@@ -861,7 +861,7 @@ Cevap Anahtarı:
 1-A, 2-B, ..."""
     
     try:
-        response_text = call_openai_responses([], prompt, temperature=0.0)
+        response_text = call_openai_with_context([], prompt, temperature=0.0)
         
         questions, answer_key = parse_mcq_questions(response_text)
         
@@ -919,7 +919,7 @@ Question: {req.question}
     prompt += "\nProvide a short, targeted explanation. Justify the correct answer and explain why others are incorrect."
     
     try:
-        response_text = call_openai_responses([], prompt, temperature=0.2)
+        response_text = call_openai_with_context([], prompt, temperature=0.2)
         
         # Increment usage only if user is authenticated
         if current_user:
@@ -959,7 +959,7 @@ async def chat(
     conversation = "\n".join([f"{msg.role}: {msg.content}" for msg in req.messages])
     
     try:
-        response_text = call_openai_responses([], conversation, temperature=0.7)
+        response_text = call_openai_with_context([], conversation, temperature=0.7)
         
         # Increment usage only if user is authenticated
         if current_user:
