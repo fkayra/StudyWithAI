@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api'
+import { useAuth } from '@/components/AuthProvider'
 
 interface UploadedFile {
   file_id: string
@@ -13,9 +14,17 @@ interface UploadedFile {
 
 export default function UploadPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+
+  useEffect(() => {
+    if (!user) {
+      alert('Please login to upload files')
+      router.push('/login')
+    }
+  }, [user, router])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()

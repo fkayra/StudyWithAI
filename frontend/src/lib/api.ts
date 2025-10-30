@@ -11,9 +11,11 @@ export const apiClient = axios.create({
 
 // Add auth token to requests
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
   }
   return config
 })
@@ -24,7 +26,7 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
     
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && typeof window !== 'undefined') {
       originalRequest._retry = true
       
       const refreshToken = localStorage.getItem('refreshToken')
@@ -39,6 +41,13 @@ apiClient.interceptors.response.use(
         } catch (refreshError) {
           localStorage.removeItem('accessToken')
           localStorage.removeItem('refreshToken')
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login'
+          }
+        }
+      } else {
+        // No refresh token, redirect to login
+        if (typeof window !== 'undefined') {
           window.location.href = '/login'
         }
       }

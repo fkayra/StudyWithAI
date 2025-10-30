@@ -3,15 +3,27 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api'
+import { useAuth } from '@/components/AuthProvider'
 
 export default function Home() {
   const router = useRouter()
+  const { user } = useAuth()
   const [prompt, setPrompt] = useState('')
   const [level, setLevel] = useState<'ilkokul-ortaokul' | 'lise' | 'universite'>('lise')
   const [loading, setLoading] = useState(false)
 
   const handleGenerateTest = async () => {
-    if (!prompt.trim()) return
+    if (!prompt.trim()) {
+      alert('Please enter a topic')
+      return
+    }
+
+    // Check if user is logged in
+    if (!user) {
+      alert('Please login first to generate tests')
+      router.push('/login')
+      return
+    }
     
     setLoading(true)
     try {
@@ -25,7 +37,7 @@ export default function Home() {
       sessionStorage.setItem('currentExam', JSON.stringify(response.data))
       router.push('/exam')
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to generate test')
+      alert(error.response?.data?.detail || 'Failed to generate test. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -103,6 +115,7 @@ export default function Home() {
           {/* Action Buttons */}
           <div className="flex gap-4">
             <button
+              type="button"
               onClick={handleGenerateTest}
               disabled={loading || !prompt.trim()}
               className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -110,12 +123,19 @@ export default function Home() {
               {loading ? 'Generating...' : 'Generate Test'}
             </button>
             <button
+              type="button"
               onClick={() => router.push('/upload')}
               className="btn-ghost"
             >
               Upload Files
             </button>
           </div>
+          
+          {!user && (
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300">
+              💡 Tip: <a href="/login" className="underline hover:text-blue-200">Login</a> or <a href="/register" className="underline hover:text-blue-200">create an account</a> to start generating tests
+            </div>
+          )}
         </div>
 
         {/* Features Grid */}

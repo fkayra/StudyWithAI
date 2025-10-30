@@ -27,30 +27,42 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-
-  useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem('accessToken')
-    if (token) {
-      refreshUser()
-    }
-  }, [])
+  const [loading, setLoading] = useState(true)
 
   const refreshUser = async () => {
     try {
       const response = await apiClient.get('/me')
       setUser(response.data)
     } catch (error) {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+      }
       setUser(null)
     }
   }
 
+  useEffect(() => {
+    // Check if user is logged in
+    const checkAuth = async () => {
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('accessToken')
+        if (token) {
+          await refreshUser()
+        }
+      }
+      setLoading(false)
+    }
+    
+    checkAuth()
+  }, []) // Empty dependency array is fine here
+
   const login = async (email: string, password: string) => {
     const response = await apiClient.post('/auth/login', { email, password })
-    localStorage.setItem('accessToken', response.data.access_token)
-    localStorage.setItem('refreshToken', response.data.refresh_token)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('accessToken', response.data.access_token)
+      localStorage.setItem('refreshToken', response.data.refresh_token)
+    }
     await refreshUser()
   }
 
@@ -60,8 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+    }
     setUser(null)
   }
 
