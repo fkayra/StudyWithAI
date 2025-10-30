@@ -46,9 +46,21 @@ export default function FlashcardsPage() {
         count: 10,
       })
 
-      setDeck(response.data)
+      // Check if response has the expected structure
+      if (response.data && response.data.cards && response.data.cards.length > 0) {
+        setDeck(response.data)
+      } else {
+        alert('No flashcards could be generated. The document might not have enough information.')
+      }
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to generate flashcards')
+      const errorMsg = error.response?.data?.detail || 'Failed to generate flashcards'
+      if (error.response?.status === 401) {
+        alert('Please login to generate flashcards from your documents.')
+      } else if (errorMsg.includes('INSUFFICIENT_CONTEXT')) {
+        alert('Not enough information in the uploaded files to generate flashcards. Please upload more detailed documents.')
+      } else {
+        alert(errorMsg)
+      }
     } finally {
       setLoading(false)
     }

@@ -33,9 +33,11 @@ export default function ExamPage() {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [showResults, setShowResults] = useState(false)
   const [explanation, setExplanation] = useState<Record<number, string>>({})
+  const [loadingExplanation, setLoadingExplanation] = useState<Record<number, boolean>>({})
   const [chatOpen, setChatOpen] = useState<number | null>(null)
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
   const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
   const [level, setLevel] = useState<'ilkokul-ortaokul' | 'lise' | 'universite'>('lise')
 
   useEffect(() => {
@@ -91,6 +93,8 @@ export default function ExamPage() {
     const question = exam?.questions.find((q) => q.number === questionNum)
     if (!question) return
 
+    setLoadingExplanation((prev) => ({ ...prev, [questionNum]: true }))
+
     try {
       const response = await apiClient.post('/explain', {
         question: question.question,
@@ -105,6 +109,8 @@ export default function ExamPage() {
       }))
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to get explanation')
+    } finally {
+      setLoadingExplanation((prev) => ({ ...prev, [questionNum]: false }))
     }
   }
 
@@ -113,12 +119,44 @@ export default function ExamPage() {
     if (!question) return
 
     setChatOpen(questionNum)
+    
+    // Pre-fill with the question and options
+    const questionContext = `Question ${questionNum}: ${question.question}\n\nOptions:\nA) ${question.options.A}\nB) ${question.options.B}\nC) ${question.options.C}\nD) ${question.options.D}`
+    
     setChatMessages([
       {
         role: 'system',
-        content: `You are a helpful tutor. The student is asking about this question: ${question.question}`,
+        content: `You are a helpful tutor helping a student understand this question.`,
+      },
+      {
+        role: 'user',
+        content: questionContext,
       },
     ])
+    
+    // Auto-send the first message to get initial response
+    sendInitialChatMessage(questionContext)
+  }
+
+  const sendInitialChatMessage = async (questionContext: string) => {
+    setChatLoading(true)
+    try {
+      const response = await apiClient.post('/chat', {
+        messages: [
+          { role: 'system', content: 'You are a helpful tutor helping a student understand this question.' },
+          { role: 'user', content: questionContext },
+        ],
+      })
+
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: response.data.response },
+      ])
+    } catch (error: any) {
+      console.error('Failed to get initial response:', error)
+    } finally {
+      setChatLoading(false)
+    }
   }
 
   const sendChatMessage = async () => {
@@ -130,6 +168,7 @@ export default function ExamPage() {
     ]
     setChatMessages(newMessages)
     setChatInput('')
+    setChatLoading(true)
 
     try {
       const response = await apiClient.post('/chat', {
@@ -142,6 +181,8 @@ export default function ExamPage() {
       ])
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Chat failed')
+    } finally {
+      setChatLoading(false)
     }
   }
 
@@ -250,9 +291,17 @@ export default function ExamPage() {
                   <div className="space-y-3">
                     <button
                       onClick={() => getExplain(question.number)}
-                      className="btn-ghost text-sm"
+                      disabled={loadingExplanation[question.number]}
+                      className="btn-ghost text-sm disabled:opacity-50 disabled:cursor-wait"
                     >
-                      💡 Explain
+                      {loadingExplanation[question.number] ? (
+                        <>
+                          <span className="inline-block animate-spin mr-2">⏳</span>
+                          Loading...
+                        </>
+                      ) : (
+                        '💡 Explain'
+                      )}
                     </button>
                     <button
                       onClick={() => openChat(question.number)}
@@ -305,9 +354,20 @@ export default function ExamPage() {
                         : 'bg-slate-700/50 mr-8'
                     }`}
                   >
-                    <p className="text-sm text-slate-200">{msg.content}</p>
+                    <div className="text-xs text-slate-400 mb-1">
+                      {msg.role === 'user' ? 'You' : 'AI Tutor'}
+                    </div>
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap">{msg.content}</p>
                   </div>
                 ))}
+                {chatLoading && (
+                  <div className="p-3 rounded-lg bg-slate-700/50 mr-8">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <span className="inline-block animate-spin">⏳</span>
+                      <span className="text-sm">AI Tutor is thinking...</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="p-4 border-t border-white/10">
@@ -316,12 +376,17 @@ export default function ExamPage() {
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
-                    placeholder="Ask a question..."
-                    className="flex-1 px-4 py-2 bg-[#1F2937] border border-white/10 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onKeyPress={(e) => e.key === 'Enter' && !chatLoading && sendChatMessage()}
+                    disabled={chatLoading}
+                    placeholder="Ask a follow-up question..."
+                    className="flex-1 px-4 py-2 bg-[#1F2937] border border-white/10 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   />
-                  <button onClick={sendChatMessage} className="btn-primary px-4">
-                    Send
+                  <button 
+                    onClick={sendChatMessage} 
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="btn-primary px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {chatLoading ? '...' : 'Send'}
                   </button>
                 </div>
               </div>
