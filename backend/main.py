@@ -19,6 +19,10 @@ import requests
 from collections import defaultdict
 import stripe
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ============================================================================
 # CONFIGURATION
