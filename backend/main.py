@@ -147,6 +147,7 @@ class ExplainRequest(BaseModel):
     options: Optional[Dict[str, str]] = None
     selected: Optional[str] = None
     correct: Optional[str] = None
+    file_ids: Optional[List[str]] = None
 
 class ChatMessage(BaseModel):
     role: str
@@ -154,6 +155,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
+    file_ids: Optional[List[str]] = None
 
 class CheckoutRequest(BaseModel):
     priceId: str
@@ -904,6 +906,18 @@ async def explain(
     if current_user and not check_quota(db, current_user, "explain"):
         raise HTTPException(status_code=403, detail="Explanation quota exceeded")
     
+    # Fetch file contents if file_ids are provided
+    file_contents = []
+    if req.file_ids:
+        for file_id in req.file_ids:
+            # Try database first
+            upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+            if upload and upload.content:
+                file_contents.append(upload.content)
+            # Try in-memory storage for anonymous users
+            elif file_id in file_content_store:
+                file_contents.append(file_content_store[file_id]["content"])
+    
     prompt = f"""Explain this question concisely:
 
 Question: {req.question}
@@ -916,10 +930,13 @@ Question: {req.question}
     if req.selected and req.correct:
         prompt += f"\nSelected: {req.selected}\nCorrect: {req.correct}\n"
     
+    if file_contents:
+        prompt += "\n\nIMPORTANT: Base your explanation on the document content provided. Reference specific information from the documents."
+    
     prompt += "\nProvide a short, targeted explanation. Justify the correct answer and explain why others are incorrect."
     
     try:
-        response_text = call_openai_with_context([], prompt, temperature=0.2)
+        response_text = call_openai_with_context(file_contents, prompt, temperature=0.2)
         
         # Increment usage only if user is authenticated
         if current_user:
@@ -955,11 +972,23 @@ async def chat(
     if current_user and not check_quota(db, current_user, "chat"):
         raise HTTPException(status_code=403, detail="Chat quota exceeded")
     
+    # Fetch file contents if file_ids are provided
+    file_contents = []
+    if req.file_ids:
+        for file_id in req.file_ids:
+            # Try database first
+            upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+            if upload and upload.content:
+                file_contents.append(upload.content)
+            # Try in-memory storage for anonymous users
+            elif file_id in file_content_store:
+                file_contents.append(file_content_store[file_id]["content"])
+    
     # Build conversation
     conversation = "\n".join([f"{msg.role}: {msg.content}" for msg in req.messages])
     
     try:
-        response_text = call_openai_with_context([], conversation, temperature=0.7)
+        response_text = call_openai_with_context(file_contents, conversation, temperature=0.7)
         
         # Increment usage only if user is authenticated
         if current_user:

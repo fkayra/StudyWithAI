@@ -96,11 +96,16 @@ export default function ExamPage() {
     setLoadingExplanation((prev) => ({ ...prev, [questionNum]: true }))
 
     try {
+      // Get file_ids from session storage if this is a grounded exam
+      const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
+      const file_ids = fileIdsStr && isGrounded ? JSON.parse(fileIdsStr) : undefined
+
       const response = await apiClient.post('/explain', {
         question: question.question,
         options: question.options,
         selected: answers[questionNum],
         correct: exam?.answer_key[questionNum.toString()],
+        file_ids: file_ids,
       })
 
       setExplanation((prev) => ({
@@ -141,11 +146,16 @@ export default function ExamPage() {
   const sendInitialChatMessage = async (questionContext: string) => {
     setChatLoading(true)
     try {
+      // Get file_ids from session storage if this is a grounded exam
+      const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
+      const file_ids = fileIdsStr && isGrounded ? JSON.parse(fileIdsStr) : undefined
+
       const response = await apiClient.post('/chat', {
         messages: [
           { role: 'system', content: 'You are a helpful tutor helping a student understand this question.' },
           { role: 'user', content: questionContext },
         ],
+        file_ids: file_ids,
       })
 
       setChatMessages((prev) => [
@@ -171,8 +181,13 @@ export default function ExamPage() {
     setChatLoading(true)
 
     try {
+      // Get file_ids from session storage if this is a grounded exam
+      const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
+      const file_ids = fileIdsStr && isGrounded ? JSON.parse(fileIdsStr) : undefined
+
       const response = await apiClient.post('/chat', {
         messages: newMessages,
+        file_ids: file_ids,
       })
 
       setChatMessages([
