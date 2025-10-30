@@ -337,21 +337,36 @@ def call_openai_with_context(file_contents: List[str], prompt: str, temperature:
         "Content-Type": "application/json"
     }
     
-    # Build the full context with file contents
+    # Build messages with system and user roles
+    messages = []
+    
     if file_contents:
-        context = "Here are the uploaded documents:\n\n"
+        # Add system message with strict instructions
+        messages.append({
+            "role": "system",
+            "content": "You are a study assistant. You MUST create content based ONLY on the documents provided. Do not use external knowledge. If you generate exam questions, they MUST be about the specific content in the documents, not general topics."
+        })
+        
+        # Add document context
+        context = "DOCUMENT CONTENT:\n\n"
         for i, content in enumerate(file_contents, 1):
             context += f"=== Document {i} ===\n{content}\n\n"
         
-        full_prompt = f"{context}\n{prompt}"
+        context += f"\n{prompt}\n\nREMEMBER: Base your response ONLY on the document content above. Do not use external knowledge."
+        
+        messages.append({
+            "role": "user",
+            "content": context
+        })
     else:
-        full_prompt = prompt
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
     
     payload = {
         "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "user", "content": full_prompt}
-        ],
+        "messages": messages,
         "temperature": temperature,
         "max_tokens": 4000
     }
@@ -659,13 +674,30 @@ Output as JSON:
         response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
         
         import json
+        
+        # Clean the response to extract JSON
+        response_text = response_text.strip()
+        
+        # Try to find JSON in response
+        if response_text.startswith('```'):
+            # Remove code blocks
+            lines = response_text.split('\n')
+            response_text = '\n'.join([l for l in lines if not l.strip().startswith('```')])
+        
         try:
             result = json.loads(response_text)
         except:
-            result = {
-                "deck": req.deck_name,
-                "cards": [{"type": req.style, "front": "Error", "back": response_text, "source": {"file_id": "", "evidence": ""}}]
-            }
+            # If still fails, try to extract JSON from text
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group(0))
+            else:
+                # Fallback: create cards from the response
+                result = {
+                    "deck": req.deck_name,
+                    "cards": [{"type": req.style, "front": "Content", "back": response_text, "source": {"file_id": "", "evidence": ""}}]
+                }
         
         return result
     except Exception as e:
@@ -729,10 +761,17 @@ Make sure questions are relevant to the document content."""
         # Parse questions and answer key
         questions, answer_key = parse_mcq_questions(response_text)
         
+        # If no questions were parsed, return error
+        if not questions:
+            return {
+                "status": "ERROR",
+                "message": "Could not generate valid questions from the document. Raw response: " + response_text[:500]
+            }
+        
         result = {
             "questions": questions,
             "answer_key": answer_key,
-            "grounding": [{"number": i+1, "sources": [{"file_id": req.file_ids[0] if req.file_ids else "", "evidence": "See uploaded files"}]} for i in range(len(questions))]
+            "grounding": [{"number": i+1, "sources": [{"file_id": req.file_ids[0] if req.file_ids else "", "evidence": "Based on uploaded documents"}]} for i in range(len(questions))]
         }
         
         increment_usage(db, current_user, "exam")
