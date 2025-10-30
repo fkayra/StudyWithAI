@@ -20,6 +20,10 @@ from collections import defaultdict
 import stripe
 import time
 from dotenv import load_dotenv
+import io
+from docx import Document
+from pptx import Presentation
+from PyPDF2 import PdfReader
 
 # Load environment variables from .env file
 load_dotenv()
@@ -61,10 +65,11 @@ class Upload(Base):
     __tablename__ = "uploads"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer)
-    file_id = Column(String)  # OpenAI file ID
+    file_id = Column(String)  # OpenAI file ID (not used anymore)
     filename = Column(String)
     mime = Column(String)
     size = Column(Integer)
+    content = Column(String)  # Extracted text content
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Usage(Base):
@@ -281,25 +286,48 @@ def get_level_text(level: str) -> str:
 # ============================================================================
 # OPENAI INTEGRATION
 # ============================================================================
-def upload_file_to_openai(file_content: bytes, filename: str) -> str:
-    """Upload file to OpenAI Files API and return file_id"""
-    if not OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+def extract_text_from_file(file_content: bytes, filename: str, mime: str) -> str:
+    """Extract text content from uploaded files"""
+    try:
+        # PDF
+        if mime == "application/pdf" or filename.endswith('.pdf'):
+            pdf_file = io.BytesIO(file_content)
+            pdf_reader = PdfReader(pdf_file)
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+            return text.strip()
+        
+        # DOCX
+        elif mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or filename.endswith('.docx'):
+            docx_file = io.BytesIO(file_content)
+            doc = Document(docx_file)
+            text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+            return text.strip()
+        
+        # PPTX
+        elif mime == "application/vnd.openxmlformats-officedocument.presentationml.presentation" or filename.endswith('.pptx'):
+            pptx_file = io.BytesIO(file_content)
+            prs = Presentation(pptx_file)
+            text = ""
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        text += shape.text + "\n"
+            return text.strip()
+        
+        # Plain text or unknown - try to decode as text
+        else:
+            try:
+                return file_content.decode('utf-8')
+            except:
+                return file_content.decode('latin-1')
     
-    url = "https://api.openai.com/v1/files"
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-    files = {"file": (filename, file_content)}
-    data = {"purpose": "user_data"}
-    
-    response = requests.post(url, headers=headers, files=files, data=data)
-    
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"OpenAI file upload failed: {response.text}")
-    
-    return response.json()["id"]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to extract text from {filename}: {str(e)}")
 
-def call_openai_responses(file_ids: List[str], prompt: str, temperature: float = 0.0) -> str:
-    """Call OpenAI Responses API with files and prompt"""
+def call_openai_with_context(file_contents: List[str], prompt: str, temperature: float = 0.0) -> str:
+    """Call OpenAI API with file contents included in the prompt"""
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
     
@@ -309,32 +337,26 @@ def call_openai_responses(file_ids: List[str], prompt: str, temperature: float =
         "Content-Type": "application/json"
     }
     
-    # Build content array with files and text
-    content = []
-    
-    # Add files as input_file (note: standard OpenAI API doesn't support input_file in this way)
-    # We'll use a workaround: mention the file IDs in the prompt
-    # In a real implementation with the actual OpenAI Responses endpoint, you'd use input_file
-    if file_ids:
-        content.append({
-            "type": "text",
-            "text": f"Context: You have access to files with IDs: {', '.join(file_ids)}. Use only the content from these files to answer.\n\n{prompt}"
-        })
+    # Build the full context with file contents
+    if file_contents:
+        context = "Here are the uploaded documents:\n\n"
+        for i, content in enumerate(file_contents, 1):
+            context += f"=== Document {i} ===\n{content}\n\n"
+        
+        full_prompt = f"{context}\n{prompt}"
     else:
-        content.append({
-            "type": "text",
-            "text": prompt
-        })
+        full_prompt = prompt
     
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
-            {"role": "user", "content": content[0]["text"]}
+            {"role": "user", "content": full_prompt}
         ],
-        "temperature": temperature
+        "temperature": temperature,
+        "max_tokens": 4000
     }
     
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, headers=headers, json=payload, timeout=60)
     
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail=f"OpenAI API call failed: {response.text}")
@@ -500,13 +522,21 @@ async def upload_files(
     results = []
     
     for file in files:
-        content = await file.read()
+        file_bytes = await file.read()
         
-        # Upload to OpenAI
+        # Extract text content from file
         try:
-            file_id = upload_file_to_openai(content, file.filename)
+            text_content = extract_text_from_file(
+                file_bytes, 
+                file.filename,
+                file.content_type or "application/octet-stream"
+            )
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to upload {file.filename}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to process {file.filename}: {str(e)}")
+        
+        # Generate a simple file_id for tracking
+        import hashlib
+        file_id = f"file-{hashlib.md5(file_bytes).hexdigest()[:16]}"
         
         # Save to database if user is authenticated
         if current_user:
@@ -515,7 +545,8 @@ async def upload_files(
                 file_id=file_id,
                 filename=file.filename,
                 mime=file.content_type or "application/octet-stream",
-                size=len(content)
+                size=len(file_bytes),
+                content=text_content
             )
             db.add(upload)
         
@@ -523,7 +554,8 @@ async def upload_files(
             "file_id": file_id,
             "filename": file.filename,
             "mime": file.content_type,
-            "size": len(content)
+            "size": len(file_bytes),
+            "content_length": len(text_content)
         })
     
     if current_user:
@@ -544,26 +576,35 @@ async def summarize_from_files(
 ):
     rate_limit(request)
     
-    system_prompt = """You are a grounded study assistant. Only use the content contained in the provided files. 
-If the files don't contain enough information to answer, reply with INSUFFICIENT_CONTEXT and list what is missing. 
-Do not invent facts."""
+    # Fetch file contents from database
+    file_contents = []
+    for file_id in req.file_ids:
+        upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+        if upload and upload.content:
+            file_contents.append(upload.content)
     
-    user_prompt = f"""Produce a structured summary (title + 3–6 sections of bullet points) only from these files. 
-Include short inline evidence snippets to support key bullets. Output as JSON with this structure:
+    if not file_contents:
+        raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
+    
+    system_prompt = """You are a study assistant. Analyze the documents provided and create a helpful summary."""
+    
+    user_prompt = f"""Create a structured summary from the documents. Even if the content is brief, extract key points and organize them.
+
+Output as JSON:
 {{
   "summary": {{
-    "title": "...",
+    "title": "Document Summary",
     "sections": [
-      {{"heading": "...", "bullets": ["..."]}}
+      {{"heading": "Main Points", "bullets": ["point 1", "point 2"]}}
     ]
   }},
   "citations": [
-    {{"file_id": "...", "evidence": "quoted text or page reference"}}
+    {{"file_id": "doc", "evidence": "key information from the document"}}
   ]
 }}"""
     
     try:
-        response_text = call_openai_responses(req.file_ids, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
         
         # Try to parse as JSON
         import json
@@ -592,22 +633,30 @@ async def flashcards_from_files(
 ):
     rate_limit(request)
     
-    system_prompt = """You are a grounded study assistant. Only use the content contained in the provided files. 
-If the files don't contain enough information to answer, reply with INSUFFICIENT_CONTEXT and list what is missing. 
-Do not invent facts."""
+    # Fetch file contents from database
+    file_contents = []
+    for file_id in req.file_ids:
+        upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+        if upload and upload.content:
+            file_contents.append(upload.content)
     
-    user_prompt = f"""Produce {req.count} concise flashcards strictly from these files. 
-Prefer atomic facts per card. Include a short evidence snippet from the source for each card. 
+    if not file_contents:
+        raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
+    
+    system_prompt = """You are a study assistant. Create helpful flashcards from the document content."""
+    
+    user_prompt = f"""Create {req.count} flashcards from the documents. Extract key concepts, questions, or important information.
+
 Output as JSON:
 {{
   "deck": "{req.deck_name}",
   "cards": [
-    {{"type": "{req.style}", "front": "...", "back": "...", "source": {{"file_id": "...", "evidence": "..."}}}}
+    {{"type": "{req.style}", "front": "Question or term", "back": "Answer or definition", "source": {{"file_id": "doc", "evidence": "relevant text"}}}}
   ]
 }}"""
     
     try:
-        response_text = call_openai_responses(req.file_ids, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
         
         import json
         try:
@@ -634,13 +683,23 @@ async def exam_from_files(
     if not check_quota(db, current_user, "exam"):
         raise HTTPException(status_code=403, detail="Exam generation quota exceeded")
     
+    # Fetch file contents from database
+    file_contents = []
+    for file_id in req.file_ids:
+        upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+        if upload and upload.content:
+            file_contents.append(upload.content)
+    
+    if not file_contents:
+        raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
+    
     level_text = get_level_text(req.level)
     
-    system_prompt = """You are a grounded study assistant. Only use the content contained in the provided files. 
-If the files don't contain enough information to answer, reply with INSUFFICIENT_CONTEXT and list what is missing. 
-Do not invent facts."""
+    system_prompt = """You are a study assistant. Create exam questions based on the document content provided."""
     
-    user_prompt = f"""Create {req.count} multiple-choice questions (A–D) only from these files at the {level_text} difficulty. 
+    user_prompt = f"""Create {req.count} multiple-choice questions (A–D) from the documents at {level_text} difficulty. 
+Base questions ONLY on the content provided in the documents.
+
 Follow this EXACT format:
 
 1. Question text here?
@@ -658,10 +717,10 @@ D) Option D
 Cevap Anahtarı:
 1-A, 2-B, ...
 
-Then list grounding evidence per question (quotes or page references)."""
+Make sure questions are relevant to the document content."""
     
     try:
-        response_text = call_openai_responses(req.file_ids, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
         
         # Check for insufficient context
         if "INSUFFICIENT_CONTEXT" in response_text:
