@@ -231,22 +231,26 @@ def rate_limit(request: Request, limit: int = 30, window: int = 300):
 
 def check_quota(db: Session, user: User, kind: str) -> bool:
     """Check if user has quota remaining for the given action"""
-    if user.tier == "premium":
-        # Premium users have generous limits
-        limits = {"exam": 100, "explain": 500, "chat": 1000, "upload": 100}
-    else:
-        # Free tier limits
-        limits = {"exam": 2, "explain": 5, "chat": 10, "upload": 2}
+    # QUOTAS DISABLED FOR TESTING - Always return True
+    return True
     
-    today = date.today()
-    usage = db.query(Usage).filter(
-        Usage.user_id == user.id,
-        Usage.kind == kind,
-        Usage.date == today
-    ).first()
-    
-    current_count = usage.count if usage else 0
-    return current_count < limits.get(kind, 0)
+    # Original quota logic (disabled for testing)
+    # if user.tier == "premium":
+    #     # Premium users have generous limits
+    #     limits = {"exam": 100, "explain": 500, "chat": 1000, "upload": 100}
+    # else:
+    #     # Free tier limits
+    #     limits = {"exam": 2, "explain": 5, "chat": 10, "upload": 2}
+    # 
+    # today = date.today()
+    # usage = db.query(Usage).filter(
+    #     Usage.user_id == user.id,
+    #     Usage.kind == kind,
+    #     Usage.date == today
+    # ).first()
+    # 
+    # current_count = usage.count if usage else 0
+    # return current_count < limits.get(kind, 0)
 
 def increment_usage(db: Session, user: User, kind: str):
     """Increment usage counter for the user"""
