@@ -52,3 +52,13 @@ coverage/
 # Build
 dist/
 build/
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+.env
+.DS_Store
+*.log
