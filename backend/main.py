@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, date
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
 import bcrypt
-import jwt
+from jose import jwt, JWTError
 import os
 import re
 import requests
@@ -169,12 +169,13 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
     token = authorization.split(" ")[1]
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
             raise HTTPException(status_code=401, detail="Invalid token")
+        user_id = int(user_id_str)  # Convert string back to int
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     
     user = db.query(User).filter(User.id == user_id).first()
@@ -191,10 +192,11 @@ def get_optional_user(authorization: Optional[str] = Header(None), db: Session =
     try:
         token = authorization.split(" ")[1]
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
             return None
         
+        user_id = int(user_id_str)  # Convert string back to int
         user = db.query(User).filter(User.id == user_id).first()
         return user
     except:
@@ -211,7 +213,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_token(user_id: int, expires_delta: timedelta) -> str:
     expire = datetime.utcnow() + expires_delta
-    payload = {"sub": user_id, "exp": expire}
+    payload = {"sub": str(user_id), "exp": expire}  # Convert user_id to string
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def rate_limit(request: Request, limit: int = 30, window: int = 300):
