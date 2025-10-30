@@ -768,10 +768,11 @@ async def explain(
         token = authorization.split(" ")[1]
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            user_id = payload.get("sub")
-            if user_id:
+            user_id_str = payload.get("sub")
+            if user_id_str:
+                user_id = int(user_id_str)  # Convert string to int
                 current_user = db.query(User).filter(User.id == user_id).first()
-        except jwt.JWTError:
+        except JWTError:
             pass
     
     # Check quota only if user is authenticated
@@ -818,10 +819,11 @@ async def chat(
         token = authorization.split(" ")[1]
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            user_id = payload.get("sub")
-            if user_id:
+            user_id_str = payload.get("sub")
+            if user_id_str:
+                user_id = int(user_id_str)  # Convert string to int
                 current_user = db.query(User).filter(User.id == user_id).first()
-        except jwt.JWTError:
+        except JWTError:
             pass
     
     # Check quota only if user is authenticated
