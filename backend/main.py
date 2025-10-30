@@ -601,12 +601,16 @@ async def summarize_from_files(
 ):
     rate_limit(request)
     
-    # Fetch file contents from database
+    # Fetch file contents from database or in-memory storage
     file_contents = []
     for file_id in req.file_ids:
+        # Try database first
         upload = db.query(Upload).filter(Upload.file_id == file_id).first()
         if upload and upload.content:
             file_contents.append(upload.content)
+        # Try in-memory storage for anonymous users
+        elif file_id in file_content_store:
+            file_contents.append(file_content_store[file_id]["content"])
     
     if not file_contents:
         raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
