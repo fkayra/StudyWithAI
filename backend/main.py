@@ -751,10 +751,22 @@ async def exam_from_files(
     
     level_text = get_level_text(req.level)
     
-    system_prompt = """You are a study assistant. Create exam questions based on the document content provided."""
+    system_prompt = """You are a study assistant. Analyze the uploaded document and create exam questions intelligently."""
     
-    user_prompt = f"""Create {req.count} multiple-choice questions (A–D) from the documents at {level_text} difficulty. 
-Base questions ONLY on the content provided in the documents.
+    user_prompt = f"""IMPORTANT: First, analyze the document to determine its type:
+
+1. If the document contains EXISTING EXAM QUESTIONS/TESTS:
+   - Identify the topics, subjects, and difficulty level
+   - Generate {req.count} NEW similar questions on the SAME TOPICS
+   - DO NOT ask questions about the exam itself (e.g., "What does question 3 ask?")
+   - Instead, create new questions about the same subject matter
+   - Example: If the exam has SQL database questions, create NEW SQL questions, not "What table is mentioned in the exam?"
+
+2. If the document contains STUDY MATERIAL (notes, textbooks, lectures):
+   - Generate {req.count} questions testing knowledge of the content
+   - Ask questions about concepts, definitions, and topics in the material
+
+Difficulty level: {level_text}
 
 Follow this EXACT format:
 
@@ -773,7 +785,7 @@ D) Option D
 Cevap Anahtarı:
 1-A, 2-B, ...
 
-Make sure questions are relevant to the document content."""
+Generate questions now based on the document type you identified."""
     
     try:
         response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
@@ -931,9 +943,12 @@ Question: {req.question}
         prompt += f"\nSelected: {req.selected}\nCorrect: {req.correct}\n"
     
     if file_contents:
-        prompt += "\n\nIMPORTANT: Base your explanation on the document content provided. Reference specific information from the documents."
+        prompt += """\n\nNOTE: The uploaded document contains reference material. 
+If it's an exam/test, use it to understand the topic and context, but explain based on the SUBJECT MATTER, not the document itself.
+If it's study material, reference specific information from it.
+"""
     
-    prompt += "\nProvide a short, targeted explanation. Justify the correct answer and explain why others are incorrect."
+    prompt += "\nProvide a short, targeted explanation in the same language as the question. Justify the correct answer and explain why others are incorrect."
     
     try:
         response_text = call_openai_with_context(file_contents, prompt, temperature=0.2)
