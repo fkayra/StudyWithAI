@@ -62,3 +62,4 @@ build/
 .env
 .DS_Store
 *.log
+frontend/next-env.d.ts
