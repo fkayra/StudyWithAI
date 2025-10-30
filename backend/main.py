@@ -46,6 +46,9 @@ if STRIPE_SECRET_KEY:
 # Rate limiting storage (in-memory, use Redis in production)
 rate_limit_store = defaultdict(list)
 
+# File content storage for anonymous users (in-memory)
+file_content_store = {}
+
 # ============================================================================
 # DATABASE SETUP
 # ============================================================================
@@ -553,7 +556,7 @@ async def upload_files(
         import hashlib
         file_id = f"file-{hashlib.md5(file_bytes).hexdigest()[:16]}"
         
-        # Save to database if user is authenticated
+        # Save to database if user is authenticated, otherwise use in-memory storage
         if current_user:
             upload = Upload(
                 user_id=current_user.id,
@@ -564,6 +567,13 @@ async def upload_files(
                 content=text_content
             )
             db.add(upload)
+        else:
+            # Store in memory for anonymous users
+            file_content_store[file_id] = {
+                "filename": file.filename,
+                "content": text_content,
+                "mime": file.content_type or "application/octet-stream"
+            }
         
         results.append({
             "file_id": file_id,
@@ -586,7 +596,7 @@ async def upload_files(
 async def summarize_from_files(
     request: Request,
     req: SummarizeRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
     rate_limit(request)
@@ -643,17 +653,21 @@ Output as JSON:
 async def flashcards_from_files(
     request: Request,
     req: FlashcardsRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
     rate_limit(request)
     
-    # Fetch file contents from database
+    # Fetch file contents from database or in-memory storage
     file_contents = []
     for file_id in req.file_ids:
+        # Try database first
         upload = db.query(Upload).filter(Upload.file_id == file_id).first()
         if upload and upload.content:
             file_contents.append(upload.content)
+        # Try in-memory storage for anonymous users
+        elif file_id in file_content_store:
+            file_contents.append(file_content_store[file_id]["content"])
     
     if not file_contents:
         raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
@@ -707,20 +721,24 @@ Output as JSON:
 async def exam_from_files(
     request: Request,
     req: ExamRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
     rate_limit(request)
     
-    if not check_quota(db, current_user, "exam"):
+    if current_user and not check_quota(db, current_user, "exam"):
         raise HTTPException(status_code=403, detail="Exam generation quota exceeded")
     
-    # Fetch file contents from database
+    # Fetch file contents from database or in-memory storage
     file_contents = []
     for file_id in req.file_ids:
+        # Try database first
         upload = db.query(Upload).filter(Upload.file_id == file_id).first()
         if upload and upload.content:
             file_contents.append(upload.content)
+        # Try in-memory storage for anonymous users
+        elif file_id in file_content_store:
+            file_contents.append(file_content_store[file_id]["content"])
     
     if not file_contents:
         raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
@@ -774,13 +792,14 @@ Make sure questions are relevant to the document content."""
             "grounding": [{"number": i+1, "sources": [{"file_id": req.file_ids[0] if req.file_ids else "", "evidence": "Based on uploaded documents"}]} for i in range(len(questions))]
         }
         
-        increment_usage(db, current_user, "exam")
-        
-        # Save exam
-        import json
-        exam = Exam(user_id=current_user.id, payload_json=json.dumps(result))
-        db.add(exam)
-        db.commit()
+        if current_user:
+            increment_usage(db, current_user, "exam")
+            
+            # Save exam
+            import json
+            exam = Exam(user_id=current_user.id, payload_json=json.dumps(result))
+            db.add(exam)
+            db.commit()
         
         return result
     except Exception as e:
