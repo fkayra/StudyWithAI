@@ -17,13 +17,6 @@ export default function Home() {
       alert('Please enter a topic')
       return
     }
-
-    // Check if user is logged in
-    if (!user) {
-      alert('Please login first to generate tests')
-      router.push('/login')
-      return
-    }
     
     setLoading(true)
     try {
@@ -37,7 +30,12 @@ export default function Home() {
       sessionStorage.setItem('currentExam', JSON.stringify(response.data))
       router.push('/exam')
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to generate test. Please check your connection and try again.')
+      const errorMsg = error.response?.data?.detail || 'Failed to generate test.'
+      if (error.response?.status === 403) {
+        alert(errorMsg + ' Please login or upgrade to Premium for more quota.')
+      } else {
+        alert(errorMsg + ' Please check your connection and try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -133,7 +131,7 @@ export default function Home() {
           
           {!user && (
             <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300">
-              💡 Tip: <a href="/login" className="underline hover:text-blue-200">Login</a> or <a href="/register" className="underline hover:text-blue-200">create an account</a> to start generating tests
+              💡 Tip: <a href="/login" className="underline hover:text-blue-200">Login</a> or <a href="/register" className="underline hover:text-blue-200">create an account</a> for higher quotas and to save your progress
             </div>
           )}
         </div>

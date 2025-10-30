@@ -19,12 +19,7 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
 
-  useEffect(() => {
-    if (!user) {
-      alert('Please login to upload files')
-      router.push('/login')
-    }
-  }, [user, router])
+  // Optional: Removed strict auth check - backend handles quotas
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()

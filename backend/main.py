@@ -179,6 +179,23 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
     
     return user
 
+def get_optional_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Optional[User]:
+    """Get user if authenticated, None otherwise"""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    
+    try:
+        token = authorization.split(" ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        
+        user = db.query(User).filter(User.id == user_id).first()
+        return user
+    except:
+        return None
+
 # ============================================================================
 # UTILITIES
 # ============================================================================
@@ -456,12 +473,18 @@ async def get_me(current_user: User = Depends(get_current_user), db: Session = D
 async def upload_files(
     request: Request,
     files: List[UploadFile] = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
-    # Check quota
-    if not check_quota(db, current_user, "upload"):
-        raise HTTPException(status_code=403, detail="Upload quota exceeded")
+    # For demo purposes, allow uploads without authentication but with limits
+    if not current_user:
+        # Anonymous uploads limited to 1 file
+        if len(files) > 1:
+            raise HTTPException(status_code=403, detail="Please login to upload multiple files")
+    else:
+        # Check quota for authenticated users
+        if not check_quota(db, current_user, "upload"):
+            raise HTTPException(status_code=403, detail="Upload quota exceeded. Please upgrade to Premium.")
     
     results = []
     
@@ -474,15 +497,16 @@ async def upload_files(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to upload {file.filename}: {str(e)}")
         
-        # Save to database
-        upload = Upload(
-            user_id=current_user.id,
-            file_id=file_id,
-            filename=file.filename,
-            mime=file.content_type or "application/octet-stream",
-            size=len(content)
-        )
-        db.add(upload)
+        # Save to database if user is authenticated
+        if current_user:
+            upload = Upload(
+                user_id=current_user.id,
+                file_id=file_id,
+                filename=file.filename,
+                mime=file.content_type or "application/octet-stream",
+                size=len(content)
+            )
+            db.add(upload)
         
         results.append({
             "file_id": file_id,
@@ -491,8 +515,9 @@ async def upload_files(
             "size": len(content)
         })
     
-    db.commit()
-    increment_usage(db, current_user, "upload")
+    if current_user:
+        db.commit()
+        increment_usage(db, current_user, "upload")
     
     return results
 
@@ -659,13 +684,26 @@ Then list grounding evidence per question (quotes or page references)."""
 async def ask(
     request: Request,
     req: AskRequest,
-    current_user: User = Depends(get_current_user),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     rate_limit(request)
     
-    if not check_quota(db, current_user, "exam"):
-        raise HTTPException(status_code=403, detail="Exam generation quota exceeded")
+    # Try to get user if authenticated, otherwise allow limited access
+    current_user = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("sub")
+            if user_id:
+                current_user = db.query(User).filter(User.id == user_id).first()
+        except jwt.JWTError:
+            pass
+    
+    # Check quota only if user is authenticated
+    if current_user and not check_quota(db, current_user, "exam"):
+        raise HTTPException(status_code=403, detail="Exam generation quota exceeded. Please upgrade to Premium or try again tomorrow.")
     
     level_text = get_level_text(req.level)
     
@@ -699,7 +737,9 @@ Cevap Anahtarı:
             "answer_key": answer_key
         }
         
-        increment_usage(db, current_user, "exam")
+        # Increment usage only if user is authenticated
+        if current_user:
+            increment_usage(db, current_user, "exam")
         
         return result
     except Exception as e:
@@ -709,12 +749,25 @@ Cevap Anahtarı:
 async def explain(
     request: Request,
     req: ExplainRequest,
-    current_user: User = Depends(get_current_user),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     rate_limit(request)
     
-    if not check_quota(db, current_user, "explain"):
+    # Try to get user if authenticated
+    current_user = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("sub")
+            if user_id:
+                current_user = db.query(User).filter(User.id == user_id).first()
+        except jwt.JWTError:
+            pass
+    
+    # Check quota only if user is authenticated
+    if current_user and not check_quota(db, current_user, "explain"):
         raise HTTPException(status_code=403, detail="Explanation quota exceeded")
     
     prompt = f"""Explain this question concisely:
@@ -734,7 +787,9 @@ Question: {req.question}
     try:
         response_text = call_openai_responses([], prompt, temperature=0.2)
         
-        increment_usage(db, current_user, "explain")
+        # Increment usage only if user is authenticated
+        if current_user:
+            increment_usage(db, current_user, "explain")
         
         return {"explanation": response_text}
     except Exception as e:
@@ -744,12 +799,25 @@ Question: {req.question}
 async def chat(
     request: Request,
     req: ChatRequest,
-    current_user: User = Depends(get_current_user),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     rate_limit(request)
     
-    if not check_quota(db, current_user, "chat"):
+    # Try to get user if authenticated
+    current_user = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("sub")
+            if user_id:
+                current_user = db.query(User).filter(User.id == user_id).first()
+        except jwt.JWTError:
+            pass
+    
+    # Check quota only if user is authenticated
+    if current_user and not check_quota(db, current_user, "chat"):
         raise HTTPException(status_code=403, detail="Chat quota exceeded")
     
     # Build conversation
@@ -758,7 +826,9 @@ async def chat(
     try:
         response_text = call_openai_responses([], conversation, temperature=0.7)
         
-        increment_usage(db, current_user, "chat")
+        # Increment usage only if user is authenticated
+        if current_user:
+            increment_usage(db, current_user, "chat")
         
         return {"response": response_text}
     except Exception as e:
