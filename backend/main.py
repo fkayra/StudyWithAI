@@ -438,7 +438,8 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
 async def refresh(refresh_token: str):
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
+        user_id_str = payload.get("sub")
+        user_id = int(user_id_str)  # Convert string to int
         
         access_token = create_token(user_id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
         new_refresh = create_token(user_id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
@@ -448,7 +449,7 @@ async def refresh(refresh_token: str):
             "refresh_token": new_refresh,
             "token_type": "bearer"
         }
-    except jwt.JWTError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 @app.get("/me")
@@ -701,10 +702,11 @@ async def ask(
         token = authorization.split(" ")[1]
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            user_id = payload.get("sub")
-            if user_id:
+            user_id_str = payload.get("sub")
+            if user_id_str:
+                user_id = int(user_id_str)  # Convert string to int
                 current_user = db.query(User).filter(User.id == user_id).first()
-        except jwt.JWTError:
+        except JWTError:
             pass
     
     # Check quota only if user is authenticated
