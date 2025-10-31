@@ -570,14 +570,14 @@ export default function ExamPage() {
                         <p className="text-slate-400 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-green-400 text-xl">✓</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-green-400 text-lg">✓</div>
                       <button
                         onClick={() => removeFile(file.file_id)}
-                        className="text-red-400 hover:text-red-300 hover:scale-110 transition-all p-2 hover:bg-red-400/20 rounded-lg text-xl"
+                        className="text-red-400 hover:text-red-300 hover:scale-110 transition-all p-1 hover:bg-red-400/10 rounded text-sm"
                         title="Remove file"
                       >
-                        ❌
+                        ✕
                       </button>
                     </div>
                   </div>
