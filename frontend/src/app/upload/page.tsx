@@ -128,7 +128,7 @@ export default function UploadPage() {
               {dragActive ? 'Drop files here!' : 'Drag and drop files here'}
             </p>
             <p className="text-sm text-slate-400 mb-8">
-              Supported: PDF, PPTX, DOCX, JPG, PNG (Max 10MB per file)
+              Supported: PDF, DOCX, PPTX, TXT (Max 10MB per file)
             </p>
             <input
               type="file"

@@ -311,13 +311,13 @@ export default function SummariesPage() {
               {dragActive ? 'Drop files here!' : 'Drag and drop files here'}
             </p>
             <p className="text-sm text-slate-400 mb-6">
-              Supported: PDF, PPTX, DOCX
+              Supported: PDF, DOCX, PPTX, TXT
             </p>
             <input
               type="file"
               id="file-upload"
               multiple
-              accept=".pdf,.pptx,.docx"
+              accept=".pdf,.docx,.pptx,.txt"
               onChange={handleFileInput}
               className="hidden"
               disabled={uploading}
