@@ -40,23 +40,34 @@ export default function ViewExamPage() {
   useEffect(() => {
     // Load exam from sessionStorage (set by history page)
     const historyExamState = sessionStorage.getItem('viewHistoryExam')
+    console.log('view-exam useEffect: historyExamState =', historyExamState)
+    
     if (historyExamState) {
       try {
         const state = JSON.parse(historyExamState)
-        setExam(state.exam)
-        setAnswers(state.answers || {})
-        setShowResults(state.showResults || false)
-        // Clear after loading
-        sessionStorage.removeItem('viewHistoryExam')
+        console.log('Parsed exam state:', state)
+        
+        if (state.exam) {
+          setExam(state.exam)
+          setAnswers(state.answers || {})
+          setShowResults(state.showResults || false)
+          // Clear after loading successfully
+          sessionStorage.removeItem('viewHistoryExam')
+          console.log('Exam loaded successfully')
+        } else {
+          console.error('No exam in state')
+          router.push('/history')
+        }
       } catch (e) {
         console.error('Failed to load history exam:', e)
         router.push('/history')
       }
     } else {
       // No exam data, redirect to history
+      console.log('No exam data in sessionStorage, redirecting to history')
       router.push('/history')
     }
-  }, [router])
+  }, [])
 
   const goToQuestion = (index: number) => {
     setCurrentQuestionIndex(index)
