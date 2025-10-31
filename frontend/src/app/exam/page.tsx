@@ -72,6 +72,17 @@ export default function ExamPage() {
     if (storedExam) {
       setExam(JSON.parse(storedExam))
     }
+    
+    // Load existing uploaded files from sessionStorage
+    const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+    if (uploadedFilesStr) {
+      try {
+        const uploadedFiles = JSON.parse(uploadedFilesStr)
+        setFiles(uploadedFiles)
+      } catch (e) {
+        console.error('Failed to load uploaded files:', e)
+      }
+    }
   }, [])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -110,8 +121,14 @@ export default function ExamPage() {
       const response = await apiClient.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      setFiles((prev) => [...prev, ...response.data])
-      const newFileIds = response.data.map((f: UploadedFile) => f.file_id)
+      const newFiles = response.data
+      setFiles((prev) => {
+        const updatedFiles = [...prev, ...newFiles]
+        // Save complete file info to sessionStorage
+        sessionStorage.setItem('uploadedFiles', JSON.stringify(updatedFiles))
+        return updatedFiles
+      })
+      const newFileIds = newFiles.map((f: UploadedFile) => f.file_id)
       const existingIds = sessionStorage.getItem('uploadedFileIds')
       const allFileIds = existingIds ? [...JSON.parse(existingIds), ...newFileIds] : newFileIds
       sessionStorage.setItem('uploadedFileIds', JSON.stringify(allFileIds))
@@ -123,7 +140,17 @@ export default function ExamPage() {
   }
 
   const removeFile = (fileId: string) => {
-    setFiles((prev) => prev.filter(f => f.file_id !== fileId))
+    setFiles((prev) => {
+      const updatedFiles = prev.filter(f => f.file_id !== fileId)
+      // Update sessionStorage with remaining files
+      if (updatedFiles.length > 0) {
+        sessionStorage.setItem('uploadedFiles', JSON.stringify(updatedFiles))
+      } else {
+        sessionStorage.removeItem('uploadedFiles')
+      }
+      return updatedFiles
+    })
+    
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
     if (fileIdsStr) {
       const fileIds = JSON.parse(fileIdsStr)
