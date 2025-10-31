@@ -46,10 +46,6 @@ export default function HistoryPage() {
   }
 
   const viewItem = (item: HistoryItem) => {
-    // Clear any existing exam data first
-    sessionStorage.removeItem('currentExam')
-    sessionStorage.removeItem('currentExamState')
-    
     // Store the data and navigate to the appropriate page
     if (item.type === 'summary') {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
@@ -58,19 +54,24 @@ export default function HistoryPage() {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
       router.push('/flashcards')
     } else if (item.type === 'exam') {
-      // For exams, check if it has answers (was completed)
+      // For exams, use separate storage for history viewing
+      // This prevents it from showing when user clicks Exams tab normally
       if (item.data.answers) {
         // Load with answers and show results
-        sessionStorage.setItem('currentExamState', JSON.stringify({
+        sessionStorage.setItem('viewHistoryExam', JSON.stringify({
           exam: item.data.exam,
           answers: item.data.answers,
           showResults: true
         }))
       } else {
         // Load fresh exam to retake
-        sessionStorage.setItem('currentExam', JSON.stringify(item.data))
+        sessionStorage.setItem('viewHistoryExam', JSON.stringify({
+          exam: item.data,
+          answers: {},
+          showResults: false
+        }))
       }
-      router.push('/exam')
+      router.push('/exam?view=history')
     }
   }
 
