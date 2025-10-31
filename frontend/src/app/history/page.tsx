@@ -46,6 +46,8 @@ export default function HistoryPage() {
   }
 
   const viewItem = (item: HistoryItem) => {
+    console.log('View item:', item)
+    
     // Store the data and navigate to the appropriate page
     if (item.type === 'summary') {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
@@ -54,22 +56,41 @@ export default function HistoryPage() {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
       router.push('/flashcards')
     } else if (item.type === 'exam') {
+      console.log('Exam data structure:', {
+        hasExam: !!item.data.exam,
+        hasAnswers: !!item.data.answers,
+        dataKeys: Object.keys(item.data)
+      })
+      
       // For exams, use separate page (/view-exam) to avoid navigation confusion
-      if (item.data.answers) {
-        // Load with answers and show results
+      // Check if data has exam and answers (completed exam) or if data IS the exam
+      if (item.data.exam && item.data.answers) {
+        // Data structure: { exam: {...}, answers: {...} }
+        console.log('Loading completed exam with results')
         sessionStorage.setItem('viewHistoryExam', JSON.stringify({
           exam: item.data.exam,
           answers: item.data.answers,
           showResults: true
         }))
-      } else {
-        // Load fresh exam to retake
+      } else if (item.data.exam) {
+        // Data structure: { exam: {...} } without answers
+        console.log('Loading exam without answers')
+        sessionStorage.setItem('viewHistoryExam', JSON.stringify({
+          exam: item.data.exam,
+          answers: {},
+          showResults: false
+        }))
+      } else if (item.data.questions) {
+        // Old data structure: item.data IS the exam itself
+        console.log('Loading exam from old data structure')
         sessionStorage.setItem('viewHistoryExam', JSON.stringify({
           exam: item.data,
           answers: {},
           showResults: false
         }))
       }
+      
+      console.log('Navigating to /view-exam')
       router.push('/view-exam')
     }
   }
