@@ -6,10 +6,16 @@ import { apiClient } from '@/lib/api'
 interface Flashcard {
   front: string
   back: string
+  type?: string
+  source?: {
+    file_id: string
+    evidence: string
+  }
 }
 
 interface FlashcardsData {
-  flashcards: Flashcard[]
+  deck?: string
+  cards: Flashcard[]
 }
 
 interface UploadedFile {
@@ -160,7 +166,7 @@ export default function FlashcardsPage() {
       const historyItem = {
         id: Date.now().toString(),
         type: 'flashcards' as const,
-        title: `${response.data.flashcards.length} Flashcards`,
+        title: `${response.data.cards?.length || count} Flashcards`,
         timestamp: Date.now(),
         data: response.data
       }
@@ -174,7 +180,7 @@ export default function FlashcardsPage() {
   }
 
   const nextCard = () => {
-    if (data && currentCard < data.flashcards.length - 1) {
+    if (data && data.cards && currentCard < data.cards.length - 1) {
       setFlipped(false)
       setTimeout(() => setCurrentCard(currentCard + 1), 150)
     }
@@ -199,8 +205,8 @@ export default function FlashcardsPage() {
     )
   }
 
-  if (data) {
-    const card = data.flashcards[currentCard]
+  if (data && data.cards && data.cards.length > 0) {
+    const card = data.cards[currentCard]
     return (
       <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
         <div className="fixed inset-0 -z-10">
@@ -215,7 +221,7 @@ export default function FlashcardsPage() {
               Flashcards
             </h1>
             <p className="text-xl text-slate-300">
-              Card {currentCard + 1} of {data.flashcards.length}
+              Card {currentCard + 1} of {data.cards.length}
             </p>
           </div>
 
@@ -267,7 +273,7 @@ export default function FlashcardsPage() {
             </button>
             <button
               onClick={nextCard}
-              disabled={currentCard === data.flashcards.length - 1}
+              disabled={currentCard === data.cards.length - 1}
               className="btn-primary flex-1 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               Next →
