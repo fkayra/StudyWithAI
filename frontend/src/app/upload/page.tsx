@@ -91,16 +91,16 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12 overflow-hidden">
+    <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12 overflow-hidden">
       {/* Animated background */}
       <div className="fixed inset-0 -z-10">
-        <div className="absolute top-40 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
-        <div className="absolute bottom-20 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-40 right-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
       </div>
 
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12 animate-fade-in">
-          <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-[#6366F1] to-[#60A5FA] bg-clip-text text-transparent">
+          <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
             Upload Documents
           </h1>
           <p className="text-xl text-slate-300">
@@ -117,7 +117,7 @@ export default function UploadPage() {
             onDrop={handleDrop}
             className={`border-2 border-dashed rounded-2xl p-16 text-center transition-all duration-300 transform ${
               dragActive
-                ? 'border-[#6366F1] bg-gradient-to-br from-[#6366F1]/20 to-[#60A5FA]/20 scale-[1.02]'
+                ? 'border-[#14B8A6] bg-gradient-to-br from-[#14B8A6]/20 to-[#06B6D4]/20 scale-[1.02]'
                 : 'border-white/20 hover:border-white/40 hover:bg-white/5'
             }`}
           >
@@ -162,7 +162,7 @@ export default function UploadPage() {
               <h2 className="text-2xl font-semibold text-slate-100">
                 Uploaded Files
               </h2>
-              <span className="px-4 py-2 bg-gradient-to-r from-[#6366F1]/20 to-[#60A5FA]/20 text-[#60A5FA] rounded-xl text-sm font-semibold border border-[#6366F1]/30">
+              <span className="px-4 py-2 bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] rounded-xl text-sm font-semibold border border-[#14B8A6]/30">
                 {files.length} {files.length === 1 ? 'file' : 'files'}
               </span>
             </div>
@@ -170,7 +170,7 @@ export default function UploadPage() {
               {files.map((file, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-4 bg-[#1F2937]/50 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-200 animate-slide-up card-hover"
+                  className="flex items-center justify-between p-4 bg-[#1E293B]/50 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-200 animate-slide-up card-hover"
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
                   <div className="flex items-center space-x-4">
@@ -209,30 +209,30 @@ export default function UploadPage() {
                   icon: '📝',
                   title: 'Summary',
                   desc: 'Extract key points and insights',
-                  gradient: 'from-blue-500/20 to-blue-600/20',
-                  border: 'border-blue-500/50',
-                  hoverBorder: 'hover:border-blue-400',
-                  shadow: 'hover:shadow-lg hover:shadow-blue-500/25'
+                  gradient: 'from-teal-500/20 to-teal-600/20',
+                  border: 'border-teal-500/50',
+                  hoverBorder: 'hover:border-teal-400',
+                  shadow: 'hover:shadow-lg hover:shadow-teal-500/25'
                 },
                 {
                   type: 'flashcards' as const,
                   icon: '🎴',
                   title: 'Flashcards',
                   desc: 'Create interactive study cards',
-                  gradient: 'from-purple-500/20 to-purple-600/20',
-                  border: 'border-purple-500/50',
-                  hoverBorder: 'hover:border-purple-400',
-                  shadow: 'hover:shadow-lg hover:shadow-purple-500/25'
+                  gradient: 'from-cyan-500/20 to-cyan-600/20',
+                  border: 'border-cyan-500/50',
+                  hoverBorder: 'hover:border-cyan-400',
+                  shadow: 'hover:shadow-lg hover:shadow-cyan-500/25'
                 },
                 {
                   type: 'exam' as const,
                   icon: '🎯',
                   title: 'Practice Exam',
                   desc: 'Generate a quiz from content',
-                  gradient: 'from-green-500/20 to-green-600/20',
-                  border: 'border-green-500/50',
-                  hoverBorder: 'hover:border-green-400',
-                  shadow: 'hover:shadow-lg hover:shadow-green-500/25'
+                  gradient: 'from-emerald-500/20 to-emerald-600/20',
+                  border: 'border-emerald-500/50',
+                  hoverBorder: 'hover:border-emerald-400',
+                  shadow: 'hover:shadow-lg hover:shadow-emerald-500/25'
                 }
               ].map((item, i) => (
                 <button

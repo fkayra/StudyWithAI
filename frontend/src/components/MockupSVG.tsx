@@ -7,13 +7,13 @@ export function DashboardMockup() {
       className="w-full h-auto animate-float"
     >
       {/* Background */}
-      <rect width="800" height="600" fill="#0B1220" rx="20" />
+      <rect width="800" height="600" fill="#0F172A" rx="20" />
       
       {/* Glow effect */}
       <defs>
         <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#6366F1" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#60A5FA" stopOpacity="0.1" />
+          <stop offset="0%" stopColor="#14B8A6" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#06B6D4" stopOpacity="0.1" />
         </linearGradient>
         <filter id="blur">
           <feGaussianBlur in="SourceGraphic" stdDeviation="10" />
@@ -27,34 +27,34 @@ export function DashboardMockup() {
       <rect x="100" y="100" width="600" height="400" rx="16" fill="#111827" fillOpacity="0.85" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
       
       {/* Header */}
-      <rect x="120" y="120" width="560" height="60" rx="12" fill="#1F2937" fillOpacity="0.5" />
-      <rect x="140" y="135" width="200" height="30" rx="8" fill="#6366F1" fillOpacity="0.3" />
+      <rect x="120" y="120" width="560" height="60" rx="12" fill="#1E293B" fillOpacity="0.5" />
+      <rect x="140" y="135" width="200" height="30" rx="8" fill="#14B8A6" fillOpacity="0.3" />
       
       {/* Stats cards */}
       <g className="animate-slide-up">
-        <rect x="120" y="200" width="170" height="120" rx="12" fill="#1F2937" fillOpacity="0.4" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
-        <rect x="140" y="220" width="50" height="8" rx="4" fill="#22C55E" fillOpacity="0.5" />
-        <rect x="140" y="240" width="130" height="20" rx="6" fill="#E5E7EB" fillOpacity="0.3" />
-        <rect x="140" y="270" width="100" height="12" rx="6" fill="#60A5FA" fillOpacity="0.4" />
+        <rect x="120" y="200" width="170" height="120" rx="12" fill="#1E293B" fillOpacity="0.4" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
+        <rect x="140" y="220" width="50" height="8" rx="4" fill="#10B981" fillOpacity="0.5" />
+        <rect x="140" y="240" width="130" height="20" rx="6" fill="#F1F5F9" fillOpacity="0.3" />
+        <rect x="140" y="270" width="100" height="12" rx="6" fill="#06B6D4" fillOpacity="0.4" />
       </g>
       
       <g className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-        <rect x="315" y="200" width="170" height="120" rx="12" fill="#1F2937" fillOpacity="0.4" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
-        <rect x="335" y="220" width="50" height="8" rx="4" fill="#F59E0B" fillOpacity="0.5" />
-        <rect x="335" y="240" width="130" height="20" rx="6" fill="#E5E7EB" fillOpacity="0.3" />
-        <rect x="335" y="270" width="80" height="12" rx="6" fill="#60A5FA" fillOpacity="0.4" />
+        <rect x="315" y="200" width="170" height="120" rx="12" fill="#1E293B" fillOpacity="0.4" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
+        <rect x="335" y="220" width="50" height="8" rx="4" fill="#14B8A6" fillOpacity="0.5" />
+        <rect x="335" y="240" width="130" height="20" rx="6" fill="#F1F5F9" fillOpacity="0.3" />
+        <rect x="335" y="270" width="80" height="12" rx="6" fill="#06B6D4" fillOpacity="0.4" />
       </g>
       
       <g className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-        <rect x="510" y="200" width="170" height="120" rx="12" fill="#1F2937" fillOpacity="0.4" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
-        <rect x="530" y="220" width="50" height="8" rx="4" fill="#EF4444" fillOpacity="0.5" />
-        <rect x="530" y="240" width="130" height="20" rx="6" fill="#E5E7EB" fillOpacity="0.3" />
-        <rect x="530" y="270" width="120" height="12" rx="6" fill="#60A5FA" fillOpacity="0.4" />
+        <rect x="510" y="200" width="170" height="120" rx="12" fill="#1E293B" fillOpacity="0.4" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
+        <rect x="530" y="220" width="50" height="8" rx="4" fill="#06B6D4" fillOpacity="0.5" />
+        <rect x="530" y="240" width="130" height="20" rx="6" fill="#F1F5F9" fillOpacity="0.3" />
+        <rect x="530" y="270" width="120" height="12" rx="6" fill="#14B8A6" fillOpacity="0.4" />
       </g>
       
       {/* Progress bars */}
       <g className="animate-scale-in" style={{ animationDelay: '0.3s' }}>
-        <rect x="120" y="340" width="560" height="40" rx="12" fill="#1F2937" fillOpacity="0.4" />
+        <rect x="120" y="340" width="560" height="40" rx="12" fill="#1E293B" fillOpacity="0.4" />
         <rect x="130" y="350" width="400" height="8" rx="4" fill="white" fillOpacity="0.15" />
         <rect x="130" y="350" width="280" height="8" rx="4" fill="url(#progress-gradient)" />
         
@@ -64,15 +64,15 @@ export function DashboardMockup() {
       
       <defs>
         <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#22C55E" />
-          <stop offset="100%" stopColor="#16A34A" />
+          <stop offset="0%" stopColor="#10B981" />
+          <stop offset="100%" stopColor="#059669" />
         </linearGradient>
       </defs>
       
       {/* Floating particles */}
-      <circle cx="150" cy="150" r="2" fill="#6366F1" opacity="0.6" className="animate-pulse-slow" />
-      <circle cx="650" cy="180" r="3" fill="#60A5FA" opacity="0.5" className="animate-pulse-slow" style={{ animationDelay: '0.5s' }} />
-      <circle cx="200" cy="450" r="2" fill="#22C55E" opacity="0.4" className="animate-pulse-slow" style={{ animationDelay: '1s' }} />
+      <circle cx="150" cy="150" r="2" fill="#14B8A6" opacity="0.6" className="animate-pulse-slow" />
+      <circle cx="650" cy="180" r="3" fill="#06B6D4" opacity="0.5" className="animate-pulse-slow" style={{ animationDelay: '0.5s' }} />
+      <circle cx="200" cy="450" r="2" fill="#10B981" opacity="0.4" className="animate-pulse-slow" style={{ animationDelay: '1s' }} />
     </svg>
   )
 }
@@ -86,13 +86,13 @@ export function ExamMockup() {
       className="w-full h-auto animate-slide-up"
     >
       {/* Background */}
-      <rect width="700" height="800" fill="#0B1220" rx="20" />
+      <rect width="700" height="800" fill="#0F172A" rx="20" />
       
       {/* Glow */}
       <defs>
         <linearGradient id="exam-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#6366F1" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="#60A5FA" stopOpacity="0.1" />
+          <stop offset="0%" stopColor="#14B8A6" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="#06B6D4" stopOpacity="0.1" />
         </linearGradient>
       </defs>
       
@@ -102,26 +102,26 @@ export function ExamMockup() {
       <rect x="50" y="50" width="600" height="700" rx="16" fill="#111827" fillOpacity="0.9" stroke="white" strokeOpacity="0.1" strokeWidth="1.5" />
       
       {/* Title */}
-      <rect x="80" y="80" width="300" height="40" rx="8" fill="#6366F1" fillOpacity="0.2" />
-      <rect x="100" y="90" width="200" height="20" rx="6" fill="#E5E7EB" fillOpacity="0.5" />
+      <rect x="80" y="80" width="300" height="40" rx="8" fill="#14B8A6" fillOpacity="0.2" />
+      <rect x="100" y="90" width="200" height="20" rx="6" fill="#F1F5F9" fillOpacity="0.5" />
       
       {/* Questions */}
       {[0, 1, 2, 3].map((i) => (
         <g key={i} className="animate-fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
-          <rect x="80" y={150 + i * 150} width="540" height="130" rx="12" fill="#1F2937" fillOpacity="0.5" stroke="white" strokeOpacity="0.08" strokeWidth="1" />
+          <rect x="80" y={150 + i * 150} width="540" height="130" rx="12" fill="#1E293B" fillOpacity="0.5" stroke="white" strokeOpacity="0.08" strokeWidth="1" />
           
           {/* Question text */}
-          <rect x="100" y={170 + i * 150} width="400" height="12" rx="6" fill="#E5E7EB" fillOpacity="0.4" />
-          <rect x="100" y={190 + i * 150} width="350" height="10" rx="5" fill="#E5E7EB" fillOpacity="0.3" />
+          <rect x="100" y={170 + i * 150} width="400" height="12" rx="6" fill="#F1F5F9" fillOpacity="0.4" />
+          <rect x="100" y={190 + i * 150} width="350" height="10" rx="5" fill="#F1F5F9" fillOpacity="0.3" />
           
           {/* Options */}
           <rect x="110" y={215 + i * 150} width="480" height="18" rx="9" fill="white" fillOpacity="0.05" />
-          <circle cx="125" cy={224 + i * 150} r="6" stroke="#6366F1" strokeWidth="2" fill="none" />
-          <rect x="145" y={218 + i * 150} width="200" height="12" rx="6" fill="#E5E7EB" fillOpacity="0.3" />
+          <circle cx="125" cy={224 + i * 150} r="6" stroke="#14B8A6" strokeWidth="2" fill="none" />
+          <rect x="145" y={218 + i * 150} width="200" height="12" rx="6" fill="#F1F5F9" fillOpacity="0.3" />
           
           <rect x="110" y={243 + i * 150} width="480" height="18" rx="9" fill="white" fillOpacity="0.05" />
-          <circle cx="125" cy={252 + i * 150} r="6" stroke="#60A5FA" strokeWidth="2" fill="none" />
-          <rect x="145" y={246 + i * 150} width="180" height="12" rx="6" fill="#E5E7EB" fillOpacity="0.3" />
+          <circle cx="125" cy={252 + i * 150} r="6" stroke="#06B6D4" strokeWidth="2" fill="none" />
+          <rect x="145" y={246 + i * 150} width="180" height="12" rx="6" fill="#F1F5F9" fillOpacity="0.3" />
         </g>
       ))}
       
@@ -131,8 +131,8 @@ export function ExamMockup() {
       
       <defs>
         <linearGradient id="button-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#6366F1" />
-          <stop offset="100%" stopColor="#60A5FA" />
+          <stop offset="0%" stopColor="#14B8A6" />
+          <stop offset="100%" stopColor="#06B6D4" />
         </linearGradient>
       </defs>
     </svg>
@@ -148,7 +148,7 @@ export function AnalyticsMockup() {
       className="w-full h-auto"
     >
       {/* Background */}
-      <rect width="800" height="500" fill="#0B1220" rx="20" />
+      <rect width="800" height="500" fill="#0F172A" rx="20" />
       
       {/* Card */}
       <rect x="50" y="50" width="700" height="400" rx="16" fill="#111827" fillOpacity="0.85" stroke="white" strokeOpacity="0.1" strokeWidth="1" />
@@ -175,8 +175,8 @@ export function AnalyticsMockup() {
       
       <defs>
         <linearGradient id="bar-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#6366F1" />
-          <stop offset="100%" stopColor="#60A5FA" />
+          <stop offset="0%" stopColor="#14B8A6" />
+          <stop offset="100%" stopColor="#06B6D4" />
         </linearGradient>
       </defs>
     </svg>

@@ -28,7 +28,7 @@ export function Navigation() {
           <div className="flex items-center space-x-8">
             <Link 
               href="/" 
-              className="text-2xl font-bold bg-gradient-to-r from-[#6366F1] via-[#60A5FA] to-[#3B82F6] bg-clip-text text-transparent hover:scale-105 transition-transform duration-200"
+              className="text-2xl font-bold bg-gradient-to-r from-[#14B8A6] via-[#06B6D4] to-[#0891B2] bg-clip-text text-transparent hover:scale-105 transition-transform duration-200"
             >
               StudyWithAI
             </Link>
@@ -43,7 +43,7 @@ export function Navigation() {
                       href={link.href}
                       className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                         isActive
-                          ? 'bg-gradient-to-r from-[#6366F1]/20 to-[#60A5FA]/20 text-[#60A5FA] border border-[#6366F1]/50'
+                          ? 'bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] border border-[#14B8A6]/50'
                           : 'text-slate-300 hover:text-white hover:bg-white/5'
                       }`}
                     >
@@ -84,7 +84,7 @@ export function Navigation() {
                 </Link>
                 <Link 
                   href="/register" 
-                  className="bg-gradient-to-r from-[#6366F1] to-[#60A5FA] text-white rounded-xl px-5 py-2 text-sm font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-200 hover:scale-105 active:scale-95"
+                  className="bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] text-white rounded-xl px-5 py-2 text-sm font-medium hover:shadow-lg hover:shadow-teal-500/25 transition-all duration-200 hover:scale-105 active:scale-95"
                 >
                   Sign Up Free
                 </Link>

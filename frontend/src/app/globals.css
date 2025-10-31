@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #0B1220;
-  --foreground: #E5E7EB;
+  --background: #0F172A;
+  --foreground: #F1F5F9;
 }
 
 * {
@@ -24,11 +24,11 @@ body {
 
 @layer utilities {
   .glass-card {
-    @apply rounded-xl border border-white/10 bg-[#111827]/85 shadow-[0_6px_16px_rgba(0,0,0,0.25)] backdrop-blur-sm p-6;
+    @apply rounded-xl border border-white/10 bg-[#1E293B]/90 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm p-6;
   }
   
   .btn-primary {
-    @apply bg-gradient-to-r from-[#6366F1] to-[#60A5FA] text-white rounded-xl px-6 py-3 font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-200 hover:scale-105 active:scale-95;
+    @apply bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] text-white rounded-xl px-6 py-3 font-medium hover:shadow-lg hover:shadow-teal-500/30 transition-all duration-200 hover:scale-105 active:scale-95;
   }
   
   .btn-ghost {
@@ -40,15 +40,15 @@ body {
   }
   
   .progress-fill {
-    @apply h-full rounded-lg bg-gradient-to-r from-[#22C55E] to-[#16A34A] transition-all duration-300;
+    @apply h-full rounded-lg bg-gradient-to-r from-[#10B981] to-[#059669] transition-all duration-300;
   }
 
   .input-modern {
-    @apply w-full bg-[#111827]/50 border border-white/10 rounded-xl px-4 py-3 text-[#E5E7EB] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all duration-200;
+    @apply w-full bg-[#1E293B]/50 border border-white/10 rounded-xl px-4 py-3 text-[#F1F5F9] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-transparent transition-all duration-200;
   }
 
   .card-hover {
-    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/10;
+    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-teal-500/10;
   }
 }
 
@@ -58,14 +58,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B1220;
+  background: #0F172A;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #6366F1, #60A5FA);
+  background: linear-gradient(to bottom, #14B8A6, #06B6D4);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, #4F46E5, #3B82F6);
+  background: linear-gradient(to bottom, #0D9488, #0891B2);
 }

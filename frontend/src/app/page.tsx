@@ -43,17 +43,17 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 overflow-hidden">
+    <div className="min-h-screen bg-[#0F172A] pt-20 px-4 overflow-hidden">
       {/* Animated background gradient */}
       <div className="fixed inset-0 -z-10">
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
-        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
       </div>
 
       <div className="max-w-7xl mx-auto">
         {/* Hero Section */}
         <div className="text-center mb-16 animate-fade-in">
-          <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-[#6366F1] via-[#60A5FA] to-[#3B82F6] bg-clip-text text-transparent mb-6 animate-slide-down">
+          <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-[#14B8A6] via-[#06B6D4] to-[#0891B2] bg-clip-text text-transparent mb-6 animate-slide-down">
             StudyWithAI
           </h1>
           <p className="text-2xl text-slate-300 mb-4 animate-slide-up">
@@ -105,7 +105,7 @@ export default function Home() {
                   onClick={() => setLevel(item.value as any)}
                   className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
                     level === item.value
-                      ? 'border-[#6366F1] bg-gradient-to-r from-[#6366F1]/20 to-[#60A5FA]/20 text-[#60A5FA] shadow-lg shadow-blue-500/25'
+                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
                       : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
                   }`}
                 >
@@ -155,8 +155,8 @@ export default function Home() {
           </div>
           
           {!user && (
-            <div className="mt-6 p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl text-sm text-blue-300 animate-pulse-slow">
-              💡 <span className="font-semibold">Pro Tip:</span> <a href="/login" className="underline hover:text-blue-200 transition-colors">Login</a> or <a href="/register" className="underline hover:text-blue-200 transition-colors">create an account</a> for unlimited tests and to track your progress!
+            <div className="mt-6 p-4 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border border-teal-500/30 rounded-xl text-sm text-teal-300 animate-pulse-slow">
+              💡 <span className="font-semibold">Pro Tip:</span> <a href="/login" className="underline hover:text-teal-200 transition-colors">Login</a> or <a href="/register" className="underline hover:text-teal-200 transition-colors">create an account</a> for unlimited tests and to track your progress!
             </div>
           )}
         </div>
@@ -215,7 +215,7 @@ export default function Home() {
                 <div className="text-5xl mb-4 transition-transform group-hover:scale-110 group-hover:rotate-12 duration-300">
                   {feature.icon}
                 </div>
-                <h3 className="text-xl font-semibold mb-3 text-slate-100 group-hover:text-[#60A5FA] transition-colors">
+                <h3 className="text-xl font-semibold mb-3 text-slate-100 group-hover:text-[#06B6D4] transition-colors">
                   {feature.title}
                 </h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
@@ -228,7 +228,7 @@ export default function Home() {
 
         {/* CTA Section */}
         <div className="glass-card text-center mb-12 animate-slide-up">
-          <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-[#6366F1] to-[#60A5FA] bg-clip-text text-transparent">
+          <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
             Ready to Transform Your Study Experience?
           </h2>
           <p className="text-slate-300 mb-6 max-w-2xl mx-auto">
