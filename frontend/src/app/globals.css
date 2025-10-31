@@ -7,6 +7,10 @@
   --foreground: #E5E7EB;
 }
 
+* {
+  scroll-behavior: smooth;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
@@ -15,19 +19,20 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 @layer utilities {
   .glass-card {
-    @apply rounded-xl border border-white/10 bg-[#111827]/85 shadow-[0_6px_16px_rgba(0,0,0,0.25)] backdrop-blur-sm;
+    @apply rounded-xl border border-white/10 bg-[#111827]/85 shadow-[0_6px_16px_rgba(0,0,0,0.25)] backdrop-blur-sm p-6;
   }
   
   .btn-primary {
-    @apply bg-gradient-to-r from-[#6366F1] to-[#60A5FA] text-white rounded-xl px-6 py-3 font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-200;
+    @apply bg-gradient-to-r from-[#6366F1] to-[#60A5FA] text-white rounded-xl px-6 py-3 font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-200 hover:scale-105 active:scale-95;
   }
   
   .btn-ghost {
-    @apply border border-white/15 text-slate-200 rounded-xl px-4 py-2 hover:bg-white/5 transition-colors duration-200;
+    @apply border border-white/15 text-slate-200 rounded-xl px-4 py-2 hover:bg-white/5 transition-all duration-200 hover:border-white/30;
   }
   
   .progress-bar {
@@ -37,4 +42,30 @@ body {
   .progress-fill {
     @apply h-full rounded-lg bg-gradient-to-r from-[#22C55E] to-[#16A34A] transition-all duration-300;
   }
+
+  .input-modern {
+    @apply w-full bg-[#111827]/50 border border-white/10 rounded-xl px-4 py-3 text-[#E5E7EB] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/10;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0B1220;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #6366F1, #60A5FA);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #4F46E5, #3B82F6);
 }

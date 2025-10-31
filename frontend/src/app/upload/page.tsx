@@ -19,8 +19,6 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
 
-  // Optional: Removed strict auth check - backend handles quotas
-
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -93,31 +91,44 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-          Upload Documents
-        </h1>
+    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12 overflow-hidden">
+      {/* Animated background */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-40 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+      </div>
+
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12 animate-fade-in">
+          <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-[#6366F1] to-[#60A5FA] bg-clip-text text-transparent">
+            Upload Documents
+          </h1>
+          <p className="text-xl text-slate-300">
+            Upload your study materials and let AI do the rest
+          </p>
+        </div>
 
         {/* Upload Area */}
-        <div className="glass-card p-8 mb-8">
+        <div className="glass-card mb-8 animate-slide-up">
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
+            className={`border-2 border-dashed rounded-2xl p-16 text-center transition-all duration-300 transform ${
               dragActive
-                ? 'border-blue-500 bg-blue-500/10'
-                : 'border-white/20 hover:border-white/40'
+                ? 'border-[#6366F1] bg-gradient-to-br from-[#6366F1]/20 to-[#60A5FA]/20 scale-[1.02]'
+                : 'border-white/20 hover:border-white/40 hover:bg-white/5'
             }`}
           >
-            <div className="text-6xl mb-4">📤</div>
-            <p className="text-xl text-slate-300 mb-2">
-              Drag and drop files here
+            <div className={`text-7xl mb-6 transition-transform duration-300 ${dragActive ? 'scale-110 animate-bounce' : ''}`}>
+              📤
+            </div>
+            <p className="text-2xl text-slate-300 mb-2 font-semibold">
+              {dragActive ? 'Drop files here!' : 'Drag and drop files here'}
             </p>
-            <p className="text-sm text-slate-400 mb-6">
-              Supported: PDF, PPTX, DOCX, JPG, PNG
+            <p className="text-sm text-slate-400 mb-8">
+              Supported: PDF, PPTX, DOCX, JPG, PNG (Max 10MB per file)
             </p>
             <input
               type="file"
@@ -126,40 +137,56 @@ export default function UploadPage() {
               accept=".pdf,.pptx,.docx,.jpg,.jpeg,.png"
               onChange={handleFileInput}
               className="hidden"
+              disabled={uploading}
             />
             <label
               htmlFor="file-upload"
-              className="btn-primary inline-block cursor-pointer"
+              className={`btn-primary inline-block cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {uploading ? 'Uploading...' : 'Browse Files'}
+              {uploading ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin">⏳</span>
+                  Uploading...
+                </span>
+              ) : (
+                'Browse Files 📁'
+              )}
             </label>
           </div>
         </div>
 
         {/* Uploaded Files List */}
         {files.length > 0 && (
-          <div className="glass-card p-6 mb-8">
-            <h2 className="text-xl font-semibold mb-4 text-slate-100">
-              Uploaded Files ({files.length})
-            </h2>
-            <div className="space-y-2">
+          <div className="glass-card mb-8 animate-scale-in">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-semibold text-slate-100">
+                Uploaded Files
+              </h2>
+              <span className="px-4 py-2 bg-gradient-to-r from-[#6366F1]/20 to-[#60A5FA]/20 text-[#60A5FA] rounded-xl text-sm font-semibold border border-[#6366F1]/30">
+                {files.length} {files.length === 1 ? 'file' : 'files'}
+              </span>
+            </div>
+            <div className="space-y-3">
               {files.map((file, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-3 bg-[#1F2937] rounded-lg"
+                  className="flex items-center justify-between p-4 bg-[#1F2937]/50 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-200 animate-slide-up card-hover"
+                  style={{ animationDelay: `${index * 0.05}s` }}
                 >
-                  <div className="flex items-center space-x-3">
-                    <div className="text-2xl">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-4xl">
                       {file.mime.includes('pdf') ? '📄' : 
-                       file.mime.includes('image') ? '🖼️' : '📝'}
+                       file.mime.includes('image') ? '🖼️' : 
+                       file.mime.includes('presentation') ? '📊' : '📝'}
                     </div>
                     <div>
-                      <p className="text-slate-200 font-medium">{file.filename}</p>
-                      <p className="text-slate-400 text-xs">
-                        {(file.size / 1024).toFixed(1)} KB
+                      <p className="text-slate-200 font-medium text-lg">{file.filename}</p>
+                      <p className="text-slate-400 text-sm">
+                        {(file.size / 1024).toFixed(1)} KB • {file.mime.split('/')[1].toUpperCase()}
                       </p>
                     </div>
                   </div>
+                  <div className="text-green-400 text-2xl">✓</div>
                 </div>
               ))}
             </div>
@@ -168,43 +195,81 @@ export default function UploadPage() {
 
         {/* Action Buttons */}
         {files.length > 0 && (
-          <div className="glass-card p-6">
-            <h2 className="text-xl font-semibold mb-4 text-slate-100">
-              Generate From Files
+          <div className="glass-card animate-slide-up" style={{ animationDelay: '0.3s' }}>
+            <h2 className="text-2xl font-semibold mb-2 text-slate-100">
+              What would you like to generate?
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button
-                onClick={() => generateFromFiles('summary')}
-                className="p-4 bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/50 rounded-xl hover:border-blue-500 transition-all duration-200"
-              >
-                <div className="text-3xl mb-2">📊</div>
-                <div className="font-semibold text-slate-100">Summary</div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Extract key points
-                </div>
-              </button>
+            <p className="text-slate-400 mb-6">
+              Choose an AI-powered tool to process your documents
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                {
+                  type: 'summary' as const,
+                  icon: '📝',
+                  title: 'Summary',
+                  desc: 'Extract key points and insights',
+                  gradient: 'from-blue-500/20 to-blue-600/20',
+                  border: 'border-blue-500/50',
+                  hoverBorder: 'hover:border-blue-400',
+                  shadow: 'hover:shadow-lg hover:shadow-blue-500/25'
+                },
+                {
+                  type: 'flashcards' as const,
+                  icon: '🎴',
+                  title: 'Flashcards',
+                  desc: 'Create interactive study cards',
+                  gradient: 'from-purple-500/20 to-purple-600/20',
+                  border: 'border-purple-500/50',
+                  hoverBorder: 'hover:border-purple-400',
+                  shadow: 'hover:shadow-lg hover:shadow-purple-500/25'
+                },
+                {
+                  type: 'exam' as const,
+                  icon: '🎯',
+                  title: 'Practice Exam',
+                  desc: 'Generate a quiz from content',
+                  gradient: 'from-green-500/20 to-green-600/20',
+                  border: 'border-green-500/50',
+                  hoverBorder: 'hover:border-green-400',
+                  shadow: 'hover:shadow-lg hover:shadow-green-500/25'
+                }
+              ].map((item, i) => (
+                <button
+                  key={item.type}
+                  onClick={() => generateFromFiles(item.type)}
+                  className={`p-6 bg-gradient-to-br ${item.gradient} border ${item.border} ${item.hoverBorder} ${item.shadow} rounded-2xl transition-all duration-300 hover:scale-105 active:scale-95 group animate-scale-in`}
+                  style={{ animationDelay: `${i * 0.1}s` }}
+                >
+                  <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                    {item.icon}
+                  </div>
+                  <div className="font-bold text-xl text-slate-100 mb-2">
+                    {item.title}
+                  </div>
+                  <div className="text-sm text-slate-400">
+                    {item.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-              <button
-                onClick={() => generateFromFiles('flashcards')}
-                className="p-4 bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/50 rounded-xl hover:border-purple-500 transition-all duration-200"
-              >
-                <div className="text-3xl mb-2">🎴</div>
-                <div className="font-semibold text-slate-100">Flashcards</div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Create study cards
-                </div>
-              </button>
-
-              <button
-                onClick={() => generateFromFiles('exam')}
-                className="p-4 bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/50 rounded-xl hover:border-green-500 transition-all duration-200"
-              >
-                <div className="text-3xl mb-2">✅</div>
-                <div className="font-semibold text-slate-100">Exam</div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Generate quiz
-                </div>
-              </button>
+        {/* Empty state help */}
+        {files.length === 0 && !uploading && (
+          <div className="glass-card text-center animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <div className="text-4xl mb-4">💡</div>
+            <h3 className="text-xl font-semibold text-slate-100 mb-2">
+              No files uploaded yet
+            </h3>
+            <p className="text-slate-400 mb-4">
+              Upload your study materials to get started with AI-powered learning tools
+            </p>
+            <div className="flex gap-3 justify-center text-sm text-slate-400">
+              <span>✓ Instant processing</span>
+              <span>✓ Secure upload</span>
+              <span>✓ Multiple formats</span>
             </div>
           </div>
         )}

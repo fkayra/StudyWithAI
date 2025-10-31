@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api'
 import { useAuth } from '@/components/AuthProvider'
+import { DashboardMockup, ExamMockup } from '@/components/MockupSVG'
 
 export default function Home() {
   const router = useRouter()
@@ -42,21 +43,51 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B1220] pt-20 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 overflow-hidden">
+      {/* Animated background gradient */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+      </div>
+
+      <div className="max-w-7xl mx-auto">
         {/* Hero Section */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-4">
-            AI Study Assistant
+        <div className="text-center mb-16 animate-fade-in">
+          <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-[#6366F1] via-[#60A5FA] to-[#3B82F6] bg-clip-text text-transparent mb-6 animate-slide-down">
+            StudyWithAI
           </h1>
-          <p className="text-xl text-slate-300">
-            Generate grounded exams, flashcards, and summaries from your documents
+          <p className="text-2xl text-slate-300 mb-4 animate-slide-up">
+            AI-Powered Study Assistant
           </p>
+          <p className="text-lg text-slate-400 max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            Generate grounded exams, flashcards, and summaries from your documents with intelligent AI
+          </p>
+          
+          {/* CTA Buttons */}
+          <div className="flex gap-4 justify-center mt-8 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            <button onClick={() => router.push('/upload')} className="btn-primary">
+              Get Started 🚀
+            </button>
+            <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="btn-ghost">
+              Learn More
+            </button>
+          </div>
         </div>
 
-        {/* Main Card */}
-        <div className="glass-card p-8 mb-8">
-          <h2 className="text-2xl font-semibold mb-6 text-slate-100">Generate a Test</h2>
+        {/* Mockup showcase */}
+        <div className="grid md:grid-cols-2 gap-8 mb-20 animate-scale-in" style={{ animationDelay: '0.3s' }}>
+          <div className="glass-card p-4 card-hover">
+            <DashboardMockup />
+          </div>
+          <div className="glass-card p-4 card-hover">
+            <ExamMockup />
+          </div>
+        </div>
+
+        {/* Quick Test Generator */}
+        <div className="glass-card mb-16 animate-fade-in" style={{ animationDelay: '0.4s' }}>
+          <h2 className="text-3xl font-semibold mb-2 text-slate-100">Quick Test Generator</h2>
+          <p className="text-slate-400 mb-6">Generate a test instantly on any topic</p>
           
           {/* Difficulty Selector */}
           <div className="mb-6">
@@ -64,36 +95,23 @@ export default function Home() {
               Difficulty Level
             </label>
             <div className="grid grid-cols-3 gap-3">
-              <button
-                onClick={() => setLevel('ilkokul-ortaokul')}
-                className={`py-3 px-4 rounded-xl border transition-all duration-200 ${
-                  level === 'ilkokul-ortaokul'
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-400'
-                    : 'border-white/15 text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                İlk-Ortaokul
-              </button>
-              <button
-                onClick={() => setLevel('lise')}
-                className={`py-3 px-4 rounded-xl border transition-all duration-200 ${
-                  level === 'lise'
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-400'
-                    : 'border-white/15 text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                Lise
-              </button>
-              <button
-                onClick={() => setLevel('universite')}
-                className={`py-3 px-4 rounded-xl border transition-all duration-200 ${
-                  level === 'universite'
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-400'
-                    : 'border-white/15 text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                Üniversite
-              </button>
+              {[
+                { value: 'ilkokul-ortaokul', label: 'İlk-Ortaokul' },
+                { value: 'lise', label: 'Lise' },
+                { value: 'universite', label: 'Üniversite' }
+              ].map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => setLevel(item.value as any)}
+                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                    level === item.value
+                      ? 'border-[#6366F1] bg-gradient-to-r from-[#6366F1]/20 to-[#60A5FA]/20 text-[#60A5FA] shadow-lg shadow-blue-500/25'
+                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -105,8 +123,8 @@ export default function Home() {
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Enter a topic to generate questions about..."
-              className="w-full h-32 px-4 py-3 bg-[#1F2937] border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Enter a topic to generate questions about... (e.g., 'Photosynthesis', 'World War II', 'Linear Algebra')"
+              className="input-modern h-32 resize-none"
             />
           </div>
 
@@ -118,48 +136,111 @@ export default function Home() {
               disabled={loading || !prompt.trim()}
               className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Generating...' : 'Generate Test'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="animate-spin">⏳</span>
+                  Generating...
+                </span>
+              ) : (
+                'Generate Test ✨'
+              )}
             </button>
             <button
               type="button"
               onClick={() => router.push('/upload')}
-              className="btn-ghost"
+              className="btn-ghost px-6"
             >
-              Upload Files
+              Upload Files 📄
             </button>
           </div>
           
           {!user && (
-            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300">
-              💡 Tip: <a href="/login" className="underline hover:text-blue-200">Login</a> or <a href="/register" className="underline hover:text-blue-200">create an account</a> for higher quotas and to save your progress
+            <div className="mt-6 p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl text-sm text-blue-300 animate-pulse-slow">
+              💡 <span className="font-semibold">Pro Tip:</span> <a href="/login" className="underline hover:text-blue-200 transition-colors">Login</a> or <a href="/register" className="underline hover:text-blue-200 transition-colors">create an account</a> for unlimited tests and to track your progress!
             </div>
           )}
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-card p-6">
-            <div className="text-3xl mb-3">📄</div>
-            <h3 className="text-lg font-semibold mb-2 text-slate-100">Document Upload</h3>
-            <p className="text-slate-400 text-sm">
-              Upload PDFs, PPTX, DOCX, and images to generate grounded content
-            </p>
-          </div>
+        <div id="features" className="mb-20">
+          <h2 className="text-4xl font-bold text-center mb-4 text-slate-100">Powerful Features</h2>
+          <p className="text-center text-slate-400 mb-12 max-w-2xl mx-auto">
+            Everything you need to study smarter, not harder
+          </p>
           
-          <div className="glass-card p-6">
-            <div className="text-3xl mb-3">🎯</div>
-            <h3 className="text-lg font-semibold mb-2 text-slate-100">Smart Exams</h3>
-            <p className="text-slate-400 text-sm">
-              AI generates MCQ exams strictly from your documents
-            </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: '📄',
+                title: 'Document Upload',
+                desc: 'Upload PDFs, PPTX, DOCX, and images to generate grounded content',
+                delay: '0s'
+              },
+              {
+                icon: '🎯',
+                title: 'Smart Exams',
+                desc: 'AI generates MCQ exams strictly from your documents with intelligent question generation',
+                delay: '0.1s'
+              },
+              {
+                icon: '💡',
+                title: 'AI Tutor',
+                desc: 'Get detailed explanations and chat with an AI tutor for personalized help',
+                delay: '0.2s'
+              },
+              {
+                icon: '📊',
+                title: 'Progress Tracking',
+                desc: 'Monitor your performance with detailed analytics and insights',
+                delay: '0.3s'
+              },
+              {
+                icon: '🎴',
+                title: 'Flashcards',
+                desc: 'Auto-generate flashcards from your study materials for quick review',
+                delay: '0.4s'
+              },
+              {
+                icon: '📝',
+                title: 'Smart Summaries',
+                desc: 'Get concise, structured summaries of your documents instantly',
+                delay: '0.5s'
+              }
+            ].map((feature, i) => (
+              <div
+                key={i}
+                className="glass-card card-hover animate-scale-in group"
+                style={{ animationDelay: feature.delay }}
+              >
+                <div className="text-5xl mb-4 transition-transform group-hover:scale-110 group-hover:rotate-12 duration-300">
+                  {feature.icon}
+                </div>
+                <h3 className="text-xl font-semibold mb-3 text-slate-100 group-hover:text-[#60A5FA] transition-colors">
+                  {feature.title}
+                </h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  {feature.desc}
+                </p>
+              </div>
+            ))}
           </div>
-          
-          <div className="glass-card p-6">
-            <div className="text-3xl mb-3">💡</div>
-            <h3 className="text-lg font-semibold mb-2 text-slate-100">AI Tutor</h3>
-            <p className="text-slate-400 text-sm">
-              Get explanations and chat with an AI tutor for any question
-            </p>
+        </div>
+
+        {/* CTA Section */}
+        <div className="glass-card text-center mb-12 animate-slide-up">
+          <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-[#6366F1] to-[#60A5FA] bg-clip-text text-transparent">
+            Ready to Transform Your Study Experience?
+          </h2>
+          <p className="text-slate-300 mb-6 max-w-2xl mx-auto">
+            Join thousands of students who are already studying smarter with AI-powered tools
+          </p>
+          <div className="flex gap-4 justify-center">
+            <button onClick={() => router.push('/register')} className="btn-primary">
+              Sign Up Free
+            </button>
+            <button onClick={() => router.push('/pricing')} className="btn-ghost">
+              View Pricing
+            </button>
           </div>
         </div>
       </div>
