@@ -621,7 +621,9 @@ async def summarize_from_files(
     
     user_prompt = f"""Create a structured summary from the documents. Even if the content is brief, extract key points and organize them.
 
-Output as JSON:
+IMPORTANT: Return ONLY valid JSON, no markdown code blocks, no extra text.
+
+Output format:
 {{
   "summary": {{
     "title": "Document Summary",
@@ -632,24 +634,56 @@ Output as JSON:
   "citations": [
     {{"file_id": "doc", "evidence": "key information from the document"}}
   ]
-}}"""
+}}
+
+Return pure JSON only, no ```json``` markers."""
     
     try:
         response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
         
-        # Try to parse as JSON
+        # Clean the response to extract JSON
         import json
+        import re
+        
+        # Remove markdown code blocks if present
+        response_text = response_text.strip()
+        if response_text.startswith('```'):
+            # Remove code block markers
+            lines = response_text.split('\n')
+            # Remove first line if it's ```json or ```
+            if lines[0].strip().startswith('```'):
+                lines = lines[1:]
+            # Remove last line if it's ```
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            response_text = '\n'.join(lines)
+        
         try:
             result = json.loads(response_text)
-        except:
-            # If not JSON, wrap in a basic structure
-            result = {
-                "summary": {
-                    "title": "Summary",
-                    "sections": [{"heading": "Content", "bullets": [response_text]}]
-                },
-                "citations": []
-            }
+        except json.JSONDecodeError:
+            # Try to find JSON in the text
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    result = json.loads(json_match.group(0))
+                except:
+                    # If still fails, wrap in basic structure
+                    result = {
+                        "summary": {
+                            "title": "Summary",
+                            "sections": [{"heading": "Content", "bullets": [response_text]}]
+                        },
+                        "citations": []
+                    }
+            else:
+                # If not JSON, wrap in a basic structure
+                result = {
+                    "summary": {
+                        "title": "Summary",
+                        "sections": [{"heading": "Content", "bullets": [response_text]}]
+                    },
+                    "citations": []
+                }
         
         return result
     except Exception as e:
