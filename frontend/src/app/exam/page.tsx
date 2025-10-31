@@ -39,6 +39,9 @@ export default function ExamPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [level, setLevel] = useState<'ilkokul-ortaokul' | 'lise' | 'universite'>('lise')
+  const [prompt, setPrompt] = useState('')
+  const [count, setCount] = useState(5)
+  const [showPrompt, setShowPrompt] = useState(false)
 
   useEffect(() => {
     // Try to load exam from session storage
@@ -46,26 +49,28 @@ export default function ExamPage() {
     if (storedExam) {
       setExam(JSON.parse(storedExam))
     } else if (isGrounded) {
-      // Generate from uploaded files
-      generateGroundedExam()
+      // Show prompt screen for grounded exams
+      setShowPrompt(true)
     }
   }, [])
 
   const generateGroundedExam = async () => {
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
     if (!fileIdsStr) {
-      alert('No files uploaded')
+      window.location.href = '/upload'
       return
     }
 
     const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
+    setShowPrompt(false)
 
     try {
       const response = await apiClient.post('/exam-from-files', {
         file_ids: fileIds,
         level,
-        count: 5,
+        count: count,
+        prompt: prompt || undefined,
       })
 
       if (response.data.status === 'INSUFFICIENT_CONTEXT') {
@@ -203,22 +208,121 @@ export default function ExamPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0B1220] pt-20 flex items-center justify-center">
-        <div className="text-2xl text-slate-300">Generating exam...</div>
+      <div className="min-h-screen bg-[#0F172A] pt-20 flex items-center justify-center">
+        <div className="glass-card p-8 text-center">
+          <div className="text-6xl mb-4 animate-pulse">🎯</div>
+          <div className="text-2xl text-slate-300 mb-2">Generating Exam...</div>
+          <div className="text-sm text-slate-400">Creating {count} questions at {level} level</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!exam && showPrompt) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="glass-card animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-6">🎯</div>
+              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+                Generate Practice Exam
+              </h1>
+              <p className="text-slate-300">
+                AI will create exam questions from your uploaded documents
+              </p>
+            </div>
+
+            {/* Difficulty Level */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Difficulty Level
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { value: 'ilkokul-ortaokul', label: 'İlk-Ortaokul' },
+                  { value: 'lise', label: 'Lise' },
+                  { value: 'universite', label: 'Üniversite' }
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    onClick={() => setLevel(item.value as any)}
+                    className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                      level === item.value
+                        ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
+                        : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Number of questions */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Number of Questions
+              </label>
+              <input
+                type="number"
+                value={count}
+                onChange={(e) => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                min="1"
+                max="20"
+                className="input-modern"
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                💡 Choose between 1-20 questions
+              </p>
+            </div>
+
+            {/* Optional Prompt */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Additional Instructions (Optional)
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g., 'Focus on specific topics', 'Include calculations', 'Make them tricky'..."
+                className="input-modern h-32 resize-none"
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                💡 Leave empty for general exam, or add specific instructions
+              </p>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={generateGroundedExam}
+              disabled={loading}
+              className="btn-primary w-full"
+            >
+              {loading ? '⏳ Generating Exam...' : `✨ Generate ${count} Questions`}
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (!exam) {
     return (
-      <div className="min-h-screen bg-[#0B1220] pt-20 px-4">
+      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl font-bold mb-8 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            No Exam Loaded
-          </h1>
-          <p className="text-slate-300 mb-8">
-            Generate an exam from the home page or upload documents first.
-          </p>
+          <div className="glass-card p-12">
+            <div className="text-6xl mb-6">📚</div>
+            <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+              No Exam Loaded
+            </h1>
+            <p className="text-slate-300 mb-8">
+              Generate an exam from the home page or upload documents first.
+            </p>
+            <button onClick={() => window.location.href = '/upload'} className="btn-primary">
+              Upload Documents 📄
+            </button>
+          </div>
         </div>
       </div>
     )

@@ -23,9 +23,12 @@ export default function FlashcardsPage() {
   const [loading, setLoading] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
+  const [prompt, setPrompt] = useState('')
+  const [count, setCount] = useState(10)
+  const [showPrompt, setShowPrompt] = useState(true)
 
   useEffect(() => {
-    generateFlashcards()
+    // Don't auto-generate, wait for user input
   }, [])
 
   const generateFlashcards = async () => {
@@ -38,13 +41,15 @@ export default function FlashcardsPage() {
 
     const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
+    setShowPrompt(false)
 
     try {
       const response = await apiClient.post('/flashcards-from-files', {
         file_ids: fileIds,
         style: 'basic',
         deck_name: 'Study Deck',
-        count: 10,
+        count: count,
+        prompt: prompt || undefined,
       })
 
       // Check if response has the expected structure
@@ -95,22 +100,95 @@ export default function FlashcardsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0B1220] pt-20 flex items-center justify-center">
-        <div className="text-2xl text-slate-300">Generating flashcards...</div>
+      <div className="min-h-screen bg-[#0F172A] pt-20 flex items-center justify-center">
+        <div className="glass-card p-8 text-center">
+          <div className="text-6xl mb-4 animate-pulse">🎴</div>
+          <div className="text-2xl text-slate-300 mb-2">Generating Flashcards...</div>
+          <div className="text-sm text-slate-400">Creating {count} study cards</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!deck && showPrompt) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="glass-card animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-6">🎴</div>
+              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+                Generate Flashcards
+              </h1>
+              <p className="text-slate-300">
+                AI will create study flashcards from your uploaded documents
+              </p>
+            </div>
+
+            {/* Number of cards */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Number of Flashcards
+              </label>
+              <input
+                type="number"
+                value={count}
+                onChange={(e) => setCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 10)))}
+                min="1"
+                max="50"
+                className="input-modern"
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                💡 Choose between 1-50 cards
+              </p>
+            </div>
+
+            {/* Optional Prompt */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Additional Instructions (Optional)
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g., 'Focus on definitions', 'Include code examples', 'Make them challenging'..."
+                className="input-modern h-32 resize-none"
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                💡 Leave empty for general flashcards, or add specific instructions
+              </p>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={generateFlashcards}
+              disabled={loading}
+              className="btn-primary w-full"
+            >
+              {loading ? '⏳ Generating Flashcards...' : `✨ Generate ${count} Flashcards`}
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (!deck || deck.cards.length === 0) {
     return (
-      <div className="min-h-screen bg-[#0B1220] pt-20 px-4">
+      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl font-bold mb-8 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            No Flashcards Generated
-          </h1>
-          <p className="text-slate-300 mb-8">
-            Upload documents first to generate flashcards.
-          </p>
+          <div className="glass-card p-12">
+            <div className="text-6xl mb-6">❌</div>
+            <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+              No Flashcards Generated
+            </h1>
+            <p className="text-slate-300 mb-8">
+              Failed to generate flashcards. Try again or upload different documents.
+            </p>
+            <button onClick={() => setShowPrompt(true)} className="btn-primary">
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     )

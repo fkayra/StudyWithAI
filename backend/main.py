@@ -728,9 +728,14 @@ async def flashcards_from_files(
     if not file_contents:
         raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
     
+    additional_instructions = ""
+    if req.prompt:
+        additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating flashcards."
+    
     system_prompt = """You are a study assistant. Create helpful flashcards from the document content."""
     
     user_prompt = f"""Create {req.count} flashcards from the documents. Extract key concepts, questions, or important information.
+{additional_instructions}
 
 Output as JSON:
 {{
@@ -801,6 +806,10 @@ async def exam_from_files(
     
     level_text = get_level_text(req.level)
     
+    additional_instructions = ""
+    if req.prompt:
+        additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating exam questions."
+    
     system_prompt = """You are a study assistant. Analyze the uploaded document and create exam questions intelligently."""
     
     user_prompt = f"""IMPORTANT: First, analyze the document to determine its type:
@@ -817,6 +826,7 @@ async def exam_from_files(
    - Ask questions about concepts, definitions, and topics in the material
 
 Difficulty level: {level_text}
+{additional_instructions}
 
 Follow this EXACT format:
 
