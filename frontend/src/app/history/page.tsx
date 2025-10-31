@@ -54,8 +54,7 @@ export default function HistoryPage() {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
       router.push('/flashcards')
     } else if (item.type === 'exam') {
-      // For exams, use separate storage for history viewing
-      // This prevents it from showing when user clicks Exams tab normally
+      // For exams, use separate page (/view-exam) to avoid navigation confusion
       if (item.data.answers) {
         // Load with answers and show results
         sessionStorage.setItem('viewHistoryExam', JSON.stringify({
@@ -71,7 +70,7 @@ export default function HistoryPage() {
           showResults: false
         }))
       }
-      router.push('/exam?view=history')
+      router.push('/view-exam')
     }
   }
 
