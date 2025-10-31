@@ -283,9 +283,9 @@ export default function ExamPage() {
     
     // Get file names for unique title
     let fileNames = ''
-    const isQuickExam = sessionStorage.getItem('isQuickExam') === 'true'
+    const isQuickExamFromStorage = sessionStorage.getItem('isQuickExam') === 'true'
     
-    if (isQuickExam) {
+    if (isQuickExamFromStorage) {
       // This is a quick exam from home page
       const quickPrompt = sessionStorage.getItem('quickExamPrompt') || 'Quick Test'
       fileNames = `Quick: ${quickPrompt.substring(0, 30)}${quickPrompt.length > 30 ? '...' : ''}`
