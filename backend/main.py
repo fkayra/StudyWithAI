@@ -125,17 +125,20 @@ class SummarizeRequest(BaseModel):
     file_ids: List[str]
     language: Optional[str] = "en"
     outline: Optional[bool] = False
+    prompt: Optional[str] = None
 
 class FlashcardsRequest(BaseModel):
     file_ids: List[str]
     style: Optional[str] = "basic"
     deck_name: Optional[str] = "Study Deck"
     count: Optional[int] = 10
+    prompt: Optional[str] = None
 
 class ExamRequest(BaseModel):
     file_ids: List[str]
     level: Optional[str] = "lise"
     count: Optional[int] = 5
+    prompt: Optional[str] = None
 
 class AskRequest(BaseModel):
     prompt: str
@@ -619,6 +622,10 @@ async def summarize_from_files(
     
     system_prompt = """You are a study assistant. You create study notes from course materials and documents."""
     
+    additional_instructions = ""
+    if req.prompt:
+        additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating the summary."
+    
     user_prompt = f"""Analyze the provided documents as if they are course materials or lecture notes. 
 Create a comprehensive study summary that directly explains the content, NOT what the document contains.
 
@@ -628,6 +635,7 @@ IMPORTANT RULES:
 - Extract key concepts, definitions, formulas, and explanations
 - Present information as educational content, like a textbook or study guide
 - Focus on WHAT is taught, not THAT it is taught
+{additional_instructions}
 
 Return ONLY valid JSON, no markdown code blocks, no extra text.
 

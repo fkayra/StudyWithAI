@@ -74,17 +74,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Mockup showcase */}
-        <div className="grid md:grid-cols-2 gap-8 mb-20 animate-scale-in" style={{ animationDelay: '0.3s' }}>
-          <div className="glass-card p-4 card-hover">
-            <DashboardMockup />
-          </div>
-          <div className="glass-card p-4 card-hover">
-            <ExamMockup />
-          </div>
-        </div>
-
-        {/* Quick Test Generator */}
+        {/* Quick Test Generator - Moved higher */}
         <div className="glass-card mb-16 animate-fade-in" style={{ animationDelay: '0.4s' }}>
           <h2 className="text-3xl font-semibold mb-2 text-slate-100">Quick Test Generator</h2>
           <p className="text-slate-400 mb-6">Generate a test instantly on any topic</p>
@@ -161,8 +151,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* Features Grid */}
-        <div id="features" className="mb-20">
+        {/* Features Grid - Moved higher */}
+        <div id="features" className="mb-16">
           <h2 className="text-4xl font-bold text-center mb-4 text-slate-100">Powerful Features</h2>
           <p className="text-center text-slate-400 mb-12 max-w-2xl mx-auto">
             Everything you need to study smarter, not harder

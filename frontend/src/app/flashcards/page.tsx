@@ -31,7 +31,8 @@ export default function FlashcardsPage() {
   const generateFlashcards = async () => {
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
     if (!fileIdsStr) {
-      alert('No files uploaded. Please upload documents first.')
+      // Redirect to upload page instead of showing alert
+      window.location.href = '/upload'
       return
     }
 

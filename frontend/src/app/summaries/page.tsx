@@ -24,26 +24,31 @@ interface SummaryData {
 export default function SummariesPage() {
   const [data, setData] = useState<SummaryData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [prompt, setPrompt] = useState('')
+  const [showPrompt, setShowPrompt] = useState(true)
 
   useEffect(() => {
-    generateSummary()
+    // Don't auto-generate, wait for user input
   }, [])
 
   const generateSummary = async () => {
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
     if (!fileIdsStr) {
-      alert('No files uploaded. Please upload documents first.')
+      // Redirect to upload page instead of showing alert
+      window.location.href = '/upload'
       return
     }
 
     const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
+    setShowPrompt(false)
 
     try {
       const response = await apiClient.post('/summarize-from-files', {
         file_ids: fileIds,
         language: 'en',
         outline: true,
+        prompt: prompt || undefined, // Send prompt if provided
       })
 
       setData(response.data)
@@ -66,23 +71,44 @@ export default function SummariesPage() {
     )
   }
 
-  if (!data) {
+  if (!data && showPrompt) {
     return (
       <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="glass-card p-12 animate-fade-in">
-            <div className="text-6xl mb-6">📚</div>
-            <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
-              No Summary Yet
-            </h1>
-            <p className="text-slate-300 mb-8">
-              Upload documents first to generate an AI-powered summary.
-            </p>
+        <div className="max-w-4xl mx-auto">
+          <div className="glass-card animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-6">📚</div>
+              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+                Generate Summary
+              </h1>
+              <p className="text-slate-300">
+                AI will create study notes from your uploaded documents
+              </p>
+            </div>
+
+            {/* Optional Prompt */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Additional Instructions (Optional)
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g., 'Focus on key formulas and definitions', 'Include examples', 'Summarize in Turkish'..."
+                className="input-modern h-32 resize-none"
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                💡 Leave empty for a general summary, or add specific instructions
+              </p>
+            </div>
+
+            {/* Generate Button */}
             <button
-              onClick={() => window.location.href = '/upload'}
-              className="btn-primary"
+              onClick={generateSummary}
+              disabled={loading}
+              className="btn-primary w-full"
             >
-              Upload Documents 📄
+              {loading ? '⏳ Generating Summary...' : '✨ Generate Summary'}
             </button>
           </div>
         </div>
