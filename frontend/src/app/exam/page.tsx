@@ -53,10 +53,12 @@ export default function ExamPage() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [isHistoryView, setIsHistoryView] = useState(false)
 
   useEffect(() => {
     // If this is a view from history, load from temporary storage
     if (isViewMode) {
+      setIsHistoryView(true) // Mark as history view
       const historyExamState = sessionStorage.getItem('viewHistoryExam')
       if (historyExamState) {
         try {
@@ -254,13 +256,16 @@ export default function ExamPage() {
     setShowResults(true)
     setCurrentQuestionIndex(0) // Go back to first question to review
     
-    // Save exam state to sessionStorage
-    const examState = {
-      exam: exam,
-      answers: answers,
-      showResults: true
+    // Only save to currentExamState if this is NOT a history view
+    // History exams should not persist in the main Exams tab
+    if (!isHistoryView) {
+      const examState = {
+        exam: exam,
+        answers: answers,
+        showResults: true
+      }
+      sessionStorage.setItem('currentExamState', JSON.stringify(examState))
     }
-    sessionStorage.setItem('currentExamState', JSON.stringify(examState))
     
     // Get file names for unique title
     let fileNames = ''
