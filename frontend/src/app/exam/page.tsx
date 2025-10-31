@@ -230,11 +230,33 @@ export default function ExamPage() {
     }
     sessionStorage.setItem('currentExamState', JSON.stringify(examState))
     
-    // Save completed exam to history with answers
+    // Get file names for unique title
+    const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+    let fileNames = ''
+    if (uploadedFilesStr) {
+      try {
+        const uploadedFiles = JSON.parse(uploadedFilesStr)
+        fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+        if (uploadedFiles.length > 2) {
+          fileNames += ` +${uploadedFiles.length - 2} more`
+        }
+      } catch (e) {
+        fileNames = 'Documents'
+      }
+    } else {
+      fileNames = 'Quick Exam'
+    }
+    
+    // Calculate score for title
+    const score = Object.keys(answers).filter(
+      (key) => answers[parseInt(key)] === exam.answer_key[key]
+    ).length
+    
+    // Save completed exam to history with answers and unique title
     const historyItem = {
       id: Date.now().toString(),
       type: 'exam' as const,
-      title: `Exam (${exam.questions.length} questions)`,
+      title: `${fileNames} - ${score}/${exam.questions.length} (${Math.round((score/exam.questions.length)*100)}%)`,
       timestamp: Date.now(),
       data: {
         exam: exam,

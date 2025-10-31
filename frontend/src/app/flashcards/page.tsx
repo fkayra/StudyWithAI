@@ -164,11 +164,26 @@ export default function FlashcardsPage() {
       setCurrentCard(0)
       setFlipped(false)
       
+      // Get file names for unique title
+      const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+      let fileNames = ''
+      if (uploadedFilesStr) {
+        try {
+          const uploadedFiles = JSON.parse(uploadedFilesStr)
+          fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+          if (uploadedFiles.length > 2) {
+            fileNames += ` +${uploadedFiles.length - 2} more`
+          }
+        } catch (e) {
+          fileNames = 'Documents'
+        }
+      }
+      
       // Save to history
       const historyItem = {
         id: Date.now().toString(),
         type: 'flashcards' as const,
-        title: `${response.data.cards?.length || count} Flashcards`,
+        title: `${fileNames} - ${response.data.cards?.length || count} Cards`,
         timestamp: Date.now(),
         data: response.data
       }

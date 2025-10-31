@@ -162,11 +162,26 @@ export default function SummariesPage() {
 
       setData(response.data)
       
+      // Get file names for unique title
+      const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+      let fileNames = ''
+      if (uploadedFilesStr) {
+        try {
+          const uploadedFiles = JSON.parse(uploadedFilesStr)
+          fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+          if (uploadedFiles.length > 2) {
+            fileNames += ` +${uploadedFiles.length - 2} more`
+          }
+        } catch (e) {
+          fileNames = 'Documents'
+        }
+      }
+      
       // Save to history
       const historyItem = {
         id: Date.now().toString(),
         type: 'summary' as const,
-        title: response.data.summary?.title || 'Summary',
+        title: `${fileNames} - ${response.data.summary?.title || 'Summary'}`,
         timestamp: Date.now(),
         data: response.data
       }
