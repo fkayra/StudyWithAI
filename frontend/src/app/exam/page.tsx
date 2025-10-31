@@ -111,12 +111,28 @@ export default function ExamPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setFiles((prev) => [...prev, ...response.data])
-      const fileIds = response.data.map((f: UploadedFile) => f.file_id)
-      sessionStorage.setItem('uploadedFileIds', JSON.stringify(fileIds))
+      const newFileIds = response.data.map((f: UploadedFile) => f.file_id)
+      const existingIds = sessionStorage.getItem('uploadedFileIds')
+      const allFileIds = existingIds ? [...JSON.parse(existingIds), ...newFileIds] : newFileIds
+      sessionStorage.setItem('uploadedFileIds', JSON.stringify(allFileIds))
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Upload failed')
     } finally {
       setUploading(false)
+    }
+  }
+
+  const removeFile = (fileId: string) => {
+    setFiles((prev) => prev.filter(f => f.file_id !== fileId))
+    const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
+    if (fileIdsStr) {
+      const fileIds = JSON.parse(fileIdsStr)
+      const updatedIds = fileIds.filter((id: string) => id !== fileId)
+      if (updatedIds.length > 0) {
+        sessionStorage.setItem('uploadedFileIds', JSON.stringify(updatedIds))
+      } else {
+        sessionStorage.removeItem('uploadedFileIds')
+      }
     }
   }
 
@@ -546,7 +562,7 @@ export default function ExamPage() {
               <h3 className="text-sm font-medium text-slate-300 mb-3">Uploaded Files ({files.length})</h3>
               <div className="space-y-2">
                 {files.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-[#1E293B]/50 rounded-xl border border-white/5">
+                  <div key={index} className="flex items-center justify-between p-3 bg-[#1E293B]/50 rounded-xl border border-white/5 group hover:border-white/10 transition-all">
                     <div className="flex items-center space-x-3">
                       <div className="text-2xl">{file.mime.includes('pdf') ? '📄' : file.mime.includes('presentation') ? '📊' : '📝'}</div>
                       <div>
@@ -554,7 +570,16 @@ export default function ExamPage() {
                         <p className="text-slate-400 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
                       </div>
                     </div>
-                    <div className="text-green-400">✓</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-green-400">✓</div>
+                      <button
+                        onClick={() => removeFile(file.file_id)}
+                        className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-400/10 rounded"
+                        title="Remove file"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
