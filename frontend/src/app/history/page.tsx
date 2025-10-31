@@ -54,7 +54,18 @@ export default function HistoryPage() {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
       router.push('/flashcards')
     } else if (item.type === 'exam') {
-      sessionStorage.setItem('currentExam', JSON.stringify(item.data))
+      // For exams, check if it has answers (was completed)
+      if (item.data.answers) {
+        // Load with answers and show results
+        sessionStorage.setItem('currentExamState', JSON.stringify({
+          exam: item.data.exam,
+          answers: item.data.answers,
+          showResults: true
+        }))
+      } else {
+        // Load fresh exam to retake
+        sessionStorage.setItem('currentExam', JSON.stringify(item.data))
+      }
       router.push('/exam')
     }
   }
