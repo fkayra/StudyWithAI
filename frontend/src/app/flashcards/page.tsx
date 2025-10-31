@@ -28,7 +28,18 @@ export default function FlashcardsPage() {
   const [showPrompt, setShowPrompt] = useState(true)
 
   useEffect(() => {
-    // Don't auto-generate, wait for user input
+    // Check if viewing from history
+    const viewHistory = sessionStorage.getItem('viewHistory')
+    if (viewHistory) {
+      try {
+        const historyData = JSON.parse(viewHistory)
+        setDeck(historyData)
+        setShowPrompt(false)
+        sessionStorage.removeItem('viewHistory')
+      } catch (e) {
+        console.error('Failed to load history:', e)
+      }
+    }
   }, [])
 
   const generateFlashcards = async () => {
@@ -55,6 +66,17 @@ export default function FlashcardsPage() {
       // Check if response has the expected structure
       if (response.data && response.data.cards && response.data.cards.length > 0) {
         setDeck(response.data)
+        
+        // Save to history
+        const historyItem = {
+          id: Date.now().toString(),
+          type: 'flashcards' as const,
+          title: response.data.deck || 'Flashcard Deck',
+          timestamp: Date.now(),
+          data: response.data
+        }
+        const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+        localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
       } else {
         alert('No flashcards could be generated. The document might not have enough information.')
       }

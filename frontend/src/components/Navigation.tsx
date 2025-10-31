@@ -19,6 +19,7 @@ export function Navigation() {
     { href: '/summaries', label: '📝 Summaries', icon: '📝' },
     { href: '/flashcards', label: '🎴 Flashcards', icon: '🎴' },
     { href: '/exam', label: '🎯 Exams', icon: '🎯' },
+    { href: '/history', label: '📚 History', icon: '📚' },
   ]
 
   return (

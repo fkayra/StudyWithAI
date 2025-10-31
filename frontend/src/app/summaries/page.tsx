@@ -28,7 +28,18 @@ export default function SummariesPage() {
   const [showPrompt, setShowPrompt] = useState(true)
 
   useEffect(() => {
-    // Don't auto-generate, wait for user input
+    // Check if viewing from history
+    const viewHistory = sessionStorage.getItem('viewHistory')
+    if (viewHistory) {
+      try {
+        const historyData = JSON.parse(viewHistory)
+        setData(historyData)
+        setShowPrompt(false)
+        sessionStorage.removeItem('viewHistory')
+      } catch (e) {
+        console.error('Failed to load history:', e)
+      }
+    }
   }, [])
 
   const generateSummary = async () => {
@@ -52,6 +63,17 @@ export default function SummariesPage() {
       })
 
       setData(response.data)
+      
+      // Save to history
+      const historyItem = {
+        id: Date.now().toString(),
+        type: 'summary' as const,
+        title: response.data.summary?.title || 'Summary',
+        timestamp: Date.now(),
+        data: response.data
+      }
+      const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+      localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate summary')
     } finally {

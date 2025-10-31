@@ -79,6 +79,17 @@ export default function ExamPage() {
       }
 
       setExam(response.data)
+      
+      // Save to history
+      const historyItem = {
+        id: Date.now().toString(),
+        type: 'exam' as const,
+        title: `${level.charAt(0).toUpperCase() + level.slice(1)} Exam (${response.data.questions?.length || count} questions)`,
+        timestamp: Date.now(),
+        data: response.data
+      }
+      const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+      localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate exam')
     } finally {

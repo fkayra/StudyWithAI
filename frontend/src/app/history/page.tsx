@@ -1,0 +1,215 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+
+interface HistoryItem {
+  id: string
+  type: 'summary' | 'flashcards' | 'exam'
+  title: string
+  timestamp: number
+  data: any
+}
+
+export default function HistoryPage() {
+  const router = useRouter()
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [filter, setFilter] = useState<'all' | 'summary' | 'flashcards' | 'exam'>('all')
+
+  useEffect(() => {
+    loadHistory()
+  }, [])
+
+  const loadHistory = () => {
+    const stored = localStorage.getItem('studyHistory')
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        setHistory(parsed.sort((a: HistoryItem, b: HistoryItem) => b.timestamp - a.timestamp))
+      } catch (e) {
+        console.error('Failed to load history:', e)
+      }
+    }
+  }
+
+  const clearHistory = () => {
+    if (confirm('Are you sure you want to clear all history?')) {
+      localStorage.removeItem('studyHistory')
+      setHistory([])
+    }
+  }
+
+  const deleteItem = (id: string) => {
+    const newHistory = history.filter(item => item.id !== id)
+    localStorage.setItem('studyHistory', JSON.stringify(newHistory))
+    setHistory(newHistory)
+  }
+
+  const viewItem = (item: HistoryItem) => {
+    // Store the data and navigate to the appropriate page
+    if (item.type === 'summary') {
+      sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
+      router.push('/summaries')
+    } else if (item.type === 'flashcards') {
+      sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
+      router.push('/flashcards')
+    } else if (item.type === 'exam') {
+      sessionStorage.setItem('currentExam', JSON.stringify(item.data))
+      router.push('/exam')
+    }
+  }
+
+  const filteredHistory = filter === 'all' 
+    ? history 
+    : history.filter(item => item.type === filter)
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'summary': return '📝'
+      case 'flashcards': return '🎴'
+      case 'exam': return '🎯'
+      default: return '📄'
+    }
+  }
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'summary': return 'from-teal-500/20 to-teal-600/20 border-teal-500/50'
+      case 'flashcards': return 'from-cyan-500/20 to-cyan-600/20 border-cyan-500/50'
+      case 'exam': return 'from-emerald-500/20 to-emerald-600/20 border-emerald-500/50'
+      default: return 'from-slate-500/20 to-slate-600/20 border-slate-500/50'
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
+      {/* Animated background */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+      </div>
+
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="glass-card mb-8 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-4 mb-2">
+                <div className="text-5xl">📚</div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+                  History
+                </h1>
+              </div>
+              <p className="text-slate-400">
+                View and access your past summaries, flashcards, and exams
+              </p>
+            </div>
+            {history.length > 0 && (
+              <button
+                onClick={clearHistory}
+                className="btn-ghost text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
+              >
+                🗑️ Clear All
+              </button>
+            )}
+          </div>
+
+          {/* Filter buttons */}
+          <div className="flex gap-2 mt-6">
+            {[
+              { value: 'all', label: 'All', icon: '📚' },
+              { value: 'summary', label: 'Summaries', icon: '📝' },
+              { value: 'flashcards', label: 'Flashcards', icon: '🎴' },
+              { value: 'exam', label: 'Exams', icon: '🎯' }
+            ].map((item) => (
+              <button
+                key={item.value}
+                onClick={() => setFilter(item.value as any)}
+                className={`px-4 py-2 rounded-xl border transition-all duration-200 ${
+                  filter === item.value
+                    ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4]'
+                    : 'border-white/15 text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                {item.icon} {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* History list */}
+        {filteredHistory.length === 0 ? (
+          <div className="glass-card text-center p-12 animate-scale-in">
+            <div className="text-6xl mb-4">📭</div>
+            <h2 className="text-2xl font-semibold text-slate-100 mb-2">
+              No History Yet
+            </h2>
+            <p className="text-slate-400 mb-6">
+              {filter === 'all' 
+                ? 'Start generating summaries, flashcards, or exams to see them here!'
+                : `No ${filter} in your history yet.`}
+            </p>
+            <button onClick={() => router.push('/upload')} className="btn-primary">
+              Upload Documents 📄
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredHistory.map((item, index) => (
+              <div
+                key={item.id}
+                className="glass-card card-hover animate-slide-up group"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Icon */}
+                  <div className={`flex-shrink-0 w-16 h-16 bg-gradient-to-br ${getTypeColor(item.type)} rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform`}>
+                    {getTypeIcon(item.type)}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-slate-100 mb-1 truncate">
+                          {item.title}
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm text-slate-400">
+                          <span className="capitalize">{item.type}</span>
+                          <span>•</span>
+                          <span>{new Date(item.timestamp).toLocaleDateString('tr-TR', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => viewItem(item)}
+                          className="px-4 py-2 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] text-white rounded-xl hover:shadow-lg hover:shadow-teal-500/25 transition-all duration-200 hover:scale-105"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => deleteItem(item.id)}
+                          className="px-4 py-2 border border-white/15 text-slate-300 rounded-xl hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all duration-200"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
