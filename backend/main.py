@@ -132,12 +132,14 @@ class FlashcardsRequest(BaseModel):
     style: Optional[str] = "basic"
     deck_name: Optional[str] = "Study Deck"
     count: Optional[int] = 10
+    language: Optional[str] = "en"
     prompt: Optional[str] = None
 
 class ExamRequest(BaseModel):
     file_ids: List[str]
     level: Optional[str] = "lise"
     count: Optional[int] = 5
+    language: Optional[str] = "en"
     prompt: Optional[str] = None
 
 class AskRequest(BaseModel):
@@ -732,9 +734,16 @@ async def flashcards_from_files(
     if req.prompt:
         additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating flashcards."
     
+    language_instruction = ""
+    if req.language == "tr":
+        language_instruction = "\n\nIMPORTANT: Generate ALL flashcards in TURKISH language."
+    elif req.language == "en":
+        language_instruction = "\n\nIMPORTANT: Generate ALL flashcards in ENGLISH language."
+    
     system_prompt = """You are a study assistant. Create helpful flashcards from the document content."""
     
     user_prompt = f"""Create {req.count} flashcards from the documents. Extract key concepts, questions, or important information.
+{language_instruction}
 {additional_instructions}
 
 Output as JSON:
@@ -810,9 +819,16 @@ async def exam_from_files(
     if req.prompt:
         additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating exam questions."
     
+    language_instruction = ""
+    if req.language == "tr":
+        language_instruction = "\n\nIMPORTANT: Generate ALL exam questions in TURKISH language."
+    elif req.language == "en":
+        language_instruction = "\n\nIMPORTANT: Generate ALL exam questions in ENGLISH language."
+    
     system_prompt = """You are a study assistant. Analyze the uploaded document and create exam questions intelligently."""
     
     user_prompt = f"""IMPORTANT: First, analyze the document to determine its type:
+{language_instruction}
 
 1. If the document contains EXISTING EXAM QUESTIONS/TESTS:
    - Identify the topics, subjects, and difficulty level

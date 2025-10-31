@@ -35,6 +35,7 @@ export default function SummariesPage() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [language, setLanguage] = useState<'en' | 'tr'>('en')
 
   useEffect(() => {
     // Check if viewing from history
@@ -116,7 +117,7 @@ export default function SummariesPage() {
     try {
       const response = await apiClient.post('/summarize-from-files', {
         file_ids: fileIds,
-        language: 'en',
+        language: language,
         outline: true,
         prompt: prompt || undefined,
       })
@@ -347,12 +348,41 @@ export default function SummariesPage() {
           )}
         </div>
 
-        {/* Optional Prompt */}
+        {/* Optional Settings */}
         {files.length > 0 && (
           <div className="glass-card mb-6 animate-scale-in">
             <h2 className="text-2xl font-semibold mb-2 text-slate-100">2. Customize (Optional)</h2>
             <p className="text-slate-400 text-sm mb-4">Add specific instructions or leave empty for a general summary</p>
             
+            {/* Language Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Language
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setLanguage('en')}
+                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                    language === 'en'
+                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
+                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                  }`}
+                >
+                  🇬🇧 English
+                </button>
+                <button
+                  onClick={() => setLanguage('tr')}
+                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                    language === 'tr'
+                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
+                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                  }`}
+                >
+                  🇹🇷 Türkçe
+                </button>
+              </div>
+            </div>
+
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-3">
                 Additional Instructions
@@ -360,7 +390,7 @@ export default function SummariesPage() {
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., 'Focus on formulas and definitions', 'Include examples', 'Summarize in Turkish'..."
+                placeholder="e.g., 'Focus on formulas and definitions', 'Include examples'..."
                 className="input-modern h-24 resize-none"
               />
             </div>

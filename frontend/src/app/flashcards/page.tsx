@@ -29,6 +29,7 @@ export default function FlashcardsPage() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [language, setLanguage] = useState<'en' | 'tr'>('en')
 
   useEffect(() => {
     // Check if viewing from history
@@ -104,6 +105,7 @@ export default function FlashcardsPage() {
       const response = await apiClient.post('/flashcards-from-files', {
         file_ids: fileIds,
         count,
+        language: language,
         prompt: prompt || undefined,
       })
 
@@ -351,6 +353,35 @@ export default function FlashcardsPage() {
               />
             </div>
 
+            {/* Language Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Language
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setLanguage('en')}
+                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                    language === 'en'
+                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
+                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                  }`}
+                >
+                  🇬🇧 English
+                </button>
+                <button
+                  onClick={() => setLanguage('tr')}
+                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                    language === 'tr'
+                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
+                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                  }`}
+                >
+                  🇹🇷 Türkçe
+                </button>
+              </div>
+            </div>
+
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-3">
                 Additional Instructions
@@ -358,7 +389,7 @@ export default function FlashcardsPage() {
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., 'Focus on key terms', 'Include formulas', 'Create cards in Turkish'..."
+                placeholder="e.g., 'Focus on key terms', 'Include formulas'..."
                 className="input-modern h-24 resize-none"
               />
             </div>
