@@ -82,6 +82,10 @@ export default function UploadPage() {
     sessionStorage.setItem('uploadedFileIds', JSON.stringify(fileIds))
     // Also save complete file info
     sessionStorage.setItem('uploadedFiles', JSON.stringify(files))
+    
+    // Clear any old exam/summary/flashcards data when uploading new files
+    sessionStorage.removeItem('currentExam')
+    sessionStorage.removeItem('viewHistory')
 
     if (type === 'summary') {
       router.push('/summaries')

@@ -634,12 +634,10 @@ export default function ExamPage() {
                     key={key}
                     onClick={() => {
                       setAnswers({ ...answers, [currentQuestion.number]: key })
-                      // Auto-advance to next question after a short delay
-                      setTimeout(() => {
-                        if (currentQuestionIndex < exam.questions.length - 1) {
-                          setCurrentQuestionIndex(currentQuestionIndex + 1)
-                        }
-                      }, 300)
+                      // Auto-advance to next question immediately
+                      if (currentQuestionIndex < exam.questions.length - 1) {
+                        setCurrentQuestionIndex(currentQuestionIndex + 1)
+                      }
                     }}
                     className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
                       isSelected
