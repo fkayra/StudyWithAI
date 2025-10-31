@@ -31,6 +31,10 @@ export default function Home() {
       sessionStorage.removeItem('currentExam')
       sessionStorage.removeItem('currentExamState')
       
+      // Mark this as a quick exam (not from uploaded files)
+      sessionStorage.setItem('isQuickExam', 'true')
+      sessionStorage.setItem('quickExamPrompt', prompt)
+      
       // Store new exam in sessionStorage and navigate
       sessionStorage.setItem('currentExam', JSON.stringify(response.data))
       router.push('/exam')

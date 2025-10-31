@@ -241,20 +241,32 @@ export default function ExamPage() {
     sessionStorage.setItem('currentExamState', JSON.stringify(examState))
     
     // Get file names for unique title
-    const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
     let fileNames = ''
-    if (uploadedFilesStr) {
-      try {
-        const uploadedFiles = JSON.parse(uploadedFilesStr)
-        fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
-        if (uploadedFiles.length > 2) {
-          fileNames += ` +${uploadedFiles.length - 2} more`
-        }
-      } catch (e) {
-        fileNames = 'Documents'
-      }
+    const isQuickExam = sessionStorage.getItem('isQuickExam') === 'true'
+    
+    if (isQuickExam) {
+      // This is a quick exam from home page
+      const quickPrompt = sessionStorage.getItem('quickExamPrompt') || 'Quick Test'
+      fileNames = `Quick: ${quickPrompt.substring(0, 30)}${quickPrompt.length > 30 ? '...' : ''}`
+      // Clear the quick exam markers
+      sessionStorage.removeItem('isQuickExam')
+      sessionStorage.removeItem('quickExamPrompt')
     } else {
-      fileNames = 'Quick Exam'
+      // This is from uploaded files
+      const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+      if (uploadedFilesStr) {
+        try {
+          const uploadedFiles = JSON.parse(uploadedFilesStr)
+          fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+          if (uploadedFiles.length > 2) {
+            fileNames += ` +${uploadedFiles.length - 2} more`
+          }
+        } catch (e) {
+          fileNames = 'Documents'
+        }
+      } else {
+        fileNames = 'Exam'
+      }
     }
     
     // Calculate score for title
