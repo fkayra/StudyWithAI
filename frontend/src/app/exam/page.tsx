@@ -880,10 +880,6 @@ export default function ExamPage() {
     </div>
   )
 }
-        </div>
-      </div>
-    )
-  }
 
   // No exam loaded - show upload interface
   return (
