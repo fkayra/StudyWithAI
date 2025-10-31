@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api'
 
@@ -24,6 +24,13 @@ interface ExamData {
   }>
 }
 
+interface UploadedFile {
+  file_id: string
+  filename: string
+  mime: string
+  size: number
+}
+
 export default function ExamPage() {
   const searchParams = useSearchParams()
   const isGrounded = searchParams?.get('grounded') === 'true'
@@ -41,29 +48,86 @@ export default function ExamPage() {
   const [level, setLevel] = useState<'ilkokul-ortaokul' | 'lise' | 'universite'>('lise')
   const [prompt, setPrompt] = useState('')
   const [count, setCount] = useState(5)
-  const [showPrompt, setShowPrompt] = useState(false)
+  const [files, setFiles] = useState<UploadedFile[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
 
   useEffect(() => {
-    // Try to load exam from session storage
+    // Check if viewing from history
+    const viewHistory = sessionStorage.getItem('viewHistory')
+    if (viewHistory) {
+      try {
+        const historyData = JSON.parse(viewHistory)
+        setExam(historyData)
+        sessionStorage.removeItem('viewHistory')
+        return
+      } catch (e) {
+        console.error('Failed to load history:', e)
+      }
+    }
+
+    // Try to load exam from session storage (quick exam from home page)
     const storedExam = sessionStorage.getItem('currentExam')
     if (storedExam) {
       setExam(JSON.parse(storedExam))
-    } else if (isGrounded) {
-      // Show prompt screen for grounded exams
-      setShowPrompt(true)
     }
   }, [])
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true)
+    } else if (e.type === 'dragleave') {
+      setDragActive(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    const droppedFiles = Array.from(e.dataTransfer.files)
+    await uploadFiles(droppedFiles)
+  }, [])
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files)
+      await uploadFiles(selectedFiles)
+    }
+  }
+
+  const uploadFiles = async (filesToUpload: File[]) => {
+    setUploading(true)
+    const formData = new FormData()
+    filesToUpload.forEach((file) => {
+      formData.append('files', file)
+    })
+
+    try {
+      const response = await apiClient.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setFiles((prev) => [...prev, ...response.data])
+      const fileIds = response.data.map((f: UploadedFile) => f.file_id)
+      sessionStorage.setItem('uploadedFileIds', JSON.stringify(fileIds))
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const generateGroundedExam = async () => {
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
     if (!fileIdsStr) {
-      window.location.href = '/upload'
+      alert('Please upload documents first')
       return
     }
 
     const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
-    setShowPrompt(false)
 
     try {
       const response = await apiClient.post('/exam-from-files', {
@@ -229,23 +293,281 @@ export default function ExamPage() {
     )
   }
 
-  if (!exam && showPrompt) {
+  if (exam) {
+    const score = showResults
+      ? Object.keys(answers).filter(
+          (key) => answers[parseInt(key)] === exam.answer_key[key]
+        ).length
+      : 0
+
     return (
-      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
+      <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12">
         <div className="max-w-4xl mx-auto">
-          <div className="glass-card animate-fade-in">
-            <div className="text-center mb-8">
-              <div className="text-6xl mb-6">🎯</div>
-              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
-                Generate Practice Exam
-              </h1>
-              <p className="text-slate-300">
-                AI will create exam questions from your uploaded documents
-              </p>
+          <div className="glass-card p-6 mb-8">
+            <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+              Exam
+            </h1>
+            <p className="text-slate-400">
+              {exam.questions.length} questions
+            </p>
+            {showResults && (
+              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-400">
+                  Score: {score} / {exam.questions.length}
+                </div>
+                <div className="progress-bar mt-2">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${(score / exam.questions.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Questions */}
+          <div className="space-y-6">
+            {exam.questions.map((question) => {
+              const userAnswer = answers[question.number]
+              const correctAnswer = exam.answer_key[question.number.toString()]
+              const isCorrect = showResults && userAnswer === correctAnswer
+
+              return (
+                <div key={question.number} className="glass-card p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-100 flex-1">
+                      {question.number}. {question.question}
+                    </h3>
+                    {showResults && (
+                      <div className={`text-2xl ${isCorrect ? '' : 'opacity-50'}`}>
+                        {isCorrect ? '✅' : '❌'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 mb-4">
+                    {Object.entries(question.options).map(([key, value]) => {
+                      const isSelected = userAnswer === key
+                      const isCorrectOption = showResults && key === correctAnswer
+                      const isWrong = showResults && isSelected && !isCorrect
+
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => !showResults && setAnswers({ ...answers, [question.number]: key })}
+                          disabled={showResults}
+                          className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
+                            isCorrectOption
+                              ? 'border-green-500 bg-green-500/10'
+                              : isWrong
+                              ? 'border-red-500 bg-red-500/10'
+                              : isSelected
+                              ? 'border-blue-500 bg-blue-500/10'
+                              : 'border-white/10 hover:border-white/30 hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="font-medium">{key})</span> {value}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {showResults && (
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => getExplain(question.number)}
+                        disabled={loadingExplanation[question.number]}
+                        className="btn-ghost text-sm disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        {loadingExplanation[question.number] ? (
+                          <>
+                            <span className="inline-block animate-spin mr-2">⏳</span>
+                            Loading...
+                          </>
+                        ) : (
+                          '💡 Explain'
+                        )}
+                      </button>
+                      <button
+                        onClick={() => openChat(question.number)}
+                        className="btn-ghost text-sm ml-2"
+                      >
+                        💬 Chat with Tutor
+                      </button>
+
+                      {explanation[question.number] && (
+                        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-slate-300 text-sm">
+                          {explanation[question.number]}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {!showResults && (
+            <div className="mt-8 text-center">
+              <button onClick={handleSubmit} className="btn-primary px-12">
+                Submit Exam
+              </button>
             </div>
+          )}
+
+          {/* Chat Drawer */}
+          {chatOpen !== null && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-end">
+              <div className="glass-card w-full max-w-md h-[600px] m-4 flex flex-col">
+                <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                  <h3 className="font-semibold text-slate-100">Chat with Tutor</h3>
+                  <button
+                    onClick={() => setChatOpen(null)}
+                    className="text-slate-400 hover:text-slate-200"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {chatMessages.filter((m) => m.role !== 'system').map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`p-3 rounded-lg ${
+                        msg.role === 'user'
+                          ? 'bg-blue-500/20 ml-8'
+                          : 'bg-slate-700/50 mr-8'
+                      }`}
+                    >
+                      <div className="text-xs text-slate-400 mb-1">
+                        {msg.role === 'user' ? 'You' : 'AI Tutor'}
+                      </div>
+                      <p className="text-sm text-slate-200 whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="p-3 rounded-lg bg-slate-700/50 mr-8">
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <span className="inline-block animate-spin">⏳</span>
+                        <span className="text-sm">AI Tutor is thinking...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t border-white/10">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && !chatLoading && sendChatMessage()}
+                      disabled={chatLoading}
+                      placeholder="Ask a follow-up question..."
+                      className="flex-1 px-4 py-2 bg-[#1F2937] border border-white/10 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    />
+                    <button 
+                      onClick={sendChatMessage} 
+                      disabled={chatLoading || !chatInput.trim()}
+                      className="btn-primary px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {chatLoading ? '...' : 'Send'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // No exam loaded - show upload interface
+  return (
+    <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+      </div>
+
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="text-6xl mb-4">🎯</div>
+          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+            Generate Practice Exam
+          </h1>
+          <p className="text-xl text-slate-300">
+            Upload documents and AI will create exam questions
+          </p>
+        </div>
+
+        {/* Upload Area */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Upload Documents</h2>
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 transform ${
+              dragActive
+                ? 'border-[#14B8A6] bg-gradient-to-br from-[#14B8A6]/20 to-[#06B6D4]/20 scale-[1.02]'
+                : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+            }`}
+          >
+            <div className={`text-6xl mb-4 transition-transform duration-300 ${dragActive ? 'scale-110 animate-bounce' : ''}`}>
+              📤
+            </div>
+            <p className="text-xl text-slate-300 mb-2 font-semibold">
+              {dragActive ? 'Drop files here!' : 'Drag and drop files here'}
+            </p>
+            <p className="text-sm text-slate-400 mb-6">
+              Supported: PDF, PPTX, DOCX
+            </p>
+            <input
+              type="file"
+              id="file-upload"
+              multiple
+              accept=".pdf,.pptx,.docx"
+              onChange={handleFileInput}
+              className="hidden"
+              disabled={uploading}
+            />
+            <label htmlFor="file-upload" className={`btn-primary inline-block cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {uploading ? '⏳ Uploading...' : '📁 Browse Files'}
+            </label>
+          </div>
+
+          {files.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-slate-300 mb-3">Uploaded Files ({files.length})</h3>
+              <div className="space-y-2">
+                {files.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-[#1E293B]/50 rounded-xl border border-white/5">
+                    <div className="flex items-center space-x-3">
+                      <div className="text-2xl">{file.mime.includes('pdf') ? '📄' : file.mime.includes('presentation') ? '📊' : '📝'}</div>
+                      <div>
+                        <p className="text-slate-200 font-medium">{file.filename}</p>
+                        <p className="text-slate-400 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                    </div>
+                    <div className="text-green-400">✓</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Settings (shown after upload) */}
+        {files.length > 0 && (
+          <div className="glass-card mb-6 animate-scale-in">
+            <h2 className="text-2xl font-semibold mb-2 text-slate-100">2. Customize (Optional)</h2>
+            <p className="text-slate-400 text-sm mb-4">Adjust settings or leave default values</p>
 
             {/* Difficulty Level */}
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-3">
                 Difficulty Level
               </label>
@@ -271,7 +593,7 @@ export default function ExamPage() {
             </div>
 
             {/* Number of questions */}
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-3">
                 Number of Questions
               </label>
@@ -283,25 +605,19 @@ export default function ExamPage() {
                 max="20"
                 className="input-modern"
               />
-              <p className="text-xs text-slate-400 mt-2">
-                💡 Choose between 1-20 questions
-              </p>
             </div>
 
             {/* Optional Prompt */}
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-3">
-                Additional Instructions (Optional)
+                Additional Instructions
               </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="e.g., 'Focus on specific topics', 'Include calculations', 'Make them tricky'..."
-                className="input-modern h-32 resize-none"
+                className="input-modern h-24 resize-none"
               />
-              <p className="text-xs text-slate-400 mt-2">
-                💡 Leave empty for general exam, or add specific instructions
-              </p>
             </div>
 
             {/* Generate Button */}
@@ -312,215 +628,6 @@ export default function ExamPage() {
             >
               {loading ? '⏳ Generating Exam...' : `✨ Generate ${count} Questions`}
             </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!exam) {
-    return (
-      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="glass-card p-12">
-            <div className="text-6xl mb-6">📚</div>
-            <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
-              No Exam Loaded
-            </h1>
-            <p className="text-slate-300 mb-8">
-              Generate an exam from the home page or upload documents first.
-            </p>
-            <button onClick={() => window.location.href = '/upload'} className="btn-primary">
-              Upload Documents 📄
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const score = showResults
-    ? Object.keys(answers).filter(
-        (key) => answers[parseInt(key)] === exam.answer_key[key]
-      ).length
-    : 0
-
-  return (
-    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12">
-      <div className="max-w-4xl mx-auto">
-        <div className="glass-card p-6 mb-8">
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            Exam
-          </h1>
-          <p className="text-slate-400">
-            {exam.questions.length} questions
-          </p>
-          {showResults && (
-            <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-400">
-                Score: {score} / {exam.questions.length}
-              </div>
-              <div className="progress-bar mt-2">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${(score / exam.questions.length) * 100}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Questions */}
-        <div className="space-y-6">
-          {exam.questions.map((question) => {
-            const userAnswer = answers[question.number]
-            const correctAnswer = exam.answer_key[question.number.toString()]
-            const isCorrect = showResults && userAnswer === correctAnswer
-
-            return (
-              <div key={question.number} className="glass-card p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-slate-100 flex-1">
-                    {question.number}. {question.question}
-                  </h3>
-                  {showResults && (
-                    <div className={`text-2xl ${isCorrect ? '' : 'opacity-50'}`}>
-                      {isCorrect ? '✅' : '❌'}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  {Object.entries(question.options).map(([key, value]) => {
-                    const isSelected = userAnswer === key
-                    const isCorrectOption = showResults && key === correctAnswer
-                    const isWrong = showResults && isSelected && !isCorrect
-
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => !showResults && setAnswers({ ...answers, [question.number]: key })}
-                        disabled={showResults}
-                        className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
-                          isCorrectOption
-                            ? 'border-green-500 bg-green-500/10'
-                            : isWrong
-                            ? 'border-red-500 bg-red-500/10'
-                            : isSelected
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-white/10 hover:border-white/30 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="font-medium">{key})</span> {value}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {showResults && (
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => getExplain(question.number)}
-                      disabled={loadingExplanation[question.number]}
-                      className="btn-ghost text-sm disabled:opacity-50 disabled:cursor-wait"
-                    >
-                      {loadingExplanation[question.number] ? (
-                        <>
-                          <span className="inline-block animate-spin mr-2">⏳</span>
-                          Loading...
-                        </>
-                      ) : (
-                        '💡 Explain'
-                      )}
-                    </button>
-                    <button
-                      onClick={() => openChat(question.number)}
-                      className="btn-ghost text-sm ml-2"
-                    >
-                      💬 Chat with Tutor
-                    </button>
-
-                    {explanation[question.number] && (
-                      <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-slate-300 text-sm">
-                        {explanation[question.number]}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {!showResults && (
-          <div className="mt-8 text-center">
-            <button onClick={handleSubmit} className="btn-primary px-12">
-              Submit Exam
-            </button>
-          </div>
-        )}
-
-        {/* Chat Drawer */}
-        {chatOpen !== null && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-end">
-            <div className="glass-card w-full max-w-md h-[600px] m-4 flex flex-col">
-              <div className="p-4 border-b border-white/10 flex justify-between items-center">
-                <h3 className="font-semibold text-slate-100">Chat with Tutor</h3>
-                <button
-                  onClick={() => setChatOpen(null)}
-                  className="text-slate-400 hover:text-slate-200"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {chatMessages.filter((m) => m.role !== 'system').map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`p-3 rounded-lg ${
-                      msg.role === 'user'
-                        ? 'bg-blue-500/20 ml-8'
-                        : 'bg-slate-700/50 mr-8'
-                    }`}
-                  >
-                    <div className="text-xs text-slate-400 mb-1">
-                      {msg.role === 'user' ? 'You' : 'AI Tutor'}
-                    </div>
-                    <p className="text-sm text-slate-200 whitespace-pre-wrap">{msg.content}</p>
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="p-3 rounded-lg bg-slate-700/50 mr-8">
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <span className="inline-block animate-spin">⏳</span>
-                      <span className="text-sm">AI Tutor is thinking...</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-4 border-t border-white/10">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && !chatLoading && sendChatMessage()}
-                    disabled={chatLoading}
-                    placeholder="Ask a follow-up question..."
-                    className="flex-1 px-4 py-2 bg-[#1F2937] border border-white/10 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  />
-                  <button 
-                    onClick={sendChatMessage} 
-                    disabled={chatLoading || !chatInput.trim()}
-                    className="btn-primary px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {chatLoading ? '...' : 'Send'}
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </div>

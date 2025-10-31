@@ -1,31 +1,34 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '@/lib/api'
 
 interface Flashcard {
-  type: string
   front: string
   back: string
-  source?: {
-    file_id: string
-    evidence: string
-  }
 }
 
-interface FlashcardDeck {
-  deck: string
-  cards: Flashcard[]
+interface FlashcardsData {
+  flashcards: Flashcard[]
+}
+
+interface UploadedFile {
+  file_id: string
+  filename: string
+  mime: string
+  size: number
 }
 
 export default function FlashcardsPage() {
-  const [deck, setDeck] = useState<FlashcardDeck | null>(null)
+  const [data, setData] = useState<FlashcardsData | null>(null)
   const [loading, setLoading] = useState(false)
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [flipped, setFlipped] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [count, setCount] = useState(10)
-  const [showPrompt, setShowPrompt] = useState(true)
+  const [currentCard, setCurrentCard] = useState(0)
+  const [flipped, setFlipped] = useState(false)
+  const [files, setFiles] = useState<UploadedFile[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
 
   useEffect(() => {
     // Check if viewing from history
@@ -33,8 +36,7 @@ export default function FlashcardsPage() {
     if (viewHistory) {
       try {
         const historyData = JSON.parse(viewHistory)
-        setDeck(historyData)
-        setShowPrompt(false)
+        setData(historyData)
         sessionStorage.removeItem('viewHistory')
       } catch (e) {
         console.error('Failed to load history:', e)
@@ -42,82 +44,102 @@ export default function FlashcardsPage() {
     }
   }, [])
 
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true)
+    } else if (e.type === 'dragleave') {
+      setDragActive(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    const droppedFiles = Array.from(e.dataTransfer.files)
+    await uploadFiles(droppedFiles)
+  }, [])
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files)
+      await uploadFiles(selectedFiles)
+    }
+  }
+
+  const uploadFiles = async (filesToUpload: File[]) => {
+    setUploading(true)
+    const formData = new FormData()
+    filesToUpload.forEach((file) => {
+      formData.append('files', file)
+    })
+
+    try {
+      const response = await apiClient.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setFiles((prev) => [...prev, ...response.data])
+      const fileIds = response.data.map((f: UploadedFile) => f.file_id)
+      sessionStorage.setItem('uploadedFileIds', JSON.stringify(fileIds))
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const generateFlashcards = async () => {
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
     if (!fileIdsStr) {
-      // Redirect to upload page instead of showing alert
-      window.location.href = '/upload'
+      alert('Please upload documents first')
       return
     }
 
     const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
-    setShowPrompt(false)
 
     try {
       const response = await apiClient.post('/flashcards-from-files', {
         file_ids: fileIds,
-        style: 'basic',
-        deck_name: 'Study Deck',
-        count: count,
+        count,
         prompt: prompt || undefined,
       })
 
-      // Check if response has the expected structure
-      if (response.data && response.data.cards && response.data.cards.length > 0) {
-        setDeck(response.data)
-        
-        // Save to history
-        const historyItem = {
-          id: Date.now().toString(),
-          type: 'flashcards' as const,
-          title: response.data.deck || 'Flashcard Deck',
-          timestamp: Date.now(),
-          data: response.data
-        }
-        const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-        localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
-      } else {
-        alert('No flashcards could be generated. The document might not have enough information.')
+      setData(response.data)
+      setCurrentCard(0)
+      setFlipped(false)
+      
+      // Save to history
+      const historyItem = {
+        id: Date.now().toString(),
+        type: 'flashcards' as const,
+        title: `${response.data.flashcards.length} Flashcards`,
+        timestamp: Date.now(),
+        data: response.data
       }
+      const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+      localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || 'Failed to generate flashcards'
-      if (error.response?.status === 401) {
-        alert('Please login to generate flashcards from your documents.')
-      } else if (errorMsg.includes('INSUFFICIENT_CONTEXT')) {
-        alert('Not enough information in the uploaded files to generate flashcards. Please upload more detailed documents.')
-      } else {
-        alert(errorMsg)
-      }
+      alert(error.response?.data?.detail || 'Failed to generate flashcards')
     } finally {
       setLoading(false)
     }
   }
 
   const nextCard = () => {
-    if (deck && currentIndex < deck.cards.length - 1) {
-      setCurrentIndex(currentIndex + 1)
+    if (data && currentCard < data.flashcards.length - 1) {
       setFlipped(false)
+      setTimeout(() => setCurrentCard(currentCard + 1), 150)
     }
   }
 
   const prevCard = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1)
+    if (currentCard > 0) {
       setFlipped(false)
+      setTimeout(() => setCurrentCard(currentCard - 1), 150)
     }
-  }
-
-  const exportDeck = () => {
-    if (!deck) return
-
-    const dataStr = JSON.stringify(deck, null, 2)
-    const blob = new Blob([dataStr], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${deck.deck}.json`
-    link.click()
   }
 
   if (loading) {
@@ -126,163 +148,230 @@ export default function FlashcardsPage() {
         <div className="glass-card p-8 text-center">
           <div className="text-6xl mb-4 animate-pulse">🎴</div>
           <div className="text-2xl text-slate-300 mb-2">Generating Flashcards...</div>
-          <div className="text-sm text-slate-400">Creating {count} study cards</div>
+          <div className="text-sm text-slate-400">Creating {count} study cards with AI</div>
         </div>
       </div>
     )
   }
 
-  if (!deck && showPrompt) {
+  if (data) {
+    const card = data.flashcards[currentCard]
     return (
-      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="glass-card animate-fade-in">
-            <div className="text-center mb-8">
-              <div className="text-6xl mb-6">🎴</div>
-              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
-                Generate Flashcards
-              </h1>
-              <p className="text-slate-300">
-                AI will create study flashcards from your uploaded documents
-              </p>
-            </div>
+      <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
+        <div className="fixed inset-0 -z-10">
+          <div className="absolute top-20 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+          <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+        </div>
 
-            {/* Number of cards */}
-            <div className="mb-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-8 animate-fade-in">
+            <div className="text-6xl mb-4">🎴</div>
+            <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+              Flashcards
+            </h1>
+            <p className="text-xl text-slate-300">
+              Card {currentCard + 1} of {data.flashcards.length}
+            </p>
+          </div>
+
+          <div className="glass-card mb-8 animate-scale-in">
+            <div
+              onClick={() => setFlipped(!flipped)}
+              className="relative h-80 cursor-pointer perspective-1000"
+            >
+              <div
+                className={`absolute inset-0 transition-all duration-500 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}
+                style={{
+                  transformStyle: 'preserve-3d',
+                  transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                }}
+              >
+                {/* Front */}
+                <div
+                  className="absolute inset-0 backface-hidden bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border-2 border-teal-500/30 rounded-2xl p-8 flex flex-col items-center justify-center text-center"
+                  style={{ backfaceVisibility: 'hidden' }}
+                >
+                  <div className="text-sm font-medium text-teal-400 mb-4">QUESTION</div>
+                  <div className="text-2xl text-slate-100 leading-relaxed">{card.front}</div>
+                  <div className="mt-8 text-slate-400 text-sm">Click to reveal answer</div>
+                </div>
+
+                {/* Back */}
+                <div
+                  className="absolute inset-0 backface-hidden bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border-2 border-cyan-500/30 rounded-2xl p-8 flex flex-col items-center justify-center text-center"
+                  style={{
+                    backfaceVisibility: 'hidden',
+                    transform: 'rotateY(180deg)',
+                  }}
+                >
+                  <div className="text-sm font-medium text-cyan-400 mb-4">ANSWER</div>
+                  <div className="text-2xl text-slate-100 leading-relaxed">{card.back}</div>
+                  <div className="mt-8 text-slate-400 text-sm">Click to see question</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-4 mb-8">
+            <button
+              onClick={prevCard}
+              disabled={currentCard === 0}
+              className="btn-ghost flex-1 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ← Previous
+            </button>
+            <button
+              onClick={nextCard}
+              disabled={currentCard === data.flashcards.length - 1}
+              className="btn-primary flex-1 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
+
+          <div className="flex gap-4 animate-fade-in">
+            <button
+              onClick={() => {
+                setData(null)
+                setFiles([])
+                sessionStorage.removeItem('uploadedFileIds')
+              }}
+              className="btn-ghost flex-1"
+            >
+              📄 Create New Set
+            </button>
+            <button
+              onClick={() => {
+                setCurrentCard(0)
+                setFlipped(false)
+              }}
+              className="btn-ghost flex-1"
+            >
+              🔄 Restart
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+      </div>
+
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="text-6xl mb-4">🎴</div>
+          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+            Generate Flashcards
+          </h1>
+          <p className="text-xl text-slate-300">
+            Upload documents and AI will create flashcards
+          </p>
+        </div>
+
+        {/* Upload Area */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Upload Documents</h2>
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 transform ${
+              dragActive
+                ? 'border-[#14B8A6] bg-gradient-to-br from-[#14B8A6]/20 to-[#06B6D4]/20 scale-[1.02]'
+                : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+            }`}
+          >
+            <div className={`text-6xl mb-4 transition-transform duration-300 ${dragActive ? 'scale-110 animate-bounce' : ''}`}>
+              📤
+            </div>
+            <p className="text-xl text-slate-300 mb-2 font-semibold">
+              {dragActive ? 'Drop files here!' : 'Drag and drop files here'}
+            </p>
+            <p className="text-sm text-slate-400 mb-6">
+              Supported: PDF, PPTX, DOCX
+            </p>
+            <input
+              type="file"
+              id="file-upload"
+              multiple
+              accept=".pdf,.pptx,.docx"
+              onChange={handleFileInput}
+              className="hidden"
+              disabled={uploading}
+            />
+            <label htmlFor="file-upload" className={`btn-primary inline-block cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {uploading ? '⏳ Uploading...' : '📁 Browse Files'}
+            </label>
+          </div>
+
+          {files.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-slate-300 mb-3">Uploaded Files ({files.length})</h3>
+              <div className="space-y-2">
+                {files.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-[#1E293B]/50 rounded-xl border border-white/5">
+                    <div className="flex items-center space-x-3">
+                      <div className="text-2xl">{file.mime.includes('pdf') ? '📄' : file.mime.includes('presentation') ? '📊' : '📝'}</div>
+                      <div>
+                        <p className="text-slate-200 font-medium">{file.filename}</p>
+                        <p className="text-slate-400 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                    </div>
+                    <div className="text-green-400">✓</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Optional Settings */}
+        {files.length > 0 && (
+          <div className="glass-card mb-6 animate-scale-in">
+            <h2 className="text-2xl font-semibold mb-2 text-slate-100">2. Customize (Optional)</h2>
+            <p className="text-slate-400 text-sm mb-4">Adjust settings or leave default values</p>
+            
+            <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-3">
-                Number of Flashcards
+                Number of Cards
               </label>
               <input
                 type="number"
-                value={count}
-                onChange={(e) => setCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 10)))}
                 min="1"
                 max="50"
+                value={count}
+                onChange={(e) => setCount(parseInt(e.target.value))}
                 className="input-modern"
               />
-              <p className="text-xs text-slate-400 mt-2">
-                💡 Choose between 1-50 cards
-              </p>
             </div>
 
-            {/* Optional Prompt */}
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-3">
-                Additional Instructions (Optional)
+                Additional Instructions
               </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., 'Focus on definitions', 'Include code examples', 'Make them challenging'..."
-                className="input-modern h-32 resize-none"
+                placeholder="e.g., 'Focus on key terms', 'Include formulas', 'Create cards in Turkish'..."
+                className="input-modern h-24 resize-none"
               />
-              <p className="text-xs text-slate-400 mt-2">
-                💡 Leave empty for general flashcards, or add specific instructions
-              </p>
             </div>
 
-            {/* Generate Button */}
             <button
               onClick={generateFlashcards}
               disabled={loading}
               className="btn-primary w-full"
             >
-              {loading ? '⏳ Generating Flashcards...' : `✨ Generate ${count} Flashcards`}
+              {loading ? '⏳ Generating Flashcards...' : '✨ Generate Flashcards'}
             </button>
           </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!deck || deck.cards.length === 0) {
-    return (
-      <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="glass-card p-12">
-            <div className="text-6xl mb-6">❌</div>
-            <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
-              No Flashcards Generated
-            </h1>
-            <p className="text-slate-300 mb-8">
-              Failed to generate flashcards. Try again or upload different documents.
-            </p>
-            <button onClick={() => setShowPrompt(true)} className="btn-primary">
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const currentCard = deck.cards[currentIndex]
-
-  return (
-    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12">
-      <div className="max-w-2xl mx-auto">
-        <div className="glass-card p-6 mb-8">
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            {deck.deck}
-          </h1>
-          <p className="text-slate-400">
-            Card {currentIndex + 1} of {deck.cards.length}
-          </p>
-          <div className="progress-bar mt-4">
-            <div
-              className="progress-fill"
-              style={{ width: `${((currentIndex + 1) / deck.cards.length) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Flashcard */}
-        <div
-          onClick={() => setFlipped(!flipped)}
-          className="glass-card p-12 min-h-[400px] flex flex-col items-center justify-center cursor-pointer hover:shadow-2xl transition-shadow duration-300 mb-8"
-        >
-          <div className="text-center">
-            <div className="text-sm text-slate-400 mb-4">
-              {flipped ? 'Back' : 'Front'}
-            </div>
-            <div className="text-2xl text-slate-100 font-medium leading-relaxed">
-              {flipped ? currentCard.back : currentCard.front}
-            </div>
-            {flipped && currentCard.source && (
-              <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-xs text-slate-400">
-                📎 {currentCard.source.evidence}
-              </div>
-            )}
-          </div>
-          <div className="text-sm text-slate-500 mt-8">
-            Click to flip
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={prevCard}
-            disabled={currentIndex === 0}
-            className="flex-1 btn-ghost disabled:opacity-30"
-          >
-            ← Previous
-          </button>
-          <button
-            onClick={nextCard}
-            disabled={currentIndex === deck.cards.length - 1}
-            className="flex-1 btn-ghost disabled:opacity-30"
-          >
-            Next →
-          </button>
-        </div>
-
-        {/* Export */}
-        <div className="text-center">
-          <button onClick={exportDeck} className="btn-primary">
-            📥 Export Deck (JSON)
-          </button>
-        </div>
+        )}
       </div>
     </div>
   )
