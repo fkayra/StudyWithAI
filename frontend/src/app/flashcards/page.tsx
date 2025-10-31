@@ -225,40 +225,38 @@ export default function FlashcardsPage() {
             </p>
           </div>
 
-          <div className="glass-card mb-8 animate-scale-in">
+          <div
+            onClick={() => setFlipped(!flipped)}
+            className="relative h-96 cursor-pointer mb-8 animate-scale-in"
+          >
             <div
-              onClick={() => setFlipped(!flipped)}
-              className="relative h-80 cursor-pointer perspective-1000"
+              className={`absolute inset-0 transition-all duration-700 ease-in-out ${flipped ? 'rotate-y-180' : ''}`}
+              style={{
+                transformStyle: 'preserve-3d',
+                transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+              }}
             >
+              {/* Front */}
               <div
-                className={`absolute inset-0 transition-all duration-500 preserve-3d ${flipped ? 'rotate-y-180' : ''}`}
+                className="absolute inset-0 backface-hidden bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] rounded-3xl p-12 flex flex-col items-center justify-center text-center shadow-2xl"
+                style={{ backfaceVisibility: 'hidden' }}
+              >
+                <div className="text-xs uppercase tracking-wider text-teal-400 mb-6 font-semibold">Question</div>
+                <div className="text-3xl text-slate-100 leading-relaxed font-light">{card.front}</div>
+                <div className="mt-10 text-slate-500 text-sm">Tap to reveal</div>
+              </div>
+
+              {/* Back */}
+              <div
+                className="absolute inset-0 backface-hidden bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] rounded-3xl p-12 flex flex-col items-center justify-center text-center shadow-2xl"
                 style={{
-                  transformStyle: 'preserve-3d',
-                  transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                  backfaceVisibility: 'hidden',
+                  transform: 'rotateY(180deg)',
                 }}
               >
-                {/* Front */}
-                <div
-                  className="absolute inset-0 backface-hidden bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border-2 border-teal-500/30 rounded-2xl p-8 flex flex-col items-center justify-center text-center"
-                  style={{ backfaceVisibility: 'hidden' }}
-                >
-                  <div className="text-sm font-medium text-teal-400 mb-4">QUESTION</div>
-                  <div className="text-2xl text-slate-100 leading-relaxed">{card.front}</div>
-                  <div className="mt-8 text-slate-400 text-sm">Click to reveal answer</div>
-                </div>
-
-                {/* Back */}
-                <div
-                  className="absolute inset-0 backface-hidden bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border-2 border-cyan-500/30 rounded-2xl p-8 flex flex-col items-center justify-center text-center"
-                  style={{
-                    backfaceVisibility: 'hidden',
-                    transform: 'rotateY(180deg)',
-                  }}
-                >
-                  <div className="text-sm font-medium text-cyan-400 mb-4">ANSWER</div>
-                  <div className="text-2xl text-slate-100 leading-relaxed">{card.back}</div>
-                  <div className="mt-8 text-slate-400 text-sm">Click to see question</div>
-                </div>
+                <div className="text-xs uppercase tracking-wider text-cyan-400 mb-6 font-semibold">Answer</div>
+                <div className="text-3xl text-slate-100 leading-relaxed font-light">{card.back}</div>
+                <div className="mt-10 text-slate-500 text-sm">Tap to flip back</div>
               </div>
             </div>
           </div>
