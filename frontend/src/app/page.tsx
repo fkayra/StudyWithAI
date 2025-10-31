@@ -37,7 +37,7 @@ export default function Home() {
       
       // Store new exam in sessionStorage and navigate
       sessionStorage.setItem('currentExam', JSON.stringify(response.data))
-      router.push('/exam')
+      router.push('/exam?quick=true')
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || 'Failed to generate test.'
       if (error.response?.status === 403) {

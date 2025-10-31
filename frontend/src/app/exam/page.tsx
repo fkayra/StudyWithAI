@@ -35,6 +35,7 @@ export default function ExamPage() {
   const searchParams = useSearchParams()
   const isGrounded = searchParams?.get('grounded') === 'true'
   const isViewMode = searchParams?.get('view') === 'history'
+  const isQuickMode = searchParams?.get('quick') === 'true'
 
   const [exam, setExam] = useState<ExamData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -54,6 +55,7 @@ export default function ExamPage() {
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [isHistoryView, setIsHistoryView] = useState(false)
+  const [isQuickExam, setIsQuickExam] = useState(false)
 
   useEffect(() => {
     // If this is a view from history, load from temporary storage
@@ -75,7 +77,19 @@ export default function ExamPage() {
       return
     }
 
-    // For normal exam page (not from history):
+    // If this is a quick exam from home page
+    if (isQuickMode) {
+      setIsQuickExam(true) // Mark as quick exam
+      const storedExam = sessionStorage.getItem('currentExam')
+      if (storedExam) {
+        setExam(JSON.parse(storedExam))
+        // Clear it immediately after loading so it doesn't persist
+        sessionStorage.removeItem('currentExam')
+      }
+      return
+    }
+
+    // For normal exam page (generated from uploaded files):
     // Priority 1: Load active exam state (if user is in middle of exam)
     const examState = sessionStorage.getItem('currentExamState')
     if (examState) {
@@ -107,7 +121,7 @@ export default function ExamPage() {
         console.error('Failed to load uploaded files:', e)
       }
     }
-  }, [isViewMode])
+  }, [isViewMode, isQuickMode])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -256,9 +270,9 @@ export default function ExamPage() {
     setShowResults(true)
     setCurrentQuestionIndex(0) // Go back to first question to review
     
-    // Only save to currentExamState if this is NOT a history view
-    // History exams should not persist in the main Exams tab
-    if (!isHistoryView) {
+    // Only save to currentExamState if this is a NORMAL exam (from uploaded files)
+    // History exams and quick exams should NOT persist in the main Exams tab
+    if (!isHistoryView && !isQuickExam) {
       const examState = {
         exam: exam,
         answers: answers,
