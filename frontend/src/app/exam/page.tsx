@@ -880,68 +880,6 @@ export default function ExamPage() {
     </div>
   )
 }
-
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-end">
-              <div className="glass-card w-full max-w-md h-[600px] m-4 flex flex-col">
-                <div className="p-4 border-b border-white/10 flex justify-between items-center">
-                  <h3 className="font-semibold text-slate-100">Chat with Tutor</h3>
-                  <button
-                    onClick={() => setChatOpen(null)}
-                    className="text-slate-400 hover:text-slate-200"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {chatMessages.filter((m) => m.role !== 'system').map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`p-3 rounded-lg ${
-                        msg.role === 'user'
-                          ? 'bg-blue-500/20 ml-8'
-                          : 'bg-slate-700/50 mr-8'
-                      }`}
-                    >
-                      <div className="text-xs text-slate-400 mb-1">
-                        {msg.role === 'user' ? 'You' : 'AI Tutor'}
-                      </div>
-                      <p className="text-sm text-slate-200 whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  ))}
-                  {chatLoading && (
-                    <div className="p-3 rounded-lg bg-slate-700/50 mr-8">
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <span className="inline-block animate-spin">⏳</span>
-                        <span className="text-sm">AI Tutor is thinking...</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-4 border-t border-white/10">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && !chatLoading && sendChatMessage()}
-                      disabled={chatLoading}
-                      placeholder="Ask a follow-up question..."
-                      className="flex-1 px-4 py-2 bg-[#1F2937] border border-white/10 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                    />
-                    <button 
-                      onClick={sendChatMessage} 
-                      disabled={chatLoading || !chatInput.trim()}
-                      className="btn-primary px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {chatLoading ? '...' : 'Send'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     )
