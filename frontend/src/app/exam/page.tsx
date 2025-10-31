@@ -529,6 +529,8 @@ export default function ExamPage() {
                   setShowResults(false)
                   setAnswers({})
                   setCurrentQuestionIndex(0)
+                  // Clear saved exam state for fresh restart
+                  sessionStorage.removeItem('currentExamState')
                 }}
                 className="btn-primary px-8"
               >
