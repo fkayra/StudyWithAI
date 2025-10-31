@@ -39,6 +39,7 @@ export default function ExamPage() {
   const [loading, setLoading] = useState(false)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [showResults, setShowResults] = useState(false)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [explanation, setExplanation] = useState<Record<number, string>>({})
   const [loadingExplanation, setLoadingExplanation] = useState<Record<number, boolean>>({})
   const [chatOpen, setChatOpen] = useState<number | null>(null)
@@ -207,7 +208,45 @@ export default function ExamPage() {
   }
 
   const handleSubmit = () => {
+    if (!exam) return
+    
+    // Check for unanswered questions
+    const unansweredQuestions: number[] = []
+    exam.questions.forEach((q) => {
+      if (!answers[q.number]) {
+        unansweredQuestions.push(q.number)
+      }
+    })
+    
+    if (unansweredQuestions.length > 0) {
+      const confirmSubmit = window.confirm(
+        `Şu sorular henüz işaretlenmedi: ${unansweredQuestions.join(', ')}\n\nYine de sınavı bitirmek istiyor musunuz?`
+      )
+      if (!confirmSubmit) return
+    }
+    
     setShowResults(true)
+    setCurrentQuestionIndex(0) // Go back to first question to review
+  }
+
+  const goToQuestion = (index: number) => {
+    setCurrentQuestionIndex(index)
+  }
+
+  const nextQuestion = () => {
+    if (exam && currentQuestionIndex < exam.questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
+    }
+  }
+
+  const prevQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1)
+    }
+  }
+
+  const skipQuestion = () => {
+    nextQuestion()
   }
 
   const getExplain = async (questionNum: number) => {
@@ -345,24 +384,30 @@ export default function ExamPage() {
         ).length
       : 0
 
+    const currentQuestion = exam.questions[currentQuestionIndex]
+    const userAnswer = answers[currentQuestion.number]
+    const correctAnswer = exam.answer_key[currentQuestion.number.toString()]
+    const isCorrect = showResults && userAnswer === correctAnswer
+
     return (
       <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12">
         <div className="max-w-4xl mx-auto">
-          <div className="glass-card p-6 mb-8">
+          {/* Header */}
+          <div className="glass-card p-6 mb-6">
             <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
               Exam
             </h1>
             <p className="text-slate-400">
-              {exam.questions.length} questions
+              {exam.questions.length} questions • Question {currentQuestionIndex + 1} of {exam.questions.length}
             </p>
             {showResults && (
               <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-400">
                   Score: {score} / {exam.questions.length}
                 </div>
-                <div className="progress-bar mt-2">
+                <div className="h-2 rounded-lg bg-white/15 mt-2 overflow-hidden">
                   <div
-                    className="progress-fill"
+                    className="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500"
                     style={{ width: `${(score / exam.questions.length) * 100}%` }}
                   />
                 </div>
@@ -370,95 +415,146 @@ export default function ExamPage() {
             )}
           </div>
 
-          {/* Questions */}
-          <div className="space-y-6">
-            {exam.questions.map((question) => {
-              const userAnswer = answers[question.number]
-              const correctAnswer = exam.answer_key[question.number.toString()]
-              const isCorrect = showResults && userAnswer === correctAnswer
-
-              return (
-                <div key={question.number} className="glass-card p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-100 flex-1">
-                      {question.number}. {question.question}
-                    </h3>
-                    {showResults && (
-                      <div className={`text-2xl ${isCorrect ? '' : 'opacity-50'}`}>
-                        {isCorrect ? '✅' : '❌'}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 mb-4">
-                    {Object.entries(question.options).map(([key, value]) => {
-                      const isSelected = userAnswer === key
-                      const isCorrectOption = showResults && key === correctAnswer
-                      const isWrong = showResults && isSelected && !isCorrect
-
-                      return (
-                        <button
-                          key={key}
-                          onClick={() => !showResults && setAnswers({ ...answers, [question.number]: key })}
-                          disabled={showResults}
-                          className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
-                            isCorrectOption
-                              ? 'border-green-500 bg-green-500/10'
-                              : isWrong
-                              ? 'border-red-500 bg-red-500/10'
-                              : isSelected
-                              ? 'border-blue-500 bg-blue-500/10'
-                              : 'border-white/10 hover:border-white/30 hover:bg-white/5'
-                          }`}
-                        >
-                          <span className="font-medium">{key})</span> {value}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {showResults && (
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => getExplain(question.number)}
-                        disabled={loadingExplanation[question.number]}
-                        className="btn-ghost text-sm disabled:opacity-50 disabled:cursor-wait"
-                      >
-                        {loadingExplanation[question.number] ? (
-                          <>
-                            <span className="inline-block animate-spin mr-2">⏳</span>
-                            Loading...
-                          </>
-                        ) : (
-                          '💡 Explain'
-                        )}
-                      </button>
-                      <button
-                        onClick={() => openChat(question.number)}
-                        className="btn-ghost text-sm ml-2"
-                      >
-                        💬 Chat with Tutor
-                      </button>
-
-                      {explanation[question.number] && (
-                        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-slate-300 text-sm">
-                          {explanation[question.number]}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+          {/* Question Navigation */}
+          <div className="glass-card p-4 mb-6">
+            <div className="flex flex-wrap gap-2">
+              {exam.questions.map((q, index) => {
+                const isAnswered = !!answers[q.number]
+                const isCurrent = index === currentQuestionIndex
+                const isCorrectAnswer = showResults && answers[q.number] === exam.answer_key[q.number.toString()]
+                
+                return (
+                  <button
+                    key={q.number}
+                    onClick={() => goToQuestion(index)}
+                    className={`w-10 h-10 rounded-lg font-semibold transition-all ${
+                      isCurrent
+                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white scale-110 shadow-lg'
+                        : showResults
+                        ? isCorrectAnswer
+                          ? 'bg-green-500/20 border border-green-500/50 text-green-400'
+                          : isAnswered
+                          ? 'bg-red-500/20 border border-red-500/50 text-red-400'
+                          : 'bg-slate-700/20 border border-slate-500/30 text-slate-500'
+                        : isAnswered
+                        ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400'
+                        : 'bg-slate-700/20 border border-slate-500/30 text-slate-400 hover:border-slate-400'
+                    }`}
+                  >
+                    {q.number}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {!showResults && (
-            <div className="mt-8 text-center">
-              <button onClick={handleSubmit} className="btn-primary px-12">
-                Submit Exam
-              </button>
+          {/* Current Question */}
+          <div className="glass-card p-6 mb-6">
+            <div className="flex items-start justify-between mb-6">
+              <h3 className="text-xl font-semibold text-slate-100 flex-1">
+                {currentQuestion.number}. {currentQuestion.question}
+              </h3>
+              {showResults && (
+                <div className={`text-3xl ${isCorrect ? '' : 'opacity-50'}`}>
+                  {isCorrect ? '✅' : '❌'}
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="space-y-3 mb-6">
+              {Object.entries(currentQuestion.options).map(([key, value]) => {
+                const isSelected = userAnswer === key
+                const isCorrectOption = showResults && key === correctAnswer
+                const isWrong = showResults && isSelected && !isCorrect
+
+                return (
+                  <button
+                    key={key}
+                    onClick={() => !showResults && setAnswers({ ...answers, [currentQuestion.number]: key })}
+                    disabled={showResults}
+                    className={`w-full text-left p-4 rounded-lg border transition-all duration-200 ${
+                      isCorrectOption
+                        ? 'border-green-500 bg-green-500/10'
+                        : isWrong
+                        ? 'border-red-500 bg-red-500/10'
+                        : isSelected
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-white/10 hover:border-white/30 hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="font-medium">{key})</span> {value}
+                  </button>
+                )
+              })}
+            </div>
+
+            {showResults && (
+              <div className="space-y-3 border-t border-white/10 pt-4">
+                <button
+                  onClick={() => getExplain(currentQuestion.number)}
+                  disabled={loadingExplanation[currentQuestion.number]}
+                  className="btn-ghost text-sm disabled:opacity-50 disabled:cursor-wait"
+                >
+                  {loadingExplanation[currentQuestion.number] ? (
+                    <>
+                      <span className="inline-block animate-spin mr-2">⏳</span>
+                      Loading...
+                    </>
+                  ) : (
+                    '💡 Explain'
+                  )}
+                </button>
+                <button
+                  onClick={() => openChat(currentQuestion.number)}
+                  className="btn-ghost text-sm ml-2"
+                >
+                  💬 Chat with Tutor
+                </button>
+
+                {explanation[currentQuestion.number] && (
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-slate-300 text-sm mt-3">
+                    {explanation[currentQuestion.number]}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Navigation Buttons */}
+          <div className="flex gap-4">
+            <button
+              onClick={prevQuestion}
+              disabled={currentQuestionIndex === 0}
+              className="btn-ghost flex-1 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ← Önceki
+            </button>
+            
+            {!showResults && (
+              <>
+                <button
+                  onClick={skipQuestion}
+                  className="btn-ghost flex-1"
+                >
+                  Boş Geç →
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  className="btn-primary flex-1"
+                >
+                  Sınavı Bitir 🏁
+                </button>
+              </>
+            )}
+            
+            <button
+              onClick={nextQuestion}
+              disabled={currentQuestionIndex === exam.questions.length - 1}
+              className="btn-ghost flex-1 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Sonraki →
+            </button>
+          </div>
 
           {/* Chat Drawer */}
           {chatOpen !== null && (
