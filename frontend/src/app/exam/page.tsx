@@ -70,6 +70,8 @@ export default function ExamPage() {
       const storedExam = sessionStorage.getItem('currentExam')
       if (storedExam) {
         setExam(JSON.parse(storedExam))
+        // Clear it immediately after loading so it doesn't persist
+        sessionStorage.removeItem('currentExam')
       }
     }
     
