@@ -37,6 +37,7 @@ export default function ViewExamPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [historyItemId, setHistoryItemId] = useState<string | null>(null)
 
   useEffect(() => {
     // Only run once - check if already loaded
@@ -47,7 +48,8 @@ export default function ViewExamPage() {
     
     // Load exam from sessionStorage (set by history page)
     const historyExamState = sessionStorage.getItem('viewHistoryExam')
-    console.log('view-exam useEffect: historyExamState =', historyExamState)
+    const historyId = sessionStorage.getItem('viewHistoryExamId')
+    console.log('view-exam useEffect: historyExamState =', historyExamState, 'historyId =', historyId)
     
     if (historyExamState) {
       try {
@@ -58,6 +60,7 @@ export default function ViewExamPage() {
           setExam(state.exam)
           setAnswers(state.answers || {})
           setShowResults(state.showResults || false)
+          setHistoryItemId(historyId)
           setIsLoaded(true)
           // Don't clear immediately - keep it in case of hot reload
           console.log('Exam loaded successfully')
@@ -118,6 +121,38 @@ export default function ViewExamPage() {
     
     setShowResults(true)
     setCurrentQuestionIndex(0)
+    
+    // Update history item if this is from history
+    if (historyItemId) {
+      try {
+        const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+        const itemIndex = history.findIndex((item: any) => item.id === historyItemId)
+        
+        if (itemIndex !== -1) {
+          // Calculate new score
+          const score = Object.keys(answers).filter(
+            (key) => answers[parseInt(key)] === exam.answer_key[key]
+          ).length
+          
+          // Update the history item with new answers and score
+          history[itemIndex].data = {
+            exam: exam,
+            answers: answers
+          }
+          
+          // Update title with new score
+          const oldTitle = history[itemIndex].title
+          const titleWithoutScore = oldTitle.split(' - ')[0] // Get filename/Quick part
+          history[itemIndex].title = `${titleWithoutScore} - ${score}/${exam.questions.length} (${Math.round((score/exam.questions.length)*100)}%)`
+          history[itemIndex].timestamp = Date.now()
+          
+          localStorage.setItem('studyHistory', JSON.stringify(history))
+          console.log('Updated history item:', history[itemIndex])
+        }
+      } catch (e) {
+        console.error('Failed to update history:', e)
+      }
+    }
   }
 
   const getExplain = async (questionNum: number) => {
