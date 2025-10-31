@@ -80,6 +80,8 @@ export default function UploadPage() {
 
     const fileIds = files.map((f) => f.file_id)
     sessionStorage.setItem('uploadedFileIds', JSON.stringify(fileIds))
+    // Also save complete file info
+    sessionStorage.setItem('uploadedFiles', JSON.stringify(files))
 
     if (type === 'summary') {
       router.push('/summaries')
