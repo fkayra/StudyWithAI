@@ -879,10 +879,6 @@ export default function ExamPage() {
       </div>
     </div>
   )
-}
-
-  // No exam loaded - show upload interface
-  return (
     <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
       <div className="fixed inset-0 -z-10">
         <div className="absolute top-20 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
