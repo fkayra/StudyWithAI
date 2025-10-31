@@ -36,8 +36,15 @@ export default function ViewExamPage() {
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
+    // Only run once - check if already loaded
+    if (isLoaded) {
+      console.log('Already loaded, skipping')
+      return
+    }
+    
     // Load exam from sessionStorage (set by history page)
     const historyExamState = sessionStorage.getItem('viewHistoryExam')
     console.log('view-exam useEffect: historyExamState =', historyExamState)
@@ -51,8 +58,8 @@ export default function ViewExamPage() {
           setExam(state.exam)
           setAnswers(state.answers || {})
           setShowResults(state.showResults || false)
-          // Clear after loading successfully
-          sessionStorage.removeItem('viewHistoryExam')
+          setIsLoaded(true)
+          // Don't clear immediately - keep it in case of hot reload
           console.log('Exam loaded successfully')
         } else {
           console.error('No exam in state')
@@ -63,11 +70,13 @@ export default function ViewExamPage() {
         router.push('/history')
       }
     } else {
-      // No exam data, redirect to history
-      console.log('No exam data in sessionStorage, redirecting to history')
-      router.push('/history')
+      // No exam data, redirect to history only if we haven't loaded yet
+      if (!exam) {
+        console.log('No exam data in sessionStorage and no exam loaded, redirecting to history')
+        router.push('/history')
+      }
     }
-  }, [])
+  }, [isLoaded, exam, router])
 
   const goToQuestion = (index: number) => {
     setCurrentQuestionIndex(index)
