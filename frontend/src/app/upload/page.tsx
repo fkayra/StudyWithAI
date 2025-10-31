@@ -85,6 +85,7 @@ export default function UploadPage() {
     
     // Clear any old exam/summary/flashcards data when uploading new files
     sessionStorage.removeItem('currentExam')
+    sessionStorage.removeItem('currentExamState')
     sessionStorage.removeItem('viewHistory')
 
     if (type === 'summary') {
