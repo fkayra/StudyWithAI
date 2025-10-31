@@ -617,22 +617,30 @@ async def summarize_from_files(
     if not file_contents:
         raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
     
-    system_prompt = """You are a study assistant. Analyze the documents provided and create a helpful summary."""
+    system_prompt = """You are a study assistant. You create study notes from course materials and documents."""
     
-    user_prompt = f"""Create a structured summary from the documents. Even if the content is brief, extract key points and organize them.
+    user_prompt = f"""Analyze the provided documents as if they are course materials or lecture notes. 
+Create a comprehensive study summary that directly explains the content, NOT what the document contains.
 
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks, no extra text.
+IMPORTANT RULES:
+- Write as if teaching the subject directly (e.g., "Agents perceive..." not "The document discusses agents...")
+- Organize content by topics, not by document structure
+- Extract key concepts, definitions, formulas, and explanations
+- Present information as educational content, like a textbook or study guide
+- Focus on WHAT is taught, not THAT it is taught
+
+Return ONLY valid JSON, no markdown code blocks, no extra text.
 
 Output format:
 {{
   "summary": {{
-    "title": "Document Summary",
+    "title": "Study Notes: [Topic Name]",
     "sections": [
-      {{"heading": "Main Points", "bullets": ["point 1", "point 2"]}}
+      {{"heading": "Topic Name", "bullets": ["Direct explanation of concept 1", "Direct explanation of concept 2"]}}
     ]
   }},
   "citations": [
-    {{"file_id": "doc", "evidence": "key information from the document"}}
+    {{"file_id": "doc", "evidence": "Source of this information"}}
   ]
 }}
 
