@@ -54,27 +54,7 @@ export default function ExamPage() {
   const [dragActive, setDragActive] = useState(false)
 
   useEffect(() => {
-    // Check if viewing from history
-    const viewHistory = sessionStorage.getItem('viewHistory')
-    if (viewHistory) {
-      try {
-        const historyData = JSON.parse(viewHistory)
-        // Check if history item has saved answers (was completed before)
-        if (historyData.answers) {
-          setExam(historyData.exam || historyData)
-          setAnswers(historyData.answers)
-          setShowResults(true)
-        } else {
-          setExam(historyData)
-        }
-        sessionStorage.removeItem('viewHistory')
-        return
-      } catch (e) {
-        console.error('Failed to load history:', e)
-      }
-    }
-
-    // Try to load exam state from session storage (preserves progress)
+    // Priority 1: Try to load exam state from session storage (preserves progress)
     const examState = sessionStorage.getItem('currentExamState')
     if (examState) {
       try {
@@ -85,13 +65,12 @@ export default function ExamPage() {
       } catch (e) {
         console.error('Failed to load exam state:', e)
       }
-      return
-    }
-
-    // Try to load exam from session storage (quick exam from home page)
-    const storedExam = sessionStorage.getItem('currentExam')
-    if (storedExam) {
-      setExam(JSON.parse(storedExam))
+    } else {
+      // Priority 2: Load exam from currentExam (quick exam or fresh from upload)
+      const storedExam = sessionStorage.getItem('currentExam')
+      if (storedExam) {
+        setExam(JSON.parse(storedExam))
+      }
     }
     
     // Load existing uploaded files from sessionStorage
