@@ -190,7 +190,17 @@ export default function ExamPage() {
         return
       }
 
+      // Clear old exam states before setting new exam
+      sessionStorage.removeItem('currentExam')
+      sessionStorage.removeItem('currentExamState')
+      
       setExam(response.data)
+      setAnswers({})
+      setShowResults(false)
+      setCurrentQuestionIndex(0)
+      
+      // Save new exam to currentExam
+      sessionStorage.setItem('currentExam', JSON.stringify(response.data))
       
       // Don't save to history yet - save when exam is completed
       // Just set the exam for now

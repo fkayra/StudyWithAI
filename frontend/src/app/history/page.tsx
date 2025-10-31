@@ -46,6 +46,10 @@ export default function HistoryPage() {
   }
 
   const viewItem = (item: HistoryItem) => {
+    // Clear any existing exam data first
+    sessionStorage.removeItem('currentExam')
+    sessionStorage.removeItem('currentExamState')
+    
     // Store the data and navigate to the appropriate page
     if (item.type === 'summary') {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))

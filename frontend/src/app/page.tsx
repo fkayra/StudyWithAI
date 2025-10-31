@@ -27,7 +27,11 @@ export default function Home() {
         count: 5
       })
       
-      // Store exam in sessionStorage and navigate
+      // Clear old exam states before storing new exam
+      sessionStorage.removeItem('currentExam')
+      sessionStorage.removeItem('currentExamState')
+      
+      // Store new exam in sessionStorage and navigate
       sessionStorage.setItem('currentExam', JSON.stringify(response.data))
       router.push('/exam')
     } catch (error: any) {
