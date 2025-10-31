@@ -52,7 +52,6 @@ export default function ExamPage() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
-  const [language, setLanguage] = useState<'en' | 'tr'>('en')
 
   useEffect(() => {
     // Check if viewing from history
@@ -60,12 +59,33 @@ export default function ExamPage() {
     if (viewHistory) {
       try {
         const historyData = JSON.parse(viewHistory)
-        setExam(historyData)
+        // Check if history item has saved answers (was completed before)
+        if (historyData.answers) {
+          setExam(historyData.exam || historyData)
+          setAnswers(historyData.answers)
+          setShowResults(true)
+        } else {
+          setExam(historyData)
+        }
         sessionStorage.removeItem('viewHistory')
         return
       } catch (e) {
         console.error('Failed to load history:', e)
       }
+    }
+
+    // Try to load exam state from session storage (preserves progress)
+    const examState = sessionStorage.getItem('currentExamState')
+    if (examState) {
+      try {
+        const state = JSON.parse(examState)
+        setExam(state.exam)
+        setAnswers(state.answers || {})
+        setShowResults(state.showResults || false)
+      } catch (e) {
+        console.error('Failed to load exam state:', e)
+      }
+      return
     }
 
     // Try to load exam from session storage (quick exam from home page)
@@ -174,12 +194,15 @@ export default function ExamPage() {
     const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
 
+    // Get global language from localStorage
+    const globalLanguage = localStorage.getItem('appLanguage') || 'en'
+
     try {
       const response = await apiClient.post('/exam-from-files', {
         file_ids: fileIds,
         level,
         count: count,
-        language: language,
+        language: globalLanguage,
         prompt: prompt || undefined,
       })
 
@@ -190,16 +213,8 @@ export default function ExamPage() {
 
       setExam(response.data)
       
-      // Save to history
-      const historyItem = {
-        id: Date.now().toString(),
-        type: 'exam' as const,
-        title: `${level.charAt(0).toUpperCase() + level.slice(1)} Exam (${response.data.questions?.length || count} questions)`,
-        timestamp: Date.now(),
-        data: response.data
-      }
-      const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-      localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
+      // Don't save to history yet - save when exam is completed
+      // Just set the exam for now
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate exam')
     } finally {
@@ -227,6 +242,28 @@ export default function ExamPage() {
     
     setShowResults(true)
     setCurrentQuestionIndex(0) // Go back to first question to review
+    
+    // Save exam state to sessionStorage
+    const examState = {
+      exam: exam,
+      answers: answers,
+      showResults: true
+    }
+    sessionStorage.setItem('currentExamState', JSON.stringify(examState))
+    
+    // Save completed exam to history with answers
+    const historyItem = {
+      id: Date.now().toString(),
+      type: 'exam' as const,
+      title: `Exam (${exam.questions.length} questions)`,
+      timestamp: Date.now(),
+      data: {
+        exam: exam,
+        answers: answers
+      }
+    }
+    const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+    localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
   }
 
   const goToQuestion = (index: number) => {
@@ -820,35 +857,6 @@ export default function ExamPage() {
                 max="20"
                 className="input-modern"
               />
-            </div>
-
-            {/* Language Selection */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-3">
-                Language
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setLanguage('en')}
-                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                    language === 'en'
-                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
-                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
-                  }`}
-                >
-                  🇬🇧 English
-                </button>
-                <button
-                  onClick={() => setLanguage('tr')}
-                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                    language === 'tr'
-                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
-                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
-                  }`}
-                >
-                  🇹🇷 Türkçe
-                </button>
-              </div>
             </div>
 
             {/* Optional Prompt */}
