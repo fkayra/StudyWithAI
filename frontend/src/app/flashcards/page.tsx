@@ -341,14 +341,14 @@ export default function FlashcardsPage() {
                         <p className="text-slate-400 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-green-400">✓</div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-green-400 text-xl">✓</div>
                       <button
                         onClick={() => removeFile(file.file_id)}
-                        className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-400/10 rounded"
+                        className="text-red-400 hover:text-red-300 hover:scale-110 transition-all p-2 hover:bg-red-400/20 rounded-lg text-xl"
                         title="Remove file"
                       >
-                        🗑️
+                        ❌
                       </button>
                     </div>
                   </div>

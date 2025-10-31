@@ -628,7 +628,14 @@ async def summarize_from_files(
     if req.prompt:
         additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating the summary."
     
-    user_prompt = f"""Analyze the provided documents as if they are course materials or lecture notes. 
+    language_instruction = ""
+    if req.language == "tr":
+        language_instruction = "\n\nIMPORTANT: Generate the ENTIRE summary in TURKISH language. All headings, bullet points, and explanations must be in Turkish."
+    elif req.language == "en":
+        language_instruction = "\n\nIMPORTANT: Generate the ENTIRE summary in ENGLISH language. All headings, bullet points, and explanations must be in English."
+    
+    user_prompt = f"""Analyze the provided documents as if they are course materials or lecture notes.
+{language_instruction} 
 Create a comprehensive study summary that directly explains the content, NOT what the document contains.
 
 IMPORTANT RULES:
