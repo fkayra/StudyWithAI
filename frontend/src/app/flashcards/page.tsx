@@ -358,25 +358,9 @@ export default function FlashcardsPage() {
           </p>
         </div>
 
-        {/* Number of Cards */}
-        <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">2. Settings</h2>
-          <label className="block text-sm font-medium text-slate-300 mb-3">
-            Number of Cards
-          </label>
-          <input
-            type="number"
-            min="1"
-            max="50"
-            value={count}
-            onChange={(e) => setCount(parseInt(e.target.value))}
-            className="input-modern"
-          />
-        </div>
-
         {/* Upload Area - Optional */}
         <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">3. Upload Documents (Optional)</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">2. Upload Documents (Optional)</h2>
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -439,6 +423,22 @@ export default function FlashcardsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Settings */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">3. Settings</h2>
+          <label className="block text-sm font-medium text-slate-300 mb-3">
+            Number of Cards
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={count}
+            onChange={(e) => setCount(parseInt(e.target.value))}
+            className="input-modern"
+          />
         </div>
 
         {/* Generate Button */}

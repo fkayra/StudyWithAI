@@ -815,55 +815,9 @@ export default function ExamPage() {
           </p>
         </div>
 
-        {/* Settings */}
-        <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">2. Settings</h2>
-          
-          {/* Difficulty Level */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-300 mb-3">
-              Difficulty Level
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { value: 'ilkokul-ortaokul', label: 'İlk-Ortaokul' },
-                { value: 'lise', label: 'Lise' },
-                { value: 'universite', label: 'Üniversite' }
-              ].map((item) => (
-                <button
-                  key={item.value}
-                  onClick={() => setLevel(item.value as any)}
-                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                    level === item.value
-                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
-                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Number of questions */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-300 mb-3">
-              Number of Questions
-            </label>
-            <input
-              type="number"
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
-              min="1"
-              max="20"
-              className="input-modern"
-            />
-          </div>
-        </div>
-
         {/* Upload Area - Optional */}
         <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">3. Upload Documents (Optional)</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">2. Upload Documents (Optional)</h2>
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -926,6 +880,52 @@ export default function ExamPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Settings */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">3. Settings</h2>
+          
+          {/* Difficulty Level */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Difficulty Level
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { value: 'ilkokul-ortaokul', label: 'İlk-Ortaokul' },
+                { value: 'lise', label: 'Lise' },
+                { value: 'universite', label: 'Üniversite' }
+              ].map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => setLevel(item.value as any)}
+                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                    level === item.value
+                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
+                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Number of questions */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Number of Questions
+            </label>
+            <input
+              type="number"
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+              min="1"
+              max="20"
+              className="input-modern"
+            />
+          </div>
         </div>
 
         {/* Generate Button */}
