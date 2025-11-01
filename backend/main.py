@@ -122,13 +122,13 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 class SummarizeRequest(BaseModel):
-    file_ids: List[str]
+    file_ids: Optional[List[str]] = None
     language: Optional[str] = "en"
     outline: Optional[bool] = False
     prompt: Optional[str] = None
 
 class FlashcardsRequest(BaseModel):
-    file_ids: List[str]
+    file_ids: Optional[List[str]] = None
     style: Optional[str] = "basic"
     deck_name: Optional[str] = "Study Deck"
     count: Optional[int] = 10
@@ -136,7 +136,7 @@ class FlashcardsRequest(BaseModel):
     prompt: Optional[str] = None
 
 class ExamRequest(BaseModel):
-    file_ids: List[str]
+    file_ids: Optional[List[str]] = None
     level: Optional[str] = "lise"
     count: Optional[int] = 5
     language: Optional[str] = "en"
@@ -608,19 +608,21 @@ async def summarize_from_files(
 ):
     rate_limit(request)
     
+    # Require either file_ids or prompt
+    if not req.file_ids and not req.prompt:
+        raise HTTPException(status_code=400, detail="Please provide either files or a prompt.")
+    
     # Fetch file contents from database or in-memory storage
     file_contents = []
-    for file_id in req.file_ids:
-        # Try database first
-        upload = db.query(Upload).filter(Upload.file_id == file_id).first()
-        if upload and upload.content:
-            file_contents.append(upload.content)
-        # Try in-memory storage for anonymous users
-        elif file_id in file_content_store:
-            file_contents.append(file_content_store[file_id]["content"])
-    
-    if not file_contents:
-        raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
+    if req.file_ids:
+        for file_id in req.file_ids:
+            # Try database first
+            upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+            if upload and upload.content:
+                file_contents.append(upload.content)
+            # Try in-memory storage for anonymous users
+            elif file_id in file_content_store:
+                file_contents.append(file_content_store[file_id]["content"])
     
     system_prompt = """You are a study assistant. You create study notes from course materials and documents."""
     
@@ -634,7 +636,8 @@ async def summarize_from_files(
     elif req.language == "en":
         language_instruction = "\n\nIMPORTANT: Generate the ENTIRE summary in ENGLISH language. All headings, bullet points, and explanations must be in English."
     
-    user_prompt = f"""Analyze the provided documents as if they are course materials or lecture notes.
+    if file_contents:
+        user_prompt = f"""Analyze the provided documents as if they are course materials or lecture notes.
 {language_instruction} 
 Create a comprehensive study summary that directly explains the content, NOT what the document contains.
 
@@ -645,6 +648,19 @@ IMPORTANT RULES:
 - Present information as educational content, like a textbook or study guide
 - Focus on WHAT is taught, not THAT it is taught
 {additional_instructions}
+    else:
+        # No files, just prompt
+        user_prompt = f"""Create a comprehensive study summary on the topic requested by the user.
+{language_instruction}
+
+IMPORTANT RULES:
+- Write as if teaching the subject directly
+- Organize content by topics
+- Include key concepts, definitions, formulas, and explanations
+- Present information as educational content, like a textbook or study guide
+
+USER REQUEST:
+{req.prompt}
 
 Return ONLY valid JSON, no markdown code blocks, no extra text.
 
@@ -723,19 +739,21 @@ async def flashcards_from_files(
 ):
     rate_limit(request)
     
+    # Require either file_ids or prompt
+    if not req.file_ids and not req.prompt:
+        raise HTTPException(status_code=400, detail="Please provide either files or a prompt.")
+    
     # Fetch file contents from database or in-memory storage
     file_contents = []
-    for file_id in req.file_ids:
-        # Try database first
-        upload = db.query(Upload).filter(Upload.file_id == file_id).first()
-        if upload and upload.content:
-            file_contents.append(upload.content)
-        # Try in-memory storage for anonymous users
-        elif file_id in file_content_store:
-            file_contents.append(file_content_store[file_id]["content"])
-    
-    if not file_contents:
-        raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
+    if req.file_ids:
+        for file_id in req.file_ids:
+            # Try database first
+            upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+            if upload and upload.content:
+                file_contents.append(upload.content)
+            # Try in-memory storage for anonymous users
+            elif file_id in file_content_store:
+                file_contents.append(file_content_store[file_id]["content"])
     
     additional_instructions = ""
     if req.prompt:
@@ -747,9 +765,10 @@ async def flashcards_from_files(
     elif req.language == "en":
         language_instruction = "\n\nIMPORTANT: Generate ALL flashcards in ENGLISH language."
     
-    system_prompt = """You are a study assistant. Create helpful flashcards from the document content."""
+    system_prompt = """You are a study assistant. Create helpful flashcards from the document content or user topics."""
     
-    user_prompt = f"""Create {req.count} flashcards from the documents. Extract key concepts, questions, or important information.
+    if file_contents:
+        user_prompt = f"""Create {req.count} flashcards from the documents. Extract key concepts, questions, or important information.
 {language_instruction}
 {additional_instructions}
 
@@ -758,6 +777,21 @@ Output as JSON:
   "deck": "{req.deck_name}",
   "cards": [
     {{"type": "{req.style}", "front": "Question or term", "back": "Answer or definition", "source": {{"file_id": "doc", "evidence": "relevant text"}}}}
+  ]
+}}"""
+    else:
+        # No files, just prompt
+        user_prompt = f"""Create {req.count} flashcards about the topic requested by the user.
+{language_instruction}
+
+USER REQUEST:
+{req.prompt}
+
+Output as JSON:
+{{
+  "deck": "{req.deck_name}",
+  "cards": [
+    {{"type": "{req.style}", "front": "Question or term", "back": "Answer or definition"}}
   ]
 }}"""
     
@@ -806,19 +840,21 @@ async def exam_from_files(
     if current_user and not check_quota(db, current_user, "exam"):
         raise HTTPException(status_code=403, detail="Exam generation quota exceeded")
     
+    # Require either file_ids or prompt
+    if not req.file_ids and not req.prompt:
+        raise HTTPException(status_code=400, detail="Please provide either files or a prompt.")
+    
     # Fetch file contents from database or in-memory storage
     file_contents = []
-    for file_id in req.file_ids:
-        # Try database first
-        upload = db.query(Upload).filter(Upload.file_id == file_id).first()
-        if upload and upload.content:
-            file_contents.append(upload.content)
-        # Try in-memory storage for anonymous users
-        elif file_id in file_content_store:
-            file_contents.append(file_content_store[file_id]["content"])
-    
-    if not file_contents:
-        raise HTTPException(status_code=400, detail="No file content found. Please upload files first.")
+    if req.file_ids:
+        for file_id in req.file_ids:
+            # Try database first
+            upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+            if upload and upload.content:
+                file_contents.append(upload.content)
+            # Try in-memory storage for anonymous users
+            elif file_id in file_content_store:
+                file_contents.append(file_content_store[file_id]["content"])
     
     level_text = get_level_text(req.level)
     
@@ -832,9 +868,10 @@ async def exam_from_files(
     elif req.language == "en":
         language_instruction = "\n\nIMPORTANT: Generate ALL exam questions in ENGLISH language."
     
-    system_prompt = """You are a study assistant. Analyze the uploaded document and create exam questions intelligently."""
+    system_prompt = """You are a study assistant. Create exam questions intelligently from documents or user topics."""
     
-    user_prompt = f"""IMPORTANT: First, analyze the document to determine its type:
+    if file_contents:
+        user_prompt = f"""IMPORTANT: First, analyze the document to determine its type:
 {language_instruction}
 
 1. If the document contains EXISTING EXAM QUESTIONS/TESTS:
@@ -850,6 +887,17 @@ async def exam_from_files(
 
 Difficulty level: {level_text}
 {additional_instructions}
+    else:
+        # No files, generate from prompt
+        user_prompt = f"""Create {req.count} multiple-choice exam questions on the topic requested by the user.
+{language_instruction}
+
+USER REQUEST:
+{req.prompt}
+
+Difficulty level: {level_text}
+
+Create educational questions that test understanding of the topic
 
 Follow this EXACT format:
 
