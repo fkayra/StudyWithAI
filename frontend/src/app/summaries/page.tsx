@@ -353,7 +353,7 @@ export default function SummariesPage() {
 
         {/* Prompt Area - Primary */}
         <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Enter Topic or Instructions</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Enter Topic or Instructions (Optional)</h2>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}

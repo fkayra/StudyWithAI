@@ -797,13 +797,73 @@ export default function ExamPage() {
             Generate Practice Exam
           </h1>
           <p className="text-xl text-slate-300">
-            Upload documents and AI will create exam questions
+            Enter a topic or upload documents for AI-generated exam questions
           </p>
         </div>
 
-        {/* Upload Area */}
+        {/* Prompt Area - Primary */}
         <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Upload Documents</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Enter Topic or Instructions (Optional)</h2>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="e.g., 'Create exam on World War II', 'Test my knowledge of calculus', 'Questions about Python programming'..."
+            className="input-modern h-32 resize-none w-full"
+          />
+          <p className="text-slate-400 text-sm mt-2">
+            Or upload documents below for document-based exams
+          </p>
+        </div>
+
+        {/* Settings */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">2. Settings</h2>
+          
+          {/* Difficulty Level */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Difficulty Level
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { value: 'ilkokul-ortaokul', label: 'İlk-Ortaokul' },
+                { value: 'lise', label: 'Lise' },
+                { value: 'universite', label: 'Üniversite' }
+              ].map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => setLevel(item.value as any)}
+                  className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                    level === item.value
+                      ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
+                      : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Number of questions */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Number of Questions
+            </label>
+            <input
+              type="number"
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+              min="1"
+              max="20"
+              className="input-modern"
+            />
+          </div>
+        </div>
+
+        {/* Upload Area - Optional */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">3. Upload Documents (Optional)</h2>
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -868,76 +928,25 @@ export default function ExamPage() {
           )}
         </div>
 
-        {/* Settings (shown after upload) */}
-        {files.length > 0 && (
-          <div className="glass-card mb-6 animate-scale-in">
-            <h2 className="text-2xl font-semibold mb-2 text-slate-100">2. Customize (Optional)</h2>
-            <p className="text-slate-400 text-sm mb-4">Adjust settings or leave default values</p>
-
-            {/* Difficulty Level */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-3">
-                Difficulty Level
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { value: 'ilkokul-ortaokul', label: 'İlk-Ortaokul' },
-                  { value: 'lise', label: 'Lise' },
-                  { value: 'universite', label: 'Üniversite' }
-                ].map((item) => (
-                  <button
-                    key={item.value}
-                    onClick={() => setLevel(item.value as any)}
-                    className={`py-3 px-4 rounded-xl border transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                      level === item.value
-                        ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4] shadow-lg shadow-teal-500/25'
-                        : 'border-white/15 text-slate-300 hover:bg-white/5 hover:border-white/30'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Number of questions */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-3">
-                Number of Questions
-              </label>
-              <input
-                type="number"
-                value={count}
-                onChange={(e) => setCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
-                min="1"
-                max="20"
-                className="input-modern"
-              />
-            </div>
-
-            {/* Optional Prompt */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-3">
-                Additional Instructions
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., 'Focus on specific topics', 'Include calculations', 'Make them tricky'..."
-                className="input-modern h-24 resize-none"
-              />
-            </div>
-
-            {/* Generate Button */}
-            <button
-              onClick={generateGroundedExam}
-              disabled={loading}
-              className="btn-primary w-full"
-            >
-              {loading ? '⏳ Generating Exam...' : `✨ Generate ${count} Questions`}
-            </button>
-          </div>
-        )}
+        {/* Generate Button */}
+        <div className="glass-card mb-6 animate-scale-in">
+          <button
+            onClick={generateGroundedExam}
+            disabled={loading}
+            className="btn-primary w-full text-lg py-4"
+          >
+            {loading ? '⏳ Generating Exam...' : `✨ Generate ${count} Questions`}
+          </button>
+          <p className="text-slate-400 text-sm text-center mt-4">
+            {files.length > 0 && prompt.trim() 
+              ? `Will create ${count} questions from ${files.length} document(s) with your instructions`
+              : files.length > 0
+              ? `Will create ${count} questions from ${files.length} document(s)`
+              : prompt.trim()
+              ? `Will create ${count} questions based on your topic`
+              : 'Enter a topic or upload documents to continue'}
+          </p>
+        </div>
       </div>
     </div>
   )

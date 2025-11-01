@@ -340,13 +340,43 @@ export default function FlashcardsPage() {
             Generate Flashcards
           </h1>
           <p className="text-xl text-slate-300">
-            Upload documents and AI will create flashcards
+            Enter a topic or upload documents for AI-generated flashcards
           </p>
         </div>
 
-        {/* Upload Area */}
+        {/* Prompt Area - Primary */}
         <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Upload Documents</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Enter Topic or Instructions (Optional)</h2>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="e.g., 'Create flashcards about photosynthesis', 'Focus on key chemistry formulas'..."
+            className="input-modern h-32 resize-none w-full"
+          />
+          <p className="text-slate-400 text-sm mt-2">
+            Or upload documents below for document-based flashcards
+          </p>
+        </div>
+
+        {/* Number of Cards */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">2. Settings</h2>
+          <label className="block text-sm font-medium text-slate-300 mb-3">
+            Number of Cards
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={count}
+            onChange={(e) => setCount(parseInt(e.target.value))}
+            className="input-modern"
+          />
+        </div>
+
+        {/* Upload Area - Optional */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">3. Upload Documents (Optional)</h2>
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -411,47 +441,25 @@ export default function FlashcardsPage() {
           )}
         </div>
 
-        {/* Optional Settings */}
-        {files.length > 0 && (
-          <div className="glass-card mb-6 animate-scale-in">
-            <h2 className="text-2xl font-semibold mb-2 text-slate-100">2. Customize (Optional)</h2>
-            <p className="text-slate-400 text-sm mb-4">Adjust settings or leave default values</p>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-3">
-                Number of Cards
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="50"
-                value={count}
-                onChange={(e) => setCount(parseInt(e.target.value))}
-                className="input-modern"
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-3">
-                Additional Instructions
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., 'Focus on key terms', 'Include formulas'..."
-                className="input-modern h-24 resize-none"
-              />
-            </div>
-
-            <button
-              onClick={generateFlashcards}
-              disabled={loading}
-              className="btn-primary w-full"
-            >
-              {loading ? '⏳ Generating Flashcards...' : '✨ Generate Flashcards'}
-            </button>
-          </div>
-        )}
+        {/* Generate Button */}
+        <div className="glass-card mb-6 animate-scale-in">
+          <button
+            onClick={generateFlashcards}
+            disabled={loading}
+            className="btn-primary w-full text-lg py-4"
+          >
+            {loading ? '⏳ Generating Flashcards...' : '✨ Generate Flashcards'}
+          </button>
+          <p className="text-slate-400 text-sm text-center mt-4">
+            {files.length > 0 && prompt.trim() 
+              ? `Will create ${count} flashcards from ${files.length} document(s) with your instructions`
+              : files.length > 0
+              ? `Will create ${count} flashcards from ${files.length} document(s)`
+              : prompt.trim()
+              ? `Will create ${count} flashcards based on your topic`
+              : 'Enter a topic or upload documents to continue'}
+          </p>
+        </div>
       </div>
     </div>
   )
