@@ -648,6 +648,21 @@ IMPORTANT RULES:
 - Present information as educational content, like a textbook or study guide
 - Focus on WHAT is taught, not THAT it is taught
 {additional_instructions}
+
+Return ONLY valid JSON, no markdown code blocks, no extra text.
+
+Output format:
+{{
+  "summary": {{
+    "title": "Study Notes: [Topic Name]",
+    "sections": [
+      {{"heading": "Topic Name", "bullets": ["Direct explanation of concept 1", "Direct explanation of concept 2"]}}
+    ]
+  }},
+  "citations": [
+    {{"file_id": "doc", "evidence": "Source of this information"}}
+  ]
+}}"""
     else:
         # No files, just prompt
         user_prompt = f"""Create a comprehensive study summary on the topic requested by the user.
@@ -887,17 +902,6 @@ async def exam_from_files(
 
 Difficulty level: {level_text}
 {additional_instructions}
-    else:
-        # No files, generate from prompt
-        user_prompt = f"""Create {req.count} multiple-choice exam questions on the topic requested by the user.
-{language_instruction}
-
-USER REQUEST:
-{req.prompt}
-
-Difficulty level: {level_text}
-
-Create educational questions that test understanding of the topic
 
 Follow this EXACT format:
 
@@ -917,6 +921,34 @@ Cevap Anahtarı:
 1-A, 2-B, ...
 
 Generate questions now based on the document type you identified."""
+    else:
+        # No files, generate from prompt
+        user_prompt = f"""Create {req.count} multiple-choice exam questions on the topic requested by the user.
+{language_instruction}
+
+USER REQUEST:
+{req.prompt}
+
+Difficulty level: {level_text}
+
+Create educational questions that test understanding of the topic.
+
+Follow this EXACT format:
+
+1. Question text here?
+A) Option A
+B) Option B
+C) Option C
+D) Option D
+
+2. Question text here?
+A) Option A
+B) Option B
+C) Option C
+D) Option D
+
+Cevap Anahtarı:
+1-A, 2-B, ..."""
     
     try:
         response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
