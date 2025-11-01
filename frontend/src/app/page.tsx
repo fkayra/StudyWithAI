@@ -35,7 +35,7 @@ export default function Home() {
           {/* CTA Buttons */}
           <div className="flex gap-4 justify-center animate-slide-up" style={{ animationDelay: '0.2s' }}>
             <button 
-              onClick={() => router.push('/upload')} 
+              onClick={() => router.push('/register')} 
               className="px-8 py-4 bg-gradient-to-r from-teal-500 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-teal-500/30 transition-all duration-300 hover:scale-105"
             >
               Get Started
