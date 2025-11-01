@@ -140,13 +140,15 @@ export default function SummariesPage() {
   }
 
   const generateSummary = async () => {
+    // Require either files or prompt
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
-    if (!fileIdsStr) {
-      alert('Please upload documents first')
+    const fileIds = fileIdsStr ? JSON.parse(fileIdsStr) : null
+    
+    if (!fileIds && !prompt.trim()) {
+      alert('Please provide either a topic/prompt or upload documents')
       return
     }
 
-    const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
 
     // Get global language from localStorage
@@ -154,7 +156,7 @@ export default function SummariesPage() {
 
     try {
       const response = await apiClient.post('/summarize-from-files', {
-        file_ids: fileIds,
+        file_ids: fileIds || undefined,
         language: globalLanguage,
         outline: true,
         prompt: prompt || undefined,
@@ -162,26 +164,32 @@ export default function SummariesPage() {
 
       setData(response.data)
       
-      // Get file names for unique title
-      const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
-      let fileNames = ''
-      if (uploadedFilesStr) {
-        try {
-          const uploadedFiles = JSON.parse(uploadedFilesStr)
-          fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
-          if (uploadedFiles.length > 2) {
-            fileNames += ` +${uploadedFiles.length - 2} more`
+      // Generate title based on what was provided
+      let titlePrefix = ''
+      if (fileIds) {
+        // If files were provided, use file names
+        const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+        if (uploadedFilesStr) {
+          try {
+            const uploadedFiles = JSON.parse(uploadedFilesStr)
+            titlePrefix = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+            if (uploadedFiles.length > 2) {
+              titlePrefix += ` +${uploadedFiles.length - 2} more`
+            }
+          } catch (e) {
+            titlePrefix = 'Documents'
           }
-        } catch (e) {
-          fileNames = 'Documents'
         }
+      } else if (prompt.trim()) {
+        // If only prompt, use truncated prompt
+        titlePrefix = `Topic: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`
       }
       
       // Save to history
       const historyItem = {
         id: Date.now().toString(),
         type: 'summary' as const,
-        title: `${fileNames} - ${response.data.summary?.title || 'Summary'}`,
+        title: `${titlePrefix} - ${response.data.summary?.title || 'Summary'}`,
         timestamp: Date.now(),
         data: response.data
       }
@@ -339,13 +347,27 @@ export default function SummariesPage() {
             Generate Summary
           </h1>
           <p className="text-xl text-slate-300">
-            Upload documents and AI will create study notes
+            Enter a topic or upload documents for AI-generated study notes
           </p>
         </div>
 
-        {/* Upload Area */}
+        {/* Prompt Area - Primary */}
         <div className="glass-card mb-6 animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Upload Documents</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">1. Enter Topic or Instructions</h2>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="e.g., 'Explain quantum physics basics', 'Summarize photosynthesis', 'Key concepts in World War II'..."
+            className="input-modern h-32 resize-none w-full"
+          />
+          <p className="text-slate-400 text-sm mt-2">
+            Or upload documents below for document-based summaries
+          </p>
+        </div>
+
+        {/* Upload Area - Optional */}
+        <div className="glass-card mb-6 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">2. Upload Documents (Optional)</h2>
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -410,33 +432,25 @@ export default function SummariesPage() {
           )}
         </div>
 
-        {/* Optional Settings */}
-        {files.length > 0 && (
-          <div className="glass-card mb-6 animate-scale-in">
-            <h2 className="text-2xl font-semibold mb-2 text-slate-100">2. Customize (Optional)</h2>
-            <p className="text-slate-400 text-sm mb-4">Add specific instructions or leave empty for a general summary</p>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-300 mb-3">
-                Additional Instructions
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., 'Focus on formulas and definitions', 'Include examples'..."
-                className="input-modern h-24 resize-none"
-              />
-            </div>
-
-            <button
-              onClick={generateSummary}
-              disabled={loading}
-              className="btn-primary w-full"
-            >
-              {loading ? '⏳ Generating Summary...' : '✨ Generate Summary'}
-            </button>
-          </div>
-        )}
+        {/* Generate Button */}
+        <div className="glass-card mb-6 animate-scale-in">
+          <button
+            onClick={generateSummary}
+            disabled={loading}
+            className="btn-primary w-full text-lg py-4"
+          >
+            {loading ? '⏳ Generating Summary...' : '✨ Generate Summary'}
+          </button>
+          <p className="text-slate-400 text-sm text-center mt-4">
+            {files.length > 0 && prompt.trim() 
+              ? `Will summarize ${files.length} document(s) with your instructions`
+              : files.length > 0
+              ? `Will summarize ${files.length} document(s)`
+              : prompt.trim()
+              ? 'Will create summary based on your topic'
+              : 'Enter a topic or upload documents to continue'}
+          </p>
+        </div>
       </div>
     </div>
   )
