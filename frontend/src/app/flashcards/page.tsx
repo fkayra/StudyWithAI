@@ -140,13 +140,14 @@ export default function FlashcardsPage() {
   }
 
   const generateFlashcards = async () => {
+    // Require either files or prompt
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
-    if (!fileIdsStr) {
-      alert('Please upload documents first')
+    const fileIds = fileIdsStr ? JSON.parse(fileIdsStr) : null
+    
+    if (!fileIds && !prompt.trim()) {
+      alert('Please provide either a topic/prompt or upload documents')
       return
     }
-
-    const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
 
     // Get global language from localStorage
@@ -154,7 +155,7 @@ export default function FlashcardsPage() {
 
     try {
       const response = await apiClient.post('/flashcards-from-files', {
-        file_ids: fileIds,
+        file_ids: fileIds || undefined,
         count,
         language: globalLanguage,
         prompt: prompt || undefined,
@@ -164,26 +165,30 @@ export default function FlashcardsPage() {
       setCurrentCard(0)
       setFlipped(false)
       
-      // Get file names for unique title
-      const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
-      let fileNames = ''
-      if (uploadedFilesStr) {
-        try {
-          const uploadedFiles = JSON.parse(uploadedFilesStr)
-          fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
-          if (uploadedFiles.length > 2) {
-            fileNames += ` +${uploadedFiles.length - 2} more`
+      // Generate title based on what was provided
+      let titlePrefix = ''
+      if (fileIds) {
+        const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+        if (uploadedFilesStr) {
+          try {
+            const uploadedFiles = JSON.parse(uploadedFilesStr)
+            titlePrefix = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+            if (uploadedFiles.length > 2) {
+              titlePrefix += ` +${uploadedFiles.length - 2} more`
+            }
+          } catch (e) {
+            titlePrefix = 'Documents'
           }
-        } catch (e) {
-          fileNames = 'Documents'
         }
+      } else if (prompt.trim()) {
+        titlePrefix = `Topic: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`
       }
       
       // Save to history
       const historyItem = {
         id: Date.now().toString(),
         type: 'flashcards' as const,
-        title: `${fileNames} - ${response.data.cards?.length || count} Cards`,
+        title: `${titlePrefix} - ${response.data.cards?.length || count} Cards`,
         timestamp: Date.now(),
         data: response.data
       }
