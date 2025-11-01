@@ -181,13 +181,15 @@ export default function ExamPage() {
   }
 
   const generateGroundedExam = async () => {
+    // Require either files or prompt
     const fileIdsStr = sessionStorage.getItem('uploadedFileIds')
-    if (!fileIdsStr) {
-      alert('Please upload documents first')
+    const fileIds = fileIdsStr ? JSON.parse(fileIdsStr) : null
+    
+    if (!fileIds && !prompt.trim()) {
+      alert('Please provide either a topic/prompt or upload documents')
       return
     }
 
-    const fileIds = JSON.parse(fileIdsStr)
     setLoading(true)
 
     // Get global language from localStorage
@@ -195,7 +197,7 @@ export default function ExamPage() {
 
     try {
       const response = await apiClient.post('/exam-from-files', {
-        file_ids: fileIds,
+        file_ids: fileIds || undefined,
         level,
         count: count,
         language: globalLanguage,
@@ -260,32 +262,41 @@ export default function ExamPage() {
       sessionStorage.setItem('currentExamState', JSON.stringify(examState))
     }
     
-    // Get file names for unique title
-    let fileNames = ''
+    // Generate title based on what was provided
+    let titlePrefix = ''
     const isQuickExamFromStorage = sessionStorage.getItem('isQuickExam') === 'true'
     
     if (isQuickExamFromStorage) {
       // This is a quick exam from home page
       const quickPrompt = sessionStorage.getItem('quickExamPrompt') || 'Quick Test'
-      fileNames = `Quick: ${quickPrompt.substring(0, 30)}${quickPrompt.length > 30 ? '...' : ''}`
+      titlePrefix = `Quick: ${quickPrompt.substring(0, 30)}${quickPrompt.length > 30 ? '...' : ''}`
       // Clear the quick exam markers
       sessionStorage.removeItem('isQuickExam')
       sessionStorage.removeItem('quickExamPrompt')
     } else {
-      // This is from uploaded files
-      const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
-      if (uploadedFilesStr) {
-        try {
-          const uploadedFiles = JSON.parse(uploadedFilesStr)
-          fileNames = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
-          if (uploadedFiles.length > 2) {
-            fileNames += ` +${uploadedFiles.length - 2} more`
+      // Check what was used to generate
+      const storedFileIds = sessionStorage.getItem('uploadedFileIds')
+      const fileIds = storedFileIds ? JSON.parse(storedFileIds) : null
+      
+      if (fileIds) {
+        // Generated from files
+        const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+        if (uploadedFilesStr) {
+          try {
+            const uploadedFiles = JSON.parse(uploadedFilesStr)
+            titlePrefix = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+            if (uploadedFiles.length > 2) {
+              titlePrefix += ` +${uploadedFiles.length - 2} more`
+            }
+          } catch (e) {
+            titlePrefix = 'Documents'
           }
-        } catch (e) {
-          fileNames = 'Documents'
         }
+      } else if (prompt.trim()) {
+        // Generated from prompt only
+        titlePrefix = `Topic: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`
       } else {
-        fileNames = 'Exam'
+        titlePrefix = 'Exam'
       }
     }
     
@@ -298,7 +309,7 @@ export default function ExamPage() {
     const historyItem = {
       id: Date.now().toString(),
       type: 'exam' as const,
-      title: `${fileNames} - ${score}/${exam.questions.length} (${Math.round((score/exam.questions.length)*100)}%)`,
+      title: `${titlePrefix} - ${score}/${exam.questions.length} (${Math.round((score/exam.questions.length)*100)}%)`,
       timestamp: Date.now(),
       data: {
         exam: exam,
