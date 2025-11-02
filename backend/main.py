@@ -31,7 +31,7 @@ load_dotenv()
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-DATABASE_URL = "sqlite:///./study_assistant.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./study_assistant.db")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -52,7 +52,11 @@ file_content_store = {}
 # ============================================================================
 # DATABASE SETUP
 # ============================================================================
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# check_same_thread is only for SQLite
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
