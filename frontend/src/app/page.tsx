@@ -2,10 +2,23 @@
 
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
+import { useEffect } from 'react'
 
 export default function Home() {
   const router = useRouter()
   const { user } = useAuth()
+
+  // Redirect logged-in users to dashboard
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard')
+    }
+  }, [user, router])
+
+  // Don't render landing page if user is logged in (will redirect)
+  if (user) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-[#0F172A] pt-20 px-4">
