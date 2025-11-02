@@ -32,7 +32,7 @@ export default function RegisterPage() {
 
     try {
       await register(email, password)
-      router.push('/')
+      router.push('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Registration failed')
     } finally {
