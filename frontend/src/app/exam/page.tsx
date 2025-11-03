@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api'
 
@@ -31,7 +31,7 @@ interface UploadedFile {
   size: number
 }
 
-export default function ExamPage() {
+function ExamPageContent() {
   const searchParams = useSearchParams()
   const isGrounded = searchParams?.get('grounded') === 'true'
   const isQuickMode = searchParams?.get('quick') === 'true'
@@ -949,5 +949,20 @@ export default function ExamPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ExamPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0F172A] pt-20 flex items-center justify-center">
+        <div className="glass-card p-8 text-center">
+          <div className="text-6xl mb-4 animate-pulse">🎯</div>
+          <div className="text-2xl text-slate-300 mb-2">Loading...</div>
+        </div>
+      </div>
+    }>
+      <ExamPageContent />
+    </Suspense>
   )
 }
