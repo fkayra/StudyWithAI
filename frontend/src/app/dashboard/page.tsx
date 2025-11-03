@@ -81,7 +81,7 @@ export default function Dashboard() {
         {/* Header */}
         <div className="mb-12 animate-fade-in">
           <h1 className="text-5xl font-bold text-slate-100 mb-3">
-            Welcome back{user?.name ? `, ${user.name}` : ''}
+            Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}
           </h1>
           <p className="text-xl text-slate-400">
             Choose a tool to continue your study session
