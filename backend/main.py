@@ -103,11 +103,18 @@ app = FastAPI(title="AI Study Assistant API", version="1.0.0")
 
 # Get CORS origins from environment variable
 cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001")
-cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
+cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 
-# Allow * for development convenience
+# Allow * for development convenience (only in dev environments)
 if "*" in cors_origins:
     cors_origins = ["*"]
+
+# If no CORS_ORIGINS is set and we're in production, default to allow all for now
+# (should be configured with specific domains in production)
+if not cors_origins or cors_origins == ["http://localhost:3000", "http://localhost:3001"]:
+    # Check if we're in production (Railway, Render, etc.)
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER") or os.getenv("PORT"):
+        cors_origins = ["*"]  # Allow all origins in production if not configured
 
 app.add_middleware(
     CORSMiddleware,

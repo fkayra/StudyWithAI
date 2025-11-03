@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api'
+// In production, use the backend URL directly
+// In development, use the proxy via /api
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE || '/api'
 
 export const apiClient = axios.create({
   baseURL: API_BASE,

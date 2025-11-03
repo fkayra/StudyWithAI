@@ -228,6 +228,30 @@ npm run build
 npm start
 ```
 
+## Deployment (Production)
+
+### Quick Deploy to Vercel + Railway
+
+**⚡ 5 Dakikalık Hızlı Başlangıç:** [VERCEL_QUICKSTART.md](./VERCEL_QUICKSTART.md)
+
+**📚 Detaylı Rehber:** [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md)
+
+**Kısa Özet:**
+
+1. **Backend'i Deploy Edin** (Railway/Render):
+   - Environment variables: `OPENAI_API_KEY`, `JWT_SECRET_KEY`, `CORS_ORIGINS=*`
+   - Backend URL'nizi alın (örn: `https://your-app.railway.app`)
+
+2. **Frontend'i Vercel'e Deploy Edin**:
+   - Vercel Dashboard → New Project → Import Repository
+   - Root Directory: `frontend`
+   - Environment Variable: `NEXT_PUBLIC_API_URL=https://your-backend.railway.app`
+   - Deploy!
+
+3. **Test Edin**: Vercel URL'nizi açın ve uygulamayı test edin
+
+**Detaylı deployment rehberleri için yukarıdaki dökümanları inceleyin.**
+
 ## Troubleshooting
 
 ### "Upload failed" or API connection errors
