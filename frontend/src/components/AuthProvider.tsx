@@ -58,12 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []) // Empty dependency array is fine here
 
   const login = async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password })
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('accessToken', response.data.access_token)
-      localStorage.setItem('refreshToken', response.data.refresh_token)
+    try {
+      const response = await apiClient.post('/auth/login', { email, password })
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('accessToken', response.data.access_token)
+        localStorage.setItem('refreshToken', response.data.refresh_token)
+      }
+      await refreshUser()
+    } catch (error) {
+      // Re-throw the error so it can be caught by the login page
+      throw error
     }
-    await refreshUser()
   }
 
   const register = async (email: string, password: string) => {

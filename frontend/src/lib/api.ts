@@ -28,7 +28,11 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
     
-    if (error.response?.status === 401 && !originalRequest._retry && typeof window !== 'undefined') {
+    // Don't handle token refresh for auth endpoints (login/register) - let them handle their own errors
+    const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || 
+                          originalRequest?.url?.includes('/auth/register')
+    
+    if (error.response?.status === 401 && !originalRequest._retry && typeof window !== 'undefined' && !isAuthEndpoint) {
       originalRequest._retry = true
       
       const refreshToken = localStorage.getItem('refreshToken')
@@ -48,8 +52,8 @@ apiClient.interceptors.response.use(
           }
         }
       } else {
-        // No refresh token, redirect to login
-        if (typeof window !== 'undefined') {
+        // No refresh token, redirect to login (but not if we're already on login/register)
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           window.location.href = '/login'
         }
       }

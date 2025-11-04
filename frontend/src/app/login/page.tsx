@@ -22,7 +22,9 @@ export default function LoginPage() {
       await login(email, password)
       router.push('/dashboard')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed')
+      // Handle axios errors - extract error message from response
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Invalid email or password. Please try again.'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
