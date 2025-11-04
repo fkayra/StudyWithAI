@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 interface HistoryItem {
   id: string
-  type: 'summary' | 'flashcards' | 'exam'
+  type: 'summary' | 'flashcards' | 'truefalse' | 'exam'
   title: string
   timestamp: number
   data: any
@@ -14,7 +14,7 @@ interface HistoryItem {
 export default function HistoryPage() {
   const router = useRouter()
   const [history, setHistory] = useState<HistoryItem[]>([])
-  const [filter, setFilter] = useState<'all' | 'summary' | 'flashcards' | 'exam'>('all')
+  const [filter, setFilter] = useState<'all' | 'summary' | 'flashcards' | 'truefalse' | 'exam'>('all')
 
   useEffect(() => {
     loadHistory()
@@ -55,6 +55,9 @@ export default function HistoryPage() {
     } else if (item.type === 'flashcards') {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
       router.push('/flashcards')
+    } else if (item.type === 'truefalse') {
+      sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
+      router.push('/truefalse')
     } else if (item.type === 'exam') {
       console.log('Exam data structure:', {
         hasExam: !!item.data.exam,
@@ -106,6 +109,7 @@ export default function HistoryPage() {
     switch (type) {
       case 'summary': return '📝'
       case 'flashcards': return '🎴'
+      case 'truefalse': return '✓✗'
       case 'exam': return '🎯'
       default: return '📄'
     }
@@ -115,6 +119,7 @@ export default function HistoryPage() {
     switch (type) {
       case 'summary': return 'from-teal-500/20 to-teal-600/20 border-teal-500/50'
       case 'flashcards': return 'from-cyan-500/20 to-cyan-600/20 border-cyan-500/50'
+      case 'truefalse': return 'from-green-500/20 to-red-500/20 border-green-500/50'
       case 'exam': return 'from-emerald-500/20 to-emerald-600/20 border-emerald-500/50'
       default: return 'from-slate-500/20 to-slate-600/20 border-slate-500/50'
     }
@@ -159,6 +164,7 @@ export default function HistoryPage() {
               { value: 'all', label: 'All', icon: '📚' },
               { value: 'summary', label: 'Summaries', icon: '📝' },
               { value: 'flashcards', label: 'Flashcards', icon: '🎴' },
+              { value: 'truefalse', label: 'True/False', icon: '✓✗' },
               { value: 'exam', label: 'Exams', icon: '🎯' }
             ].map((item) => (
               <button

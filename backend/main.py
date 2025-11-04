@@ -154,6 +154,12 @@ class FlashcardsRequest(BaseModel):
     language: Optional[str] = "en"
     prompt: Optional[str] = None
 
+class TrueFalseRequest(BaseModel):
+    file_ids: Optional[List[str]] = None
+    count: Optional[int] = 10
+    language: Optional[str] = "en"
+    prompt: Optional[str] = None
+
 class ExamRequest(BaseModel):
     file_ids: Optional[List[str]] = None
     level: Optional[str] = "lise"
@@ -857,6 +863,137 @@ Output as JSON:
                     "deck": req.deck_name,
                     "cards": [{"type": req.style, "front": "Content", "back": response_text, "source": {"file_id": "", "evidence": ""}}]
                 }
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/truefalse-from-files")
+async def truefalse_from_files(
+    request: Request,
+    req: TrueFalseRequest,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    rate_limit(request)
+    
+    # Require either file_ids or prompt
+    if not req.file_ids and not req.prompt:
+        raise HTTPException(status_code=400, detail="Please provide either files or a prompt.")
+    
+    # Fetch file contents from database or in-memory storage
+    file_contents = []
+    if req.file_ids:
+        for file_id in req.file_ids:
+            # Try database first
+            upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+            if upload and upload.content:
+                file_contents.append(upload.content)
+            # Try in-memory storage for anonymous users
+            elif file_id in file_content_store:
+                file_contents.append(file_content_store[file_id]["content"])
+    
+    additional_instructions = ""
+    if req.prompt:
+        additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating True/False statements."
+    
+    language_instruction = ""
+    if req.language == "tr":
+        language_instruction = "\n\nIMPORTANT: Generate ALL True/False statements in TURKISH language."
+    elif req.language == "en":
+        language_instruction = "\n\nIMPORTANT: Generate ALL True/False statements in ENGLISH language."
+    
+    system_prompt = """You are a study assistant. Create True/False statement cards from document content or user topics."""
+    
+    if file_contents:
+        user_prompt = f"""Create {req.count} True/False statement cards from the documents. Each statement should be a factual claim that can be verified as true or false based on the document content.
+{language_instruction}
+{additional_instructions}
+
+IMPORTANT RULES:
+- Each statement should be a clear, factual claim
+- Statements should be based ONLY on the document content
+- Mix true and false statements (approximately 50/50 or as appropriate)
+- For false statements, make them plausible but incorrect based on the content
+- Each statement should be standalone and verifiable
+
+Output as JSON:
+{{
+  "cards": [
+    {{"statement": "Statement text here", "answer": true, "explanation": "Brief explanation why this is true/false"}},
+    {{"statement": "Another statement", "answer": false, "explanation": "Brief explanation why this is false"}}
+  ]
+}}
+
+Return ONLY valid JSON, no markdown code blocks, no extra text."""
+    else:
+        # No files, just prompt
+        user_prompt = f"""Create {req.count} True/False statement cards about the topic requested by the user.
+{language_instruction}
+
+USER REQUEST:
+{req.prompt}
+
+IMPORTANT RULES:
+- Each statement should be a clear, factual claim
+- Mix true and false statements (approximately 50/50 or as appropriate)
+- For false statements, make them plausible but incorrect
+- Each statement should be standalone and verifiable
+
+Output as JSON:
+{{
+  "cards": [
+    {{"statement": "Statement text here", "answer": true, "explanation": "Brief explanation why this is true/false"}},
+    {{"statement": "Another statement", "answer": false, "explanation": "Brief explanation why this is false"}}
+  ]
+}}
+
+Return ONLY valid JSON, no markdown code blocks, no extra text."""
+    
+    try:
+        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        
+        import json
+        import re
+        
+        # Clean the response to extract JSON
+        response_text = response_text.strip()
+        
+        # Remove markdown code blocks if present
+        if response_text.startswith('```'):
+            lines = response_text.split('\n')
+            if lines[0].strip().startswith('```'):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            response_text = '\n'.join(lines)
+        
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Try to find JSON in the text
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    result = json.loads(json_match.group(0))
+                except:
+                    # Fallback: create basic structure
+                    result = {
+                        "cards": [{"statement": "Content", "answer": True, "explanation": response_text}]
+                    }
+            else:
+                # If still fails, wrap in basic structure
+                result = {
+                    "cards": [{"statement": "Content", "answer": True, "explanation": response_text}]
+                }
+        
+        # Ensure cards have required fields
+        if "cards" in result:
+            for card in result["cards"]:
+                if "answer" not in card:
+                    card["answer"] = True
+                if "explanation" not in card:
+                    card["explanation"] = "No explanation provided"
         
         return result
     except Exception as e:

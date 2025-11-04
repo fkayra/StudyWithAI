@@ -72,7 +72,7 @@ export default function UploadPage() {
     }
   }
 
-  const generateFromFiles = (type: 'summary' | 'flashcards' | 'exam') => {
+  const generateFromFiles = (type: 'summary' | 'flashcards' | 'truefalse' | 'exam') => {
     if (files.length === 0) {
       alert('Please upload files first')
       return
@@ -92,6 +92,8 @@ export default function UploadPage() {
       router.push('/summaries')
     } else if (type === 'flashcards') {
       router.push('/flashcards')
+    } else if (type === 'truefalse') {
+      router.push('/truefalse')
     } else if (type === 'exam') {
       router.push('/exam?grounded=true')
     }
@@ -209,7 +211,7 @@ export default function UploadPage() {
             <p className="text-slate-400 mb-6">
               Choose an AI-powered tool to process your documents
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 {
                   type: 'summary' as const,
@@ -230,6 +232,16 @@ export default function UploadPage() {
                   border: 'border-cyan-500/50',
                   hoverBorder: 'hover:border-cyan-400',
                   shadow: 'hover:shadow-lg hover:shadow-cyan-500/25'
+                },
+                {
+                  type: 'truefalse' as const,
+                  icon: '✓✗',
+                  title: 'True/False',
+                  desc: 'Test knowledge with statements',
+                  gradient: 'from-green-500/20 to-red-500/20',
+                  border: 'border-green-500/50',
+                  hoverBorder: 'hover:border-green-400',
+                  shadow: 'hover:shadow-lg hover:shadow-green-500/25'
                 },
                 {
                   type: 'exam' as const,
