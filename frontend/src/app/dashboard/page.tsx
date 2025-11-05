@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { useEffect, useState } from 'react'
+import { historyAPI } from '@/lib/api'
 
 export default function Dashboard() {
   const router = useRouter()
@@ -15,19 +16,27 @@ export default function Dashboard() {
   })
 
   useEffect(() => {
-    // Load stats from localStorage
-    const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-    const summariesCount = history.filter((item: any) => item.type === 'summary').length
-    const flashcardsCount = history.filter((item: any) => item.type === 'flashcards').length
-    const truefalseCount = history.filter((item: any) => item.type === 'truefalse').length
-    const examsCount = history.filter((item: any) => item.type === 'exam').length
+    // Load stats from API (which handles both backend and localStorage)
+    const loadStats = async () => {
+      try {
+        const history = await historyAPI.getAll()
+        const summariesCount = history.filter((item: any) => item.type === 'summary').length
+        const flashcardsCount = history.filter((item: any) => item.type === 'flashcards').length
+        const truefalseCount = history.filter((item: any) => item.type === 'truefalse').length
+        const examsCount = history.filter((item: any) => item.type === 'exam').length
+        
+        setStats({
+          summaries: summariesCount,
+          flashcards: flashcardsCount,
+          truefalse: truefalseCount,
+          exams: examsCount
+        })
+      } catch (error) {
+        console.error('Failed to load history stats:', error)
+      }
+    }
     
-    setStats({
-      summaries: summariesCount,
-      flashcards: flashcardsCount,
-      truefalse: truefalseCount,
-      exams: examsCount
-    })
+    loadStats()
   }, [])
 
   const features = [
