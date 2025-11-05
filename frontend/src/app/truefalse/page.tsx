@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { apiClient } from '@/lib/api'
+import { apiClient, historyAPI } from '@/lib/api'
 
 interface TrueFalseCard {
   statement: string
@@ -191,15 +191,11 @@ export default function TrueFalsePage() {
       }
       
       // Save to history
-      const historyItem = {
-        id: Date.now().toString(),
-        type: 'truefalse' as const,
+      await historyAPI.save({
+        type: 'truefalse',
         title: `${titlePrefix} - ${response.data.cards?.length || count} Cards`,
-        timestamp: Date.now(),
         data: response.data
-      }
-      const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-      localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
+      })
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate True/False cards')
     } finally {
@@ -364,19 +360,30 @@ export default function TrueFalsePage() {
         ? Math.round((score.correct / totalAnswered) * 100)
         : 0
       
-      const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-      if (history.length > 0 && history[0].type === 'truefalse') {
-        // Update the most recent truefalse entry with score
-        history[0].score = {
-          correct: score.correct,
-          total: answeredCards.size,
-          percentage
+      // Update the most recent truefalse entry with score
+      // Note: This will update localStorage for anonymous users
+      // For logged-in users, the score will be saved when they complete
+      const updateHistory = async () => {
+        const history = await historyAPI.getAll()
+        if (history.length > 0 && history[0].type === 'truefalse') {
+          // For logged-in users, we'd need a PUT endpoint to update
+          // For now, just update localStorage
+          if (typeof window !== 'undefined') {
+            const localHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+            if (localHistory.length > 0 && localHistory[0].type === 'truefalse') {
+              localHistory[0].score = {
+                correct: score.correct,
+                total: answeredCards.size,
+                percentage
+              }
+              const baseTitle = localHistory[0].title.split(' - Score:')[0]
+              localHistory[0].title = `${baseTitle} - Score: ${score.correct}/${answeredCards.size} (${percentage}%)`
+              localStorage.setItem('studyHistory', JSON.stringify(localHistory))
+            }
+          }
         }
-        // Update title with score
-        const baseTitle = history[0].title.split(' - Score:')[0]
-        history[0].title = `${baseTitle} - Score: ${score.correct}/${answeredCards.size} (${percentage}%)`
-        localStorage.setItem('studyHistory', JSON.stringify(history))
       }
+      updateHistory()
     }
   }, [isCompleted, score.correct, answeredCards.size, data?.cards?.length])
   

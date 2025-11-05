@@ -94,6 +94,16 @@ class Exam(Base):
     payload_json = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class History(Base):
+    __tablename__ = "history"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer)
+    type = Column(String)  # "summary", "flashcards", "truefalse", "exam"
+    title = Column(String)
+    data_json = Column(String)  # JSON stringified data
+    score_json = Column(String, nullable=True)  # JSON stringified score (for truefalse, exam)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 Base.metadata.create_all(bind=engine)
 
 # ============================================================================
@@ -203,6 +213,20 @@ class CheckoutRequest(BaseModel):
     priceId: str
     successUrl: str
     cancelUrl: str
+
+class HistoryItemCreate(BaseModel):
+    type: str  # "summary", "flashcards", "truefalse", "exam"
+    title: str
+    data: Any  # Will be JSON stringified
+    score: Optional[Any] = None  # For truefalse and exam results
+
+class HistoryItemResponse(BaseModel):
+    id: int
+    type: str
+    title: str
+    data: Any
+    score: Optional[Any] = None
+    timestamp: int  # Unix timestamp in milliseconds
 
 # ============================================================================
 # DEPENDENCIES
@@ -1402,6 +1426,93 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             if user:
                 user.tier = "premium"
                 db.commit()
+    
+    return {"status": "success"}
+
+# ============================================================================
+# HISTORY ENDPOINTS
+# ============================================================================
+@app.post("/history", response_model=HistoryItemResponse)
+async def save_history(
+    item: HistoryItemCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Save a history item for the authenticated user"""
+    import json
+    
+    history_entry = History(
+        user_id=current_user.id,
+        type=item.type,
+        title=item.title,
+        data_json=json.dumps(item.data),
+        score_json=json.dumps(item.score) if item.score else None
+    )
+    db.add(history_entry)
+    db.commit()
+    db.refresh(history_entry)
+    
+    return {
+        "id": history_entry.id,
+        "type": history_entry.type,
+        "title": history_entry.title,
+        "data": json.loads(history_entry.data_json),
+        "score": json.loads(history_entry.score_json) if history_entry.score_json else None,
+        "timestamp": int(history_entry.created_at.timestamp() * 1000)
+    }
+
+@app.get("/history", response_model=List[HistoryItemResponse])
+async def get_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all history items for the authenticated user"""
+    import json
+    
+    history_entries = db.query(History).filter(
+        History.user_id == current_user.id
+    ).order_by(History.created_at.desc()).all()
+    
+    return [
+        {
+            "id": entry.id,
+            "type": entry.type,
+            "title": entry.title,
+            "data": json.loads(entry.data_json),
+            "score": json.loads(entry.score_json) if entry.score_json else None,
+            "timestamp": int(entry.created_at.timestamp() * 1000)
+        }
+        for entry in history_entries
+    ]
+
+@app.delete("/history/{history_id}")
+async def delete_history_item(
+    history_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a specific history item"""
+    history_entry = db.query(History).filter(
+        History.id == history_id,
+        History.user_id == current_user.id
+    ).first()
+    
+    if not history_entry:
+        raise HTTPException(status_code=404, detail="History item not found")
+    
+    db.delete(history_entry)
+    db.commit()
+    
+    return {"status": "success"}
+
+@app.delete("/history")
+async def clear_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Clear all history for the authenticated user"""
+    db.query(History).filter(History.user_id == current_user.id).delete()
+    db.commit()
     
     return {"status": "success"}
 

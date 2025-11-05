@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { historyAPI } from '@/lib/api'
 
 interface HistoryItem {
   id: string
@@ -20,28 +21,25 @@ export default function HistoryPage() {
     loadHistory()
   }, [])
 
-  const loadHistory = () => {
-    const stored = localStorage.getItem('studyHistory')
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        setHistory(parsed.sort((a: HistoryItem, b: HistoryItem) => b.timestamp - a.timestamp))
-      } catch (e) {
-        console.error('Failed to load history:', e)
-      }
+  const loadHistory = async () => {
+    try {
+      const items = await historyAPI.getAll()
+      setHistory(items.sort((a: HistoryItem, b: HistoryItem) => b.timestamp - a.timestamp))
+    } catch (e) {
+      console.error('Failed to load history:', e)
     }
   }
 
-  const clearHistory = () => {
+  const clearHistory = async () => {
     if (confirm('Are you sure you want to clear all history?')) {
-      localStorage.removeItem('studyHistory')
+      await historyAPI.clearAll()
       setHistory([])
     }
   }
 
-  const deleteItem = (id: string) => {
+  const deleteItem = async (id: string | number) => {
+    await historyAPI.delete(id)
     const newHistory = history.filter(item => item.id !== id)
-    localStorage.setItem('studyHistory', JSON.stringify(newHistory))
     setHistory(newHistory)
   }
 

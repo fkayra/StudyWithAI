@@ -62,3 +62,103 @@ apiClient.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// History API helpers
+export const historyAPI = {
+  // Save history item (if user is logged in, saves to backend; otherwise localStorage)
+  async save(item: { type: string; title: string; data: any; score?: any }) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    
+    if (token) {
+      // User is logged in, save to backend
+      try {
+        await apiClient.post('/history', item)
+      } catch (error) {
+        console.error('Failed to save history to backend:', error)
+        // Fallback to localStorage
+        this.saveToLocalStorage(item)
+      }
+    } else {
+      // Anonymous user, save to localStorage
+      this.saveToLocalStorage(item)
+    }
+  },
+
+  saveToLocalStorage(item: { type: string; title: string; data: any; score?: any }) {
+    if (typeof window === 'undefined') return
+    
+    const historyItem = {
+      id: Date.now().toString(),
+      type: item.type,
+      title: item.title,
+      data: item.data,
+      score: item.score,
+      timestamp: Date.now()
+    }
+    const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+    localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
+  },
+
+  // Get all history items
+  async getAll() {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    
+    if (token) {
+      // User is logged in, fetch from backend
+      try {
+        const response = await apiClient.get('/history')
+        return response.data
+      } catch (error) {
+        console.error('Failed to fetch history from backend:', error)
+        // Fallback to localStorage
+        return this.getFromLocalStorage()
+      }
+    } else {
+      // Anonymous user, read from localStorage
+      return this.getFromLocalStorage()
+    }
+  },
+
+  getFromLocalStorage() {
+    if (typeof window === 'undefined') return []
+    return JSON.parse(localStorage.getItem('studyHistory') || '[]')
+  },
+
+  // Delete specific item
+  async delete(id: string | number) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    
+    if (token && typeof id === 'number') {
+      // Backend ID, delete from backend
+      try {
+        await apiClient.delete(`/history/${id}`)
+      } catch (error) {
+        console.error('Failed to delete from backend:', error)
+      }
+    } else {
+      // localStorage ID, delete from localStorage
+      if (typeof window === 'undefined') return
+      const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+      const newHistory = history.filter((item: any) => item.id !== id)
+      localStorage.setItem('studyHistory', JSON.stringify(newHistory))
+    }
+  },
+
+  // Clear all history
+  async clearAll() {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    
+    if (token) {
+      // User is logged in, clear from backend
+      try {
+        await apiClient.delete('/history')
+      } catch (error) {
+        console.error('Failed to clear history from backend:', error)
+      }
+    }
+    // Also clear localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('studyHistory')
+    }
+  }
+}
