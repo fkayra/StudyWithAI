@@ -259,7 +259,7 @@ export default function TrueFalsePage() {
     }
   }
 
-  // Swipe handlers
+  // Swipe handlers with smooth damping
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
@@ -276,11 +276,14 @@ export default function TrueFalsePage() {
     // Only handle horizontal swipes
     if (Math.abs(deltaX) > Math.abs(deltaY)) {
       e.preventDefault()
-      setSwipeOffset(deltaX)
+      // Apply damping/friction for smoother feel (reduce movement by 40%)
+      const dampedOffset = deltaX * 0.6
+      setSwipeOffset(dampedOffset)
       
-      if (deltaX > 50) {
+      // Higher threshold for direction indication (more intentional swipe needed)
+      if (deltaX > 80) {
         setSwipeDirection('right')
-      } else if (deltaX < -50) {
+      } else if (deltaX < -80) {
         setSwipeDirection('left')
       } else {
         setSwipeDirection(null)
@@ -289,9 +292,12 @@ export default function TrueFalsePage() {
   }
 
   const handleTouchEnd = () => {
-    if (swipeDirection === 'right' && swipeOffset > 100) {
+    // Increased threshold for committing the action (need to swipe further)
+    const threshold = 180
+    
+    if (swipeDirection === 'right' && swipeOffset > threshold) {
       handleAnswer(true)
-    } else if (swipeDirection === 'left' && swipeOffset < -100) {
+    } else if (swipeDirection === 'left' && swipeOffset < -threshold) {
       handleAnswer(false)
     }
     
@@ -303,6 +309,7 @@ export default function TrueFalsePage() {
 
   // Mouse drag handlers for desktop
   const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
     touchStartX.current = e.clientX
     touchStartY.current = e.clientY
   }
@@ -314,11 +321,13 @@ export default function TrueFalsePage() {
     const deltaY = e.clientY - touchStartY.current
     
     if (Math.abs(deltaX) > Math.abs(deltaY)) {
-      setSwipeOffset(deltaX)
+      // Apply damping for smoother desktop experience
+      const dampedOffset = deltaX * 0.6
+      setSwipeOffset(dampedOffset)
       
-      if (deltaX > 50) {
+      if (deltaX > 80) {
         setSwipeDirection('right')
-      } else if (deltaX < -50) {
+      } else if (deltaX < -80) {
         setSwipeDirection('left')
       } else {
         setSwipeDirection(null)
@@ -327,9 +336,11 @@ export default function TrueFalsePage() {
   }
 
   const handleMouseUp = () => {
-    if (swipeDirection === 'right' && swipeOffset > 100) {
+    const threshold = 180
+    
+    if (swipeDirection === 'right' && swipeOffset > threshold) {
       handleAnswer(true)
-    } else if (swipeDirection === 'left' && swipeOffset < -100) {
+    } else if (swipeDirection === 'left' && swipeOffset < -threshold) {
       handleAnswer(false)
     }
     
@@ -468,8 +479,13 @@ export default function TrueFalsePage() {
               !showResult && swipeOffset === 0 ? 'swipe-hint-animation' : ''
             }`}
             style={{
-              transform: `translateX(${swipeOffset}px) ${swipeOffset !== 0 ? `rotate(${swipeOffset * 0.05}deg)` : ''}`,
-              transition: swipeOffset === 0 ? 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
+              transform: `
+                translateX(${swipeOffset}px) 
+                rotate(${swipeOffset * 0.02}deg)
+                scale(${1 - Math.abs(swipeOffset) * 0.0002})
+              `,
+              opacity: 1 - Math.abs(swipeOffset) * 0.001,
+              transition: swipeOffset === 0 ? 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
               minHeight: '28rem',
             }}
           >
@@ -508,20 +524,57 @@ export default function TrueFalsePage() {
                   <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white to-transparent animate-pulse-slow"></div>
                 </div>
                 
+                {/* Swipe progress indicator */}
+                {!showResult && swipeOffset !== 0 && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+                    <div className="bg-slate-900/90 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+                      <div className="flex items-center gap-2">
+                        {/* Left progress */}
+                        <div className="flex items-center gap-1">
+                          <span className={`text-sm transition-all ${swipeOffset < -80 ? 'text-red-400 font-bold' : 'text-slate-500'}`}>
+                            FALSE
+                          </span>
+                          <div className="w-20 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-150"
+                              style={{ width: `${Math.min(100, Math.abs(Math.min(0, swipeOffset)) / 1.8)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        
+                        <span className="text-slate-400 text-xs">|</span>
+                        
+                        {/* Right progress */}
+                        <div className="flex items-center gap-1">
+                          <div className="w-20 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-green-400 to-green-500 transition-all duration-150"
+                              style={{ width: `${Math.min(100, Math.max(0, swipeOffset) / 1.8)}%` }}
+                            ></div>
+                          </div>
+                          <span className={`text-sm transition-all ${swipeOffset > 80 ? 'text-green-400 font-bold' : 'text-slate-500'}`}>
+                            TRUE
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {/* Swipe direction overlays */}
                 {swipeDirection === 'right' && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-500/10 to-green-500/20 animate-pulse rounded-3xl">
-                    <div className="absolute top-8 right-8 flex items-center gap-2">
-                      <span className="text-5xl font-bold text-green-400 drop-shadow-lg">TRUE</span>
-                      <span className="text-4xl animate-bounce">✓</span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-500/10 to-green-500/20 rounded-3xl transition-opacity duration-300">
+                    <div className="absolute top-8 right-8 flex items-center gap-3 animate-pulse">
+                      <span className="text-6xl font-bold text-green-400 drop-shadow-[0_0_20px_rgba(74,222,128,0.5)]">TRUE</span>
+                      <span className="text-5xl animate-bounce">✓</span>
                     </div>
                   </div>
                 )}
                 {swipeDirection === 'left' && (
-                  <div className="absolute inset-0 bg-gradient-to-l from-transparent via-red-500/10 to-red-500/20 animate-pulse rounded-3xl">
-                    <div className="absolute top-8 left-8 flex items-center gap-2">
-                      <span className="text-4xl animate-bounce">✗</span>
-                      <span className="text-5xl font-bold text-red-400 drop-shadow-lg">FALSE</span>
+                  <div className="absolute inset-0 bg-gradient-to-l from-transparent via-red-500/10 to-red-500/20 rounded-3xl transition-opacity duration-300">
+                    <div className="absolute top-8 left-8 flex items-center gap-3 animate-pulse">
+                      <span className="text-5xl animate-bounce">✗</span>
+                      <span className="text-6xl font-bold text-red-400 drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]">FALSE</span>
                     </div>
                   </div>
                 )}
