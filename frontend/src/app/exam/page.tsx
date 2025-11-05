@@ -230,7 +230,7 @@ function ExamPageContent() {
     }
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!exam) return
     
     // Check for unanswered questions
