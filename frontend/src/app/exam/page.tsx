@@ -510,6 +510,14 @@ function ExamPageContent() {
                 </div>
                 <button
                   onClick={() => {
+                    // Mark as submitted so exam doesn't persist
+                    sessionStorage.setItem('examSubmitted', 'true')
+                    sessionStorage.removeItem('currentExamState')
+                    sessionStorage.removeItem('uploadedFileIds')
+                    sessionStorage.removeItem('isQuickExam')
+                    sessionStorage.removeItem('quickExamPrompt')
+                    sessionStorage.removeItem('currentExam')
+                    // Reset state
                     setExam(null)
                     setAnswers({})
                     setCurrentQuestionIndex(0)
