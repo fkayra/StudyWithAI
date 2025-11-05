@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { apiClient } from '@/lib/api'
+import { apiClient, historyAPI } from '@/lib/api'
 
 interface Flashcard {
   front: string
@@ -185,15 +185,11 @@ export default function FlashcardsPage() {
       }
       
       // Save to history
-      const historyItem = {
-        id: Date.now().toString(),
-        type: 'flashcards' as const,
+      await historyAPI.save({
+        type: 'flashcards',
         title: `${titlePrefix} - ${response.data.cards?.length || count} Cards`,
-        timestamp: Date.now(),
         data: response.data
-      }
-      const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-      localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
+      })
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate flashcards')
     } finally {

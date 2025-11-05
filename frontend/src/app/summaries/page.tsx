@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { apiClient } from '@/lib/api'
+import { apiClient, historyAPI } from '@/lib/api'
 
 interface Summary {
   title: string
@@ -186,15 +186,11 @@ export default function SummariesPage() {
       }
       
       // Save to history
-      const historyItem = {
-        id: Date.now().toString(),
-        type: 'summary' as const,
+      await historyAPI.save({
+        type: 'summary',
         title: `${titlePrefix} - ${response.data.summary?.title || 'Summary'}`,
-        timestamp: Date.now(),
         data: response.data
-      }
-      const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-      localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
+      })
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate summary')
     } finally {

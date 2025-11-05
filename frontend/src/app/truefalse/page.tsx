@@ -67,30 +67,6 @@ export default function TrueFalsePage() {
     }
   }, [])
 
-  // Update history with score when completed
-  useEffect(() => {
-    if (isCompleted && answeredCards.size === data?.cards?.length) {
-      const totalAnswered = answeredCards.size
-      const percentage = totalAnswered > 0 
-        ? Math.round((score.correct / totalAnswered) * 100)
-        : 0
-      
-      const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-      if (history.length > 0 && history[0].type === 'truefalse') {
-        // Update the most recent truefalse entry with score
-        history[0].score = {
-          correct: score.correct,
-          total: answeredCards.size,
-          percentage
-        }
-        // Update title with score
-        const baseTitle = history[0].title.split(' - Score:')[0]
-        history[0].title = `${baseTitle} - Score: ${score.correct}/${answeredCards.size} (${percentage}%)`
-        localStorage.setItem('studyHistory', JSON.stringify(history))
-      }
-    }
-  }, [isCompleted, score.correct, answeredCards.size, data?.cards?.length])
-
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -376,40 +352,8 @@ export default function TrueFalsePage() {
     )
   }
 
-  // Update history with score when completed
-  useEffect(() => {
-    if (isCompleted && answeredCards.size === data?.cards?.length) {
-      const totalAnswered = answeredCards.size
-      const percentage = totalAnswered > 0 
-        ? Math.round((score.correct / totalAnswered) * 100)
-        : 0
-      
-      // Update the most recent truefalse entry with score
-      // Note: This will update localStorage for anonymous users
-      // For logged-in users, the score will be saved when they complete
-      const updateHistory = async () => {
-        const history = await historyAPI.getAll()
-        if (history.length > 0 && history[0].type === 'truefalse') {
-          // For logged-in users, we'd need a PUT endpoint to update
-          // For now, just update localStorage
-          if (typeof window !== 'undefined') {
-            const localHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-            if (localHistory.length > 0 && localHistory[0].type === 'truefalse') {
-              localHistory[0].score = {
-                correct: score.correct,
-                total: answeredCards.size,
-                percentage
-              }
-              const baseTitle = localHistory[0].title.split(' - Score:')[0]
-              localHistory[0].title = `${baseTitle} - Score: ${score.correct}/${answeredCards.size} (${percentage}%)`
-              localStorage.setItem('studyHistory', JSON.stringify(localHistory))
-            }
-          }
-        }
-      }
-      updateHistory()
-    }
-  }, [isCompleted, score.correct, answeredCards.size, data?.cards?.length])
+  // Note: Score is already saved when cards are generated
+  // Final score could be saved to backend with a PUT endpoint in the future
   
   if (data && data.cards && data.cards.length > 0) {
     // Show completion screen if all cards are answered

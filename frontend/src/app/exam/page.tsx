@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { apiClient } from '@/lib/api'
+import { apiClient, historyAPI } from '@/lib/api'
 
 interface Question {
   number: number
@@ -306,18 +306,19 @@ function ExamPageContent() {
     ).length
     
     // Save completed exam to history with answers and unique title
-    const historyItem = {
-      id: Date.now().toString(),
-      type: 'exam' as const,
+    await historyAPI.save({
+      type: 'exam',
       title: `${titlePrefix} - ${score}/${exam.questions.length} (${Math.round((score/exam.questions.length)*100)}%)`,
-      timestamp: Date.now(),
       data: {
         exam: exam,
         answers: answers
+      },
+      score: {
+        correct: score,
+        total: exam.questions.length,
+        percentage: Math.round((score/exam.questions.length)*100)
       }
-    }
-    const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-    localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
+    })
   }
 
   const goToQuestion = (index: number) => {
