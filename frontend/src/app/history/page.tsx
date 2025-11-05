@@ -208,7 +208,7 @@ export default function HistoryPage() {
               >
                 <div className="flex items-start gap-4">
                   {/* Icon */}
-                  <div className={`flex-shrink-0 w-16 h-16 bg-gradient-to-br ${getTypeColor(item.type)} rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform`}>
+                  <div className={`flex-shrink-0 w-16 h-16 bg-gradient-to-br ${getTypeColor(item.type)} rounded-xl flex items-center justify-center ${item.type === 'truefalse' ? 'text-2xl' : 'text-3xl'} group-hover:scale-110 transition-transform`}>
                     {getTypeIcon(item.type)}
                   </div>
 
