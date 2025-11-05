@@ -36,7 +36,7 @@ export function Navigation() {
     { href: '/upload', label: '📄 Upload', icon: '📄' },
     { href: '/summaries', label: '📝 Summaries', icon: '📝' },
     { href: '/flashcards', label: '🎴 Flashcards', icon: '🎴' },
-    { href: '/truefalse', label: '✅ True/False', icon: '✅' },
+    { href: '/truefalse', label: '✅❌ True/False', icon: '✅❌' },
     { href: '/exam', label: '🎯 Exams', icon: '🎯' },
     { href: '/history', label: '📚 History', icon: '📚' },
   ]

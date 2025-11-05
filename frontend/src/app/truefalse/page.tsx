@@ -348,7 +348,7 @@ export default function TrueFalsePage() {
     return (
       <div className="min-h-screen bg-[#0F172A] pt-20 flex items-center justify-center">
         <div className="glass-card p-8 text-center">
-          <div className="text-6xl mb-4 animate-pulse">✅</div>
+          <div className="text-6xl mb-4 animate-pulse">✅❌</div>
           <div className="text-2xl text-slate-300 mb-2">Generating True/False Cards...</div>
           <div className="text-sm text-slate-400">Creating {count} statement cards with AI</div>
         </div>
@@ -469,7 +469,7 @@ export default function TrueFalsePage() {
 
         <div className="max-w-3xl mx-auto">
         <div className="text-center mb-8 animate-fade-in">
-          <div className="text-6xl mb-4">✅</div>
+          <div className="text-6xl mb-4">✅❌</div>
           <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-[#10B981] to-[#EF4444] bg-clip-text text-transparent">
             True / False
           </h1>
@@ -752,7 +752,7 @@ export default function TrueFalsePage() {
 
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8 animate-fade-in">
-          <div className="text-6xl mb-4">✅</div>
+          <div className="text-6xl mb-4">✅❌</div>
           <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-[#10B981] to-[#EF4444] bg-clip-text text-transparent">
             Generate True/False Cards
           </h1>

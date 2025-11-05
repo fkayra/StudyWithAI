@@ -55,7 +55,7 @@ export default function Dashboard() {
       id: 'truefalse',
       title: 'True/False',
       description: 'Practice with true or false statements to test your knowledge',
-      icon: '✅',
+      icon: '✅❌',
       path: '/truefalse',
       color: 'from-green-500 to-emerald-500',
       stat: stats.truefalse,
