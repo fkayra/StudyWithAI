@@ -60,6 +60,7 @@ export default function HistoryPage() {
       router.push('/flashcards')
     } else if (item.type === 'truefalse') {
       sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
+      sessionStorage.setItem('viewHistoryTrueFalseId', String(item.id))
       router.push('/truefalse')
     } else if (item.type === 'exam') {
       console.log('Exam data structure:', {

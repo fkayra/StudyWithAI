@@ -46,11 +46,20 @@ export default function TrueFalsePage() {
   useEffect(() => {
     // Check if viewing from history
     const viewHistory = sessionStorage.getItem('viewHistory')
+    const viewHistoryId = sessionStorage.getItem('viewHistoryTrueFalseId')
+    
     if (viewHistory) {
       try {
         const historyData = JSON.parse(viewHistory)
         setData(historyData)
         sessionStorage.removeItem('viewHistory')
+        
+        // If we have a history ID, set it so we can update the same item
+        if (viewHistoryId) {
+          const id = isNaN(Number(viewHistoryId)) ? viewHistoryId : Number(viewHistoryId)
+          setCurrentHistoryId(id)
+          sessionStorage.removeItem('viewHistoryTrueFalseId')
+        }
       } catch (e) {
         console.error('Failed to load history:', e)
       }
@@ -77,23 +86,13 @@ export default function TrueFalsePage() {
         : 0
       
       const updateHistoryScore = async () => {
-        // Get current history to find the item
-        const history = await historyAPI.getAll()
-        const item = history.find((h: any) => h.id === currentHistoryId)
-        
-        if (item) {
-          const baseTitle = item.title.split(' - Score:')[0]
-          const newTitle = `${baseTitle} - Score: ${score.correct}/${totalAnswered} (${percentage}%)`
-          
-          await historyAPI.update(currentHistoryId, {
-            title: newTitle,
-            score: {
-              correct: score.correct,
-              total: totalAnswered,
-              percentage
-            }
-          })
-        }
+        await historyAPI.update(currentHistoryId, {
+          score: {
+            correct: score.correct,
+            total: totalAnswered,
+            percentage
+          }
+        })
       }
       
       updateHistoryScore()
