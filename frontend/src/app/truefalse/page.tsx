@@ -225,7 +225,7 @@ export default function TrueFalsePage() {
       // Save to history and store the ID
       const historyId = await historyAPI.save({
         type: 'truefalse',
-        title: `${titlePrefix} - ${response.data.cards?.length || count} Cards`,
+        title: titlePrefix,
         data: response.data
       })
       setCurrentHistoryId(historyId)
