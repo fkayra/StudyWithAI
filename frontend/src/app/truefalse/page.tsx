@@ -220,16 +220,10 @@ export default function TrueFalsePage() {
       setScore(prev => ({ ...prev, total: prev.total + 1 }))
     }
     
-    // Track that this card has been answered
+    // Track that this card has been answered (but don't auto-complete)
     setAnsweredCards(prev => {
       const newSet = new Set(prev)
       newSet.add(currentCard)
-      
-      // Check if all cards have been answered
-      if (data && data.cards && newSet.size === data.cards.length) {
-        setIsCompleted(true)
-      }
-      
       return newSet
     })
   }
@@ -362,6 +356,30 @@ export default function TrueFalsePage() {
     )
   }
 
+  // Update history with score when completed
+  useEffect(() => {
+    if (isCompleted && answeredCards.size === data?.cards?.length) {
+      const totalAnswered = answeredCards.size
+      const percentage = totalAnswered > 0 
+        ? Math.round((score.correct / totalAnswered) * 100)
+        : 0
+      
+      const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+      if (history.length > 0 && history[0].type === 'truefalse') {
+        // Update the most recent truefalse entry with score
+        history[0].score = {
+          correct: score.correct,
+          total: answeredCards.size,
+          percentage
+        }
+        // Update title with score
+        const baseTitle = history[0].title.split(' - Score:')[0]
+        history[0].title = `${baseTitle} - Score: ${score.correct}/${answeredCards.size} (${percentage}%)`
+        localStorage.setItem('studyHistory', JSON.stringify(history))
+      }
+    }
+  }, [isCompleted, score.correct, answeredCards.size, data?.cards?.length])
+  
   if (data && data.cards && data.cards.length > 0) {
     // Show completion screen if all cards are answered
     if (isCompleted && answeredCards.size === data.cards.length) {

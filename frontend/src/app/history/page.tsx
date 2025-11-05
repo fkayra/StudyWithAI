@@ -109,7 +109,7 @@ export default function HistoryPage() {
     switch (type) {
       case 'summary': return '📝'
       case 'flashcards': return '🎴'
-      case 'truefalse': return '✓✗'
+      case 'truefalse': return '✅'
       case 'exam': return '🎯'
       default: return '📄'
     }
@@ -164,7 +164,7 @@ export default function HistoryPage() {
               { value: 'all', label: 'All', icon: '📚' },
               { value: 'summary', label: 'Summaries', icon: '📝' },
               { value: 'flashcards', label: 'Flashcards', icon: '🎴' },
-              { value: 'truefalse', label: 'True/False', icon: '✓✗' },
+              { value: 'truefalse', label: 'True/False', icon: '✅' },
               { value: 'exam', label: 'Exams', icon: '🎯' }
             ].map((item) => (
               <button
