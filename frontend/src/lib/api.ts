@@ -66,29 +66,32 @@ apiClient.interceptors.response.use(
 // History API helpers
 export const historyAPI = {
   // Save history item (if user is logged in, saves to backend; otherwise localStorage)
-  async save(item: { type: string; title: string; data: any; score?: any }) {
+  // Returns the ID of the saved item (number for backend, string for localStorage)
+  async save(item: { type: string; title: string; data: any; score?: any }): Promise<number | string | null> {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
     
     if (token) {
       // User is logged in, save to backend
       try {
-        await apiClient.post('/history', item)
+        const response = await apiClient.post('/history', item)
+        return response.data.id // Return backend ID
       } catch (error) {
         console.error('Failed to save history to backend:', error)
         // Fallback to localStorage
-        this.saveToLocalStorage(item)
+        return this.saveToLocalStorage(item)
       }
     } else {
       // Anonymous user, save to localStorage
-      this.saveToLocalStorage(item)
+      return this.saveToLocalStorage(item)
     }
   },
 
-  saveToLocalStorage(item: { type: string; title: string; data: any; score?: any }) {
-    if (typeof window === 'undefined') return
+  saveToLocalStorage(item: { type: string; title: string; data: any; score?: any }): string {
+    if (typeof window === 'undefined') return ''
     
+    const itemId = Date.now().toString()
     const historyItem = {
-      id: Date.now().toString(),
+      id: itemId,
       type: item.type,
       title: item.title,
       data: item.data,
@@ -97,6 +100,7 @@ export const historyAPI = {
     }
     const existingHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
     localStorage.setItem('studyHistory', JSON.stringify([historyItem, ...existingHistory]))
+    return itemId
   },
 
   // Get all history items
@@ -141,6 +145,32 @@ export const historyAPI = {
       const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
       const newHistory = history.filter((item: any) => item.id !== id)
       localStorage.setItem('studyHistory', JSON.stringify(newHistory))
+    }
+  },
+
+  // Update history item (for adding scores after completion)
+  async update(id: string | number, updates: { title?: string; data?: any; score?: any }) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    
+    if (token && typeof id === 'number') {
+      // Backend ID, update on backend
+      try {
+        await apiClient.put(`/history/${id}`, updates)
+      } catch (error) {
+        console.error('Failed to update history on backend:', error)
+      }
+    }
+    
+    // Also update localStorage for consistency
+    if (typeof window !== 'undefined') {
+      const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+      const index = history.findIndex((item: any) => item.id === id)
+      if (index !== -1) {
+        if (updates.title) history[index].title = updates.title
+        if (updates.data) history[index].data = updates.data
+        if (updates.score) history[index].score = updates.score
+        localStorage.setItem('studyHistory', JSON.stringify(history))
+      }
     }
   },
 

@@ -5,11 +5,16 @@ import { useRouter } from 'next/navigation'
 import { historyAPI } from '@/lib/api'
 
 interface HistoryItem {
-  id: string
+  id: string | number
   type: 'summary' | 'flashcards' | 'truefalse' | 'exam'
   title: string
   timestamp: number
   data: any
+  score?: {
+    correct: number
+    total: number
+    percentage: number
+  }
 }
 
 export default function HistoryPage() {
@@ -217,7 +222,7 @@ export default function HistoryPage() {
                         <h3 className="text-xl font-semibold text-slate-100 mb-1 truncate">
                           {item.title}
                         </h3>
-                        <div className="flex items-center gap-3 text-sm text-slate-400">
+                        <div className="flex items-center gap-3 text-sm text-slate-400 flex-wrap">
                           <span className="capitalize">{item.type}</span>
                           <span>•</span>
                           <span>{new Date(item.timestamp).toLocaleDateString('tr-TR', {
@@ -227,6 +232,20 @@ export default function HistoryPage() {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}</span>
+                          {item.score && (
+                            <>
+                              <span>•</span>
+                              <span className={`font-semibold px-2 py-0.5 rounded ${
+                                item.score.percentage >= 80 
+                                  ? 'text-green-400 bg-green-500/10' 
+                                  : item.score.percentage >= 60 
+                                  ? 'text-yellow-400 bg-yellow-500/10' 
+                                  : 'text-red-400 bg-red-500/10'
+                              }`}>
+                                {item.score.correct}/{item.score.total} ({item.score.percentage}%)
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
 

@@ -220,6 +220,11 @@ class HistoryItemCreate(BaseModel):
     data: Any  # Will be JSON stringified
     score: Optional[Any] = None  # For truefalse and exam results
 
+class HistoryItemUpdate(BaseModel):
+    title: Optional[str] = None
+    data: Optional[Any] = None
+    score: Optional[Any] = None
+
 class HistoryItemResponse(BaseModel):
     id: int
     type: str
@@ -1484,6 +1489,44 @@ async def get_history(
         }
         for entry in history_entries
     ]
+
+@app.put("/history/{history_id}", response_model=HistoryItemResponse)
+async def update_history_item(
+    history_id: int,
+    update: HistoryItemUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a specific history item (e.g., add score after completion)"""
+    import json
+    
+    history_entry = db.query(History).filter(
+        History.id == history_id,
+        History.user_id == current_user.id
+    ).first()
+    
+    if not history_entry:
+        raise HTTPException(status_code=404, detail="History item not found")
+    
+    # Update fields if provided
+    if update.title is not None:
+        history_entry.title = update.title
+    if update.data is not None:
+        history_entry.data_json = json.dumps(update.data)
+    if update.score is not None:
+        history_entry.score_json = json.dumps(update.score)
+    
+    db.commit()
+    db.refresh(history_entry)
+    
+    return {
+        "id": history_entry.id,
+        "type": history_entry.type,
+        "title": history_entry.title,
+        "data": json.loads(history_entry.data_json),
+        "score": json.loads(history_entry.score_json) if history_entry.score_json else None,
+        "timestamp": int(history_entry.created_at.timestamp() * 1000)
+    }
 
 @app.delete("/history/{history_id}")
 async def delete_history_item(
