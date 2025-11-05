@@ -308,7 +308,7 @@ function ExamPageContent() {
     // Save completed exam to history with answers and unique title
     await historyAPI.save({
       type: 'exam',
-      title: `${titlePrefix} - ${score}/${exam.questions.length} (${Math.round((score/exam.questions.length)*100)}%)`,
+      title: titlePrefix,
       data: {
         exam: exam,
         answers: answers
@@ -319,6 +319,14 @@ function ExamPageContent() {
         percentage: Math.round((score/exam.questions.length)*100)
       }
     })
+    
+    // After submit, wait a moment then reset to allow starting a new exam
+    setTimeout(() => {
+      setExam(null)
+      setAnswers({})
+      setCurrentQuestionIndex(0)
+      setShowResults(false)
+    }, 100)
   }
 
   const goToQuestion = (index: number) => {
