@@ -353,38 +353,6 @@ export default function TrueFalsePage() {
       </div>
     )
   }
-
-  // Update history with final score when completed
-  useEffect(() => {
-    if (isCompleted && answeredCards.size === data?.cards?.length && currentHistoryId) {
-      const totalAnswered = answeredCards.size
-      const percentage = totalAnswered > 0 
-        ? Math.round((score.correct / totalAnswered) * 100)
-        : 0
-      
-      const updateHistoryScore = async () => {
-        // Get current history to find the item
-        const history = await historyAPI.getAll()
-        const item = history.find((h: any) => h.id === currentHistoryId)
-        
-        if (item) {
-          const baseTitle = item.title.split(' - Score:')[0]
-          const newTitle = `${baseTitle} - Score: ${score.correct}/${totalAnswered} (${percentage}%)`
-          
-          await historyAPI.update(currentHistoryId, {
-            title: newTitle,
-            score: {
-              correct: score.correct,
-              total: totalAnswered,
-              percentage
-            }
-          })
-        }
-      }
-      
-      updateHistoryScore()
-    }
-  }, [isCompleted, score.correct, answeredCards.size, currentHistoryId, data?.cards?.length])
   
   if (data && data.cards && data.cards.length > 0) {
     // Show completion screen if all cards are answered
