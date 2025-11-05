@@ -464,50 +464,123 @@ export default function TrueFalsePage() {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            className="relative mb-8 animate-scale-in cursor-grab active:cursor-grabbing"
+            className={`relative mb-8 animate-scale-in cursor-grab active:cursor-grabbing perspective-1000 ${
+              !showResult && swipeOffset === 0 ? 'swipe-hint-animation' : ''
+            }`}
             style={{
-              transform: `translateX(${swipeOffset}px)`,
-              transition: swipeOffset === 0 ? 'transform 0.3s ease-out' : 'none',
+              transform: `translateX(${swipeOffset}px) ${swipeOffset !== 0 ? `rotate(${swipeOffset * 0.05}deg)` : ''}`,
+              transition: swipeOffset === 0 ? 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
             }}
           >
+            {/* Glow effect behind card */}
+            <div className={`absolute inset-0 rounded-3xl blur-2xl opacity-30 transition-all duration-500 ${
+              swipeDirection === 'right'
+                ? 'bg-gradient-to-r from-green-400 to-emerald-500'
+                : swipeDirection === 'left'
+                ? 'bg-gradient-to-r from-red-400 to-rose-500'
+                : showResult
+                ? isCorrect
+                  ? 'bg-gradient-to-r from-green-400 to-emerald-500'
+                  : 'bg-gradient-to-r from-red-400 to-rose-500'
+                : 'bg-gradient-to-r from-teal-500 to-cyan-500'
+            }`} style={{ transform: 'scale(0.95)' }}></div>
+            
             <div
-              className={`relative h-96 rounded-3xl p-12 flex flex-col items-center justify-center text-center shadow-2xl transition-all duration-300 ${
+              className={`relative overflow-hidden rounded-3xl transition-all duration-300 ${
                 swipeDirection === 'right'
-                  ? 'bg-gradient-to-br from-green-500/20 via-[#0F172A] to-[#0F172A] border-2 border-green-500/50'
+                  ? 'shadow-[0_20px_50px_rgba(16,185,129,0.3)]'
                   : swipeDirection === 'left'
-                  ? 'bg-gradient-to-br from-red-500/20 via-[#0F172A] to-[#0F172A] border-2 border-red-500/50'
+                  ? 'shadow-[0_20px_50px_rgba(239,68,68,0.3)]'
                   : showResult
                   ? isCorrect
-                    ? 'bg-gradient-to-br from-green-500/20 via-[#0F172A] to-[#0F172A] border-2 border-green-500/50'
-                    : 'bg-gradient-to-br from-red-500/20 via-[#0F172A] to-[#0F172A] border-2 border-red-500/50'
-                  : 'bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] border border-white/10'
+                    ? 'shadow-[0_20px_50px_rgba(16,185,129,0.3)]'
+                    : 'shadow-[0_20px_50px_rgba(239,68,68,0.3)]'
+                  : 'shadow-[0_20px_50px_rgba(20,184,166,0.15)]'
               }`}
             >
-              {swipeDirection === 'right' && (
-                <div className="absolute top-8 right-8 text-6xl text-green-400 opacity-50">TRUE</div>
-              )}
-              {swipeDirection === 'left' && (
-                <div className="absolute top-8 left-8 text-6xl text-red-400 opacity-50">FALSE</div>
-              )}
-              
-              <div className="text-xs uppercase tracking-wider text-slate-400 mb-6 font-semibold">Statement</div>
-              <div className="text-3xl text-slate-100 leading-relaxed font-light mb-8">{card.statement}</div>
-              
-              {showResult && (
-                <div className="mt-6 animate-fade-in">
-                  <div className={`text-4xl mb-4 ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
-                    {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
+              {/* Gradient border effect */}
+              <div className={`absolute inset-0 rounded-3xl transition-all duration-300 ${
+                swipeDirection === 'right'
+                  ? 'bg-gradient-to-br from-green-500 via-emerald-500 to-green-600 p-[2px]'
+                  : swipeDirection === 'left'
+                  ? 'bg-gradient-to-br from-red-500 via-rose-500 to-red-600 p-[2px]'
+                  : showResult
+                  ? isCorrect
+                    ? 'bg-gradient-to-br from-green-500 via-emerald-500 to-green-600 p-[2px]'
+                    : 'bg-gradient-to-br from-red-500 via-rose-500 to-red-600 p-[2px]'
+                  : 'bg-gradient-to-br from-teal-500 via-cyan-500 to-blue-500 p-[1px]'
+              }`}>
+                <div className="h-full w-full rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 backdrop-blur-xl">
+                  <div className="relative h-full min-h-[24rem] p-12 flex flex-col items-center justify-center text-center">
+                    {/* Animated background pattern */}
+                    <div className="absolute inset-0 opacity-5">
+                      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white to-transparent animate-pulse-slow"></div>
+                    </div>
+                    
+                    {/* Swipe direction indicators */}
+                    {swipeDirection === 'right' && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-500/10 to-green-500/20 animate-pulse">
+                        <div className="absolute top-8 right-8 flex items-center gap-2">
+                          <span className="text-5xl font-bold text-green-400 drop-shadow-lg">TRUE</span>
+                          <span className="text-4xl animate-bounce">✓</span>
+                        </div>
+                      </div>
+                    )}
+                    {swipeDirection === 'left' && (
+                      <div className="absolute inset-0 bg-gradient-to-l from-transparent via-red-500/10 to-red-500/20 animate-pulse">
+                        <div className="absolute top-8 left-8 flex items-center gap-2">
+                          <span className="text-4xl animate-bounce">✗</span>
+                          <span className="text-5xl font-bold text-red-400 drop-shadow-lg">FALSE</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Card content */}
+                    <div className="relative z-10">
+                      <div className="inline-block px-4 py-1 rounded-full bg-gradient-to-r from-teal-500/20 to-cyan-500/20 border border-teal-500/30 mb-6">
+                        <span className="text-xs uppercase tracking-widest text-teal-300 font-bold">Statement {currentCard + 1}</span>
+                      </div>
+                      
+                      <div className="text-2xl md:text-3xl text-slate-100 leading-relaxed font-medium mb-8 px-4">
+                        {card.statement}
+                      </div>
+                      
+                      {showResult && (
+                        <div className="mt-8 animate-fade-in bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+                          <div className={`text-4xl mb-4 ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                            {isCorrect ? '✓ Correct!' : '✗ Incorrect'}
+                          </div>
+                          <div className="text-sm text-slate-400 mb-3">
+                            <span className="text-slate-300">Correct answer:</span>{' '}
+                            <span className={`font-bold ${card.answer ? 'text-green-400' : 'text-red-400'}`}>
+                              {card.answer ? 'True ✓' : 'False ✗'}
+                            </span>
+                          </div>
+                          <div className="text-sm text-slate-300 leading-relaxed bg-slate-700/30 rounded-xl p-4">
+                            {card.explanation}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {!showResult && (
+                        <div className="mt-6 flex items-center justify-center gap-3 text-slate-400 text-sm">
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <span>←</span>
+                            <span className="text-red-400 font-medium">Swipe Left</span>
+                            <span className="text-red-300">= False</span>
+                          </div>
+                          <span className="text-slate-500">|</span>
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                            <span className="text-green-300">True =</span>
+                            <span className="text-green-400 font-medium">Swipe Right</span>
+                            <span>→</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-400 mb-2">Correct answer: <span className="font-semibold text-slate-200">{card.answer ? 'True' : 'False'}</span></div>
-                  <div className="text-sm text-slate-300 italic">{card.explanation}</div>
                 </div>
-              )}
-              
-              {!showResult && (
-                <div className="text-slate-500 text-sm mt-4">
-                  Swipe right for True, left for False
-                </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -516,15 +589,23 @@ export default function TrueFalsePage() {
             <div className="flex gap-4 mb-8 animate-fade-in">
               <button
                 onClick={() => handleAnswer(false)}
-                className="btn-ghost flex-1 border-red-500/50 hover:bg-red-500/10 hover:border-red-500 text-red-400 py-6 text-xl font-semibold"
+                className="group relative flex-1 overflow-hidden rounded-2xl border-2 border-red-500/30 hover:border-red-500 bg-gradient-to-br from-red-950/50 to-red-900/30 hover:from-red-900/50 hover:to-red-800/50 py-6 text-xl font-bold text-red-400 hover:text-red-300 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/20 active:scale-95"
               >
-                ✗ FALSE
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <span className="relative flex items-center justify-center gap-2">
+                  <span className="text-2xl">✗</span>
+                  <span>FALSE</span>
+                </span>
               </button>
               <button
                 onClick={() => handleAnswer(true)}
-                className="btn-ghost flex-1 border-green-500/50 hover:bg-green-500/10 hover:border-green-500 text-green-400 py-6 text-xl font-semibold"
+                className="group relative flex-1 overflow-hidden rounded-2xl border-2 border-green-500/30 hover:border-green-500 bg-gradient-to-br from-green-950/50 to-green-900/30 hover:from-green-900/50 hover:to-green-800/50 py-6 text-xl font-bold text-green-400 hover:text-green-300 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-green-500/20 active:scale-95"
               >
-                ✓ TRUE
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <span className="relative flex items-center justify-center gap-2">
+                  <span className="text-2xl">✓</span>
+                  <span>TRUE</span>
+                </span>
               </button>
             </div>
           )}

@@ -69,3 +69,30 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(to bottom, #0D9488, #0891B2);
 }
+
+/* Swipe hint animation */
+@keyframes swipe-hint {
+  0%, 100% {
+    transform: rotate(0deg) translateX(0);
+  }
+  25% {
+    transform: rotate(-2deg) translateX(-5px);
+  }
+  75% {
+    transform: rotate(2deg) translateX(5px);
+  }
+}
+
+.swipe-hint-animation {
+  animation: swipe-hint 3s ease-in-out infinite;
+}
+
+/* Pulse glow animation */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(20, 184, 166, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(20, 184, 166, 0.4), 0 0 60px rgba(6, 182, 212, 0.2);
+  }
+}
