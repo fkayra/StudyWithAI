@@ -29,16 +29,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const refreshUser = async () => {
+  const refreshUser = async (retryCount = 0) => {
     try {
       const response = await apiClient.get('/me')
       setUser(response.data)
-    } catch (error) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
+    } catch (error: any) {
+      // Check if it's a network error (CORS, connection failed, etc.)
+      const isNetworkError = !error.response || error.message?.includes('Network Error') || error.code === 'ERR_NETWORK'
+      
+      // Retry once on network errors (could be CORS preflight issue on first load)
+      if (isNetworkError && retryCount < 1) {
+        // Wait a bit and retry
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        return refreshUser(retryCount + 1)
       }
-      setUser(null)
+      
+      // If it's a 401 or other auth error, clear tokens
+      if (error.response?.status === 401 || !isNetworkError) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('refreshToken')
+        }
+        setUser(null)
+      }
+      // For other network errors after retry, keep tokens but don't set user
+      // (user might still be able to login later when network is stable)
     }
   }
 

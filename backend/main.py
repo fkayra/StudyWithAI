@@ -122,6 +122,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # ============================================================================
@@ -471,6 +473,11 @@ async def health():
 @app.get("/ping")
 async def ping():
     return {"message": "pong"}
+
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    """Handle OPTIONS requests for CORS preflight"""
+    return JSONResponse(content={"status": "ok"})
 
 # ============================================================================
 # AUTH ENDPOINTS
