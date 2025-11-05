@@ -56,6 +56,19 @@ function ExamPageContent() {
   const [isQuickExam, setIsQuickExam] = useState(false)
 
   useEffect(() => {
+    // Check if the last exam was just submitted
+    const wasSubmitted = sessionStorage.getItem('examSubmitted')
+    if (wasSubmitted === 'true') {
+      // Clear the flag and don't load any exam
+      sessionStorage.removeItem('examSubmitted')
+      sessionStorage.removeItem('currentExamState')
+      sessionStorage.removeItem('uploadedFileIds')
+      sessionStorage.removeItem('isQuickExam')
+      sessionStorage.removeItem('quickExamPrompt')
+      sessionStorage.removeItem('currentExam')
+      return
+    }
+
     // If this is a quick exam from home page
     if (isQuickMode) {
       setIsQuickExam(true) // Mark as quick exam
@@ -320,11 +333,8 @@ function ExamPageContent() {
       }
     })
     
-    // Clear sessionStorage to prevent exam from reappearing
-    sessionStorage.removeItem('currentExamState')
-    sessionStorage.removeItem('uploadedFileIds')
-    sessionStorage.removeItem('isQuickExam')
-    sessionStorage.removeItem('quickExamPrompt')
+    // Mark that this exam has been submitted so we don't reload it
+    sessionStorage.setItem('examSubmitted', 'true')
   }
 
   const goToQuestion = (index: number) => {
