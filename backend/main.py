@@ -102,20 +102,19 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="AI Study Assistant API", version="1.0.0")
 
 # Get CORS origins from environment variable
-cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001")
-cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
-
-# Allow * for development convenience (only in dev environments)
-if "*" in cors_origins:
+cors_origins_str = os.getenv("CORS_ORIGINS", "")
+if cors_origins_str:
+    cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+else:
+    # Default to allow all origins if not specified
     cors_origins = ["*"]
 
-# If no CORS_ORIGINS is set and we're in production, default to allow all for now
-# (should be configured with specific domains in production)
-if not cors_origins or cors_origins == ["http://localhost:3000", "http://localhost:3001"]:
-    # Check if we're in production (Railway, Render, etc.)
-    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER") or os.getenv("PORT"):
-        cors_origins = ["*"]  # Allow all origins in production if not configured
+# In production environments, always allow all origins for now
+# TODO: Restrict to specific domains in production
+if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER") or os.getenv("PORT"):
+    cors_origins = ["*"]
 
+# Add CORS middleware with permissive settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -125,6 +124,17 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Add custom CORS headers to all responses as backup
+@app.middleware("http")
+async def add_cors_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Expose-Headers"] = "*"
+    return response
 
 # ============================================================================
 # PYDANTIC MODELS
