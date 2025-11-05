@@ -54,6 +54,7 @@ function ExamPageContent() {
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [isQuickExam, setIsQuickExam] = useState(false)
+  const [currentHistoryId, setCurrentHistoryId] = useState<number | string | null>(null)
 
   useEffect(() => {
     // Check if the last exam was just submitted
@@ -79,6 +80,14 @@ function ExamPageContent() {
         sessionStorage.removeItem('currentExam')
       }
       return
+    }
+
+    // Check if we're restarting from history (need to update existing record)
+    const historyExamId = sessionStorage.getItem('viewHistoryExamId')
+    if (historyExamId) {
+      const id = isNaN(Number(historyExamId)) ? historyExamId : Number(historyExamId)
+      setCurrentHistoryId(id)
+      // Don't remove yet - keep it until submission
     }
 
     // For normal exam page (generated from uploaded files):
@@ -313,25 +322,44 @@ function ExamPageContent() {
       }
     }
     
-    // Calculate score for title
+    // Calculate score
     const score = Object.keys(answers).filter(
       (key) => answers[parseInt(key)] === exam.answer_key[key]
     ).length
     
-    // Save completed exam to history with answers and unique title
-    await historyAPI.save({
-      type: 'exam',
-      title: titlePrefix,
-      data: {
-        exam: exam,
-        answers: answers
-      },
-      score: {
-        correct: score,
-        total: exam.questions.length,
-        percentage: Math.round((score/exam.questions.length)*100)
-      }
-    })
+    // If we have a currentHistoryId, update it; otherwise create new
+    if (currentHistoryId) {
+      // Update existing history item with new score
+      await historyAPI.update(currentHistoryId, {
+        data: {
+          exam: exam,
+          answers: answers
+        },
+        score: {
+          correct: score,
+          total: exam.questions.length,
+          percentage: Math.round((score/exam.questions.length)*100)
+        }
+      })
+      // Clear the history ID after updating
+      sessionStorage.removeItem('viewHistoryExamId')
+      setCurrentHistoryId(null)
+    } else {
+      // Save new exam to history
+      await historyAPI.save({
+        type: 'exam',
+        title: titlePrefix,
+        data: {
+          exam: exam,
+          answers: answers
+        },
+        score: {
+          correct: score,
+          total: exam.questions.length,
+          percentage: Math.round((score/exam.questions.length)*100)
+        }
+      })
+    }
     
     // Mark that this exam has been submitted so we don't reload it
     sessionStorage.setItem('examSubmitted', 'true')

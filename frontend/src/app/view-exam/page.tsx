@@ -358,9 +358,11 @@ export default function ViewExamPage() {
           <div className="mt-8 text-center">
             <button
               onClick={() => {
-                setShowResults(false)
-                setAnswers({})
-                setCurrentQuestionIndex(0)
+                // Navigate to exam page with current exam loaded
+                // Keep history ID so it updates the same record
+                sessionStorage.setItem('currentExam', JSON.stringify(exam))
+                // Don't remove viewHistoryExamId - we need it for updating
+                router.push('/exam')
               }}
               className="btn-primary px-8"
             >
