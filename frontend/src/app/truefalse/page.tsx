@@ -57,7 +57,6 @@ export default function TrueFalsePage() {
         // If we have a history ID, set it so we can update the same item
         if (viewHistoryId) {
           const id = isNaN(Number(viewHistoryId)) ? viewHistoryId : Number(viewHistoryId)
-          console.log('Loading history item with ID:', id)
           setCurrentHistoryId(id)
           sessionStorage.removeItem('viewHistoryTrueFalseId')
         }
@@ -80,26 +79,11 @@ export default function TrueFalsePage() {
 
   // Update history with final score when completed
   useEffect(() => {
-    console.log('Score update effect triggered:', {
-      isCompleted,
-      answeredCardsSize: answeredCards.size,
-      cardsLength: data?.cards?.length,
-      currentHistoryId,
-      score
-    })
-    
     if (isCompleted && answeredCards.size === data?.cards?.length && currentHistoryId) {
       const totalAnswered = answeredCards.size
       const percentage = totalAnswered > 0 
         ? Math.round((score.correct / totalAnswered) * 100)
         : 0
-      
-      console.log('Updating history score:', {
-        currentHistoryId,
-        correct: score.correct,
-        totalAnswered,
-        percentage
-      })
       
       const updateHistoryScore = async () => {
         try {
@@ -110,7 +94,6 @@ export default function TrueFalsePage() {
               percentage
             }
           })
-          console.log('History score updated successfully')
         } catch (error) {
           console.error('Failed to update history score:', error)
         }
