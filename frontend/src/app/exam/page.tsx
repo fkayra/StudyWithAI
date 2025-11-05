@@ -320,13 +320,11 @@ function ExamPageContent() {
       }
     })
     
-    // After submit, wait a moment then reset to allow starting a new exam
-    setTimeout(() => {
-      setExam(null)
-      setAnswers({})
-      setCurrentQuestionIndex(0)
-      setShowResults(false)
-    }, 100)
+    // Clear sessionStorage to prevent exam from reappearing
+    sessionStorage.removeItem('currentExamState')
+    sessionStorage.removeItem('uploadedFileIds')
+    sessionStorage.removeItem('isQuickExam')
+    sessionStorage.removeItem('quickExamPrompt')
   }
 
   const goToQuestion = (index: number) => {
@@ -491,13 +489,28 @@ function ExamPageContent() {
           <div className="max-w-4xl mx-auto">
             {/* Header */}
             <div className="glass-card p-6 mb-8">
-              <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                Exam Results
-              </h1>
-              <p className="text-slate-400">
-                {exam.questions.length} questions
-              </p>
-              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    Exam Results
+                  </h1>
+                  <p className="text-slate-400">
+                    {exam.questions.length} questions
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setExam(null)
+                    setAnswers({})
+                    setCurrentQuestionIndex(0)
+                    setShowResults(false)
+                  }}
+                  className="btn-primary whitespace-nowrap"
+                >
+                  📝 Start New Exam
+                </button>
+              </div>
+              <div className="p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-400">
                   Score: {score} / {exam.questions.length} ({Math.round((score / exam.questions.length) * 100)}%)
                 </div>
