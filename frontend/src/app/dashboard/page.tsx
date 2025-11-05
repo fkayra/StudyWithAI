@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({
     summaries: 0,
     flashcards: 0,
+    truefalse: 0,
     exams: 0
   })
 
@@ -18,11 +19,13 @@ export default function Dashboard() {
     const history = JSON.parse(localStorage.getItem('studyHistory') || '[]')
     const summariesCount = history.filter((item: any) => item.type === 'summary').length
     const flashcardsCount = history.filter((item: any) => item.type === 'flashcards').length
+    const truefalseCount = history.filter((item: any) => item.type === 'truefalse').length
     const examsCount = history.filter((item: any) => item.type === 'exam').length
     
     setStats({
       summaries: summariesCount,
       flashcards: flashcardsCount,
+      truefalse: truefalseCount,
       exams: examsCount
     })
   }, [])
@@ -49,6 +52,16 @@ export default function Dashboard() {
       statLabel: 'sets'
     },
     {
+      id: 'truefalse',
+      title: 'True/False',
+      description: 'Practice with true or false statements to test your knowledge',
+      icon: '✅',
+      path: '/truefalse',
+      color: 'from-green-500 to-emerald-500',
+      stat: stats.truefalse,
+      statLabel: 'sets'
+    },
+    {
       id: 'exams',
       title: 'Exams',
       description: 'Generate practice exams with AI-powered questions',
@@ -65,7 +78,7 @@ export default function Dashboard() {
       icon: '📊',
       path: '/history',
       color: 'from-purple-500 to-pink-500',
-      stat: stats.summaries + stats.flashcards + stats.exams,
+      stat: stats.summaries + stats.flashcards + stats.truefalse + stats.exams,
       statLabel: 'total items'
     }
   ]
