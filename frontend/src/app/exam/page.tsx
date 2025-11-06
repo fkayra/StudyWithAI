@@ -47,7 +47,7 @@ function ExamPageContent() {
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [level, setLevel] = useState<'elementary-middle' | 'high-school' | 'university'>('high-school')
+  const [level, setLevel] = useState<'elementary-middle' | 'high-school' | 'university'>('university')
   const [prompt, setPrompt] = useState('')
   const [count, setCount] = useState(5)
   const [files, setFiles] = useState<UploadedFile[]>([])

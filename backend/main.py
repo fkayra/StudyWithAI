@@ -357,7 +357,7 @@ def get_level_text(level: str) -> str:
         "high-school": "high-school level (intermediate concepts and applications)",
         "university": "university level (advanced concepts; proofs/applications)"
     }
-    return mapping.get(level, "high-school level (intermediate concepts and applications)")
+    return mapping.get(level, "university level (advanced concepts; proofs/applications)")
 
 # ============================================================================
 # OPENAI INTEGRATION
