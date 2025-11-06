@@ -594,7 +594,7 @@ function ExamPageContent() {
                   <div key={question.number} className="glass-card p-6">
                     <div className="flex items-start justify-between mb-4">
                       <h3 className="text-lg font-semibold text-slate-100 flex-1">
-                        {question.number}. {question.question}
+                        {question.number}. <MathText text={question.question} />
                       </h3>
                       <div className={`text-2xl ${isCorrect ? '' : 'opacity-50'}`}>
                         {isCorrect ? '✅' : '❌'}
@@ -620,7 +620,7 @@ function ExamPageContent() {
                                 : 'border-white/10'
                             }`}
                           >
-                            <span className="font-medium">{key})</span> {value}
+                            <span className="font-medium">{key})</span> <MathText text={value} />
                           </div>
                         )
                       })}
