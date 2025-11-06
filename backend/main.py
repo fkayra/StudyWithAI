@@ -98,10 +98,20 @@ class Exam(Base):
     payload_json = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Folder(Base):
+    __tablename__ = "folders"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer)
+    name = Column(String)
+    color = Column(String, nullable=True)  # Hex color for folder (optional)
+    icon = Column(String, nullable=True)  # Emoji or icon name (optional)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class History(Base):
     __tablename__ = "history"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer)
+    folder_id = Column(Integer, nullable=True)  # Reference to folders table
     type = Column(String)  # "summary", "flashcards", "truefalse", "exam"
     title = Column(String)
     data_json = Column(String)  # JSON stringified data
@@ -238,16 +248,36 @@ class CheckoutRequest(BaseModel):
     successUrl: str
     cancelUrl: str
 
+class FolderCreate(BaseModel):
+    name: str
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+class FolderUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+class FolderResponse(BaseModel):
+    id: int
+    name: str
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    created_at: str
+    item_count: int = 0
+
 class HistoryItemCreate(BaseModel):
     type: str  # "summary", "flashcards", "truefalse", "exam"
     title: str
     data: Any  # Will be JSON stringified
     score: Optional[Any] = None  # For truefalse and exam results
+    folder_id: Optional[int] = None
 
 class HistoryItemUpdate(BaseModel):
     title: Optional[str] = None
     data: Optional[Any] = None
     score: Optional[Any] = None
+    folder_id: Optional[int] = None
 
 class HistoryItemResponse(BaseModel):
     id: int
@@ -255,6 +285,7 @@ class HistoryItemResponse(BaseModel):
     title: str
     data: Any
     score: Optional[Any] = None
+    folder_id: Optional[int] = None
     timestamp: int  # Unix timestamp in milliseconds
 
 # ============================================================================
@@ -1474,12 +1505,22 @@ async def save_history(
     """Save a history item for the authenticated user"""
     import json
     
+    # Validate folder_id if provided
+    if item.folder_id:
+        folder = db.query(Folder).filter(
+            Folder.id == item.folder_id,
+            Folder.user_id == current_user.id
+        ).first()
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+    
     history_entry = History(
         user_id=current_user.id,
         type=item.type,
         title=item.title,
         data_json=json.dumps(item.data),
-        score_json=json.dumps(item.score) if item.score else None
+        score_json=json.dumps(item.score) if item.score else None,
+        folder_id=item.folder_id
     )
     db.add(history_entry)
     db.commit()
@@ -1491,20 +1532,30 @@ async def save_history(
         "title": history_entry.title,
         "data": json.loads(history_entry.data_json),
         "score": json.loads(history_entry.score_json) if history_entry.score_json else None,
+        "folder_id": history_entry.folder_id,
         "timestamp": int(history_entry.created_at.timestamp() * 1000)
     }
 
 @app.get("/history", response_model=List[HistoryItemResponse])
 async def get_history(
+    folder_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all history items for the authenticated user"""
+    """Get history items for the authenticated user, optionally filtered by folder"""
     import json
     
-    history_entries = db.query(History).filter(
-        History.user_id == current_user.id
-    ).order_by(History.created_at.desc()).all()
+    query = db.query(History).filter(History.user_id == current_user.id)
+    
+    # Filter by folder if provided
+    if folder_id is not None:
+        if folder_id == 0:
+            # Special case: folder_id=0 means "no folder" (uncategorized)
+            query = query.filter(History.folder_id == None)
+        else:
+            query = query.filter(History.folder_id == folder_id)
+    
+    history_entries = query.order_by(History.created_at.desc()).all()
     
     return [
         {
@@ -1513,6 +1564,7 @@ async def get_history(
             "title": entry.title,
             "data": json.loads(entry.data_json),
             "score": json.loads(entry.score_json) if entry.score_json else None,
+            "folder_id": entry.folder_id,
             "timestamp": int(entry.created_at.timestamp() * 1000)
         }
         for entry in history_entries
@@ -1525,7 +1577,7 @@ async def update_history_item(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update a specific history item (e.g., add score after completion)"""
+    """Update a specific history item (e.g., add score after completion or move to folder)"""
     import json
     
     history_entry = db.query(History).filter(
@@ -1536,6 +1588,16 @@ async def update_history_item(
     if not history_entry:
         raise HTTPException(status_code=404, detail="History item not found")
     
+    # Validate folder_id if provided
+    if update.folder_id is not None:
+        if update.folder_id > 0:  # 0 or None means remove from folder
+            folder = db.query(Folder).filter(
+                Folder.id == update.folder_id,
+                Folder.user_id == current_user.id
+            ).first()
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
+    
     # Update fields if provided
     if update.title is not None:
         history_entry.title = update.title
@@ -1543,6 +1605,8 @@ async def update_history_item(
         history_entry.data_json = json.dumps(update.data)
     if update.score is not None:
         history_entry.score_json = json.dumps(update.score)
+    if update.folder_id is not None:
+        history_entry.folder_id = update.folder_id if update.folder_id > 0 else None
     
     db.commit()
     db.refresh(history_entry)
@@ -1553,6 +1617,7 @@ async def update_history_item(
         "title": history_entry.title,
         "data": json.loads(history_entry.data_json),
         "score": json.loads(history_entry.score_json) if history_entry.score_json else None,
+        "folder_id": history_entry.folder_id,
         "timestamp": int(history_entry.created_at.timestamp() * 1000)
     }
 
@@ -1587,23 +1652,179 @@ async def clear_history(
     
     return {"status": "success"}
 
+# ============================================================================
+# FOLDER ENDPOINTS
+# ============================================================================
+@app.post("/folders", response_model=FolderResponse)
+async def create_folder(
+    folder: FolderCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new folder for organizing history items"""
+    new_folder = Folder(
+        user_id=current_user.id,
+        name=folder.name,
+        color=folder.color,
+        icon=folder.icon
+    )
+    db.add(new_folder)
+    db.commit()
+    db.refresh(new_folder)
+    
+    # Count items in this folder
+    item_count = db.query(History).filter(
+        History.user_id == current_user.id,
+        History.folder_id == new_folder.id
+    ).count()
+    
+    return {
+        "id": new_folder.id,
+        "name": new_folder.name,
+        "color": new_folder.color,
+        "icon": new_folder.icon,
+        "created_at": new_folder.created_at.isoformat(),
+        "item_count": item_count
+    }
+
+@app.get("/folders", response_model=List[FolderResponse])
+async def get_folders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all folders for the authenticated user"""
+    folders = db.query(Folder).filter(
+        Folder.user_id == current_user.id
+    ).order_by(Folder.created_at.desc()).all()
+    
+    result = []
+    for folder in folders:
+        # Count items in this folder
+        item_count = db.query(History).filter(
+            History.user_id == current_user.id,
+            History.folder_id == folder.id
+        ).count()
+        
+        result.append({
+            "id": folder.id,
+            "name": folder.name,
+            "color": folder.color,
+            "icon": folder.icon,
+            "created_at": folder.created_at.isoformat(),
+            "item_count": item_count
+        })
+    
+    return result
+
+@app.put("/folders/{folder_id}", response_model=FolderResponse)
+async def update_folder(
+    folder_id: int,
+    update: FolderUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a folder"""
+    folder = db.query(Folder).filter(
+        Folder.id == folder_id,
+        Folder.user_id == current_user.id
+    ).first()
+    
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    
+    # Update fields if provided
+    if update.name is not None:
+        folder.name = update.name
+    if update.color is not None:
+        folder.color = update.color
+    if update.icon is not None:
+        folder.icon = update.icon
+    
+    db.commit()
+    db.refresh(folder)
+    
+    # Count items in this folder
+    item_count = db.query(History).filter(
+        History.user_id == current_user.id,
+        History.folder_id == folder.id
+    ).count()
+    
+    return {
+        "id": folder.id,
+        "name": folder.name,
+        "color": folder.color,
+        "icon": folder.icon,
+        "created_at": folder.created_at.isoformat(),
+        "item_count": item_count
+    }
+
+@app.delete("/folders/{folder_id}")
+async def delete_folder(
+    folder_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a folder (history items will become uncategorized)"""
+    folder = db.query(Folder).filter(
+        Folder.id == folder_id,
+        Folder.user_id == current_user.id
+    ).first()
+    
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    
+    # Remove folder_id from all history items in this folder
+    db.query(History).filter(
+        History.user_id == current_user.id,
+        History.folder_id == folder_id
+    ).update({"folder_id": None})
+    
+    db.delete(folder)
+    db.commit()
+    
+    return {"status": "success"}
+
 @app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")
 async def migrate_database(db: Session = Depends(get_db)):
-    """One-time migration to add name and surname columns to users table"""
+    """One-time migration to add name, surname, and folder columns"""
     try:
         # Try to add columns using raw SQL with text()
         if DATABASE_URL.startswith("sqlite"):
             # SQLite
             db.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
             db.execute(text("ALTER TABLE users ADD COLUMN surname TEXT"))
+            db.execute(text("ALTER TABLE history ADD COLUMN folder_id INTEGER"))
+            # Create folders table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS folders (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    name TEXT,
+                    color TEXT,
+                    icon TEXT,
+                    created_at TIMESTAMP
+                )
+            """))
         else:
             # PostgreSQL
             db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR"))
             db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR"))
+            db.execute(text("ALTER TABLE history ADD COLUMN IF NOT EXISTS folder_id INTEGER"))
+            # Create folders table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS folders (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER,
+                    name VARCHAR,
+                    color VARCHAR,
+                    icon VARCHAR,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
         
         db.commit()
-        return {"status": "success", "message": "Database migrated successfully - name and surname columns added"}
+        return {"status": "success", "message": "Database migrated successfully - all columns and tables added"}
     except Exception as e:
         # Columns might already exist or other error
         db.rollback()
@@ -1611,7 +1832,7 @@ async def migrate_database(db: Session = Depends(get_db)):
         
         # Check if columns already exist
         if "already exists" in error_msg.lower() or "duplicate column" in error_msg.lower():
-            return {"status": "success", "message": "Columns already exist - no migration needed"}
+            return {"status": "success", "message": "Columns/tables already exist - no migration needed"}
         
         return {"status": "error", "message": error_msg}
 
