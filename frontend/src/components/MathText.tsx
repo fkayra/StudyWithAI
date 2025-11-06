@@ -20,25 +20,72 @@ export default function MathText({ text, className = '' }: MathTextProps) {
 
       // Convert plain text math notation to LaTeX if not already in LaTeX format
       if (!text.includes('\\(') && !text.includes('\\[')) {
-        // Convert superscripts - handle complex expressions
-        // Pattern 1: (expression)^number -> (expression)^{number}
-        processedText = processedText.replace(/(\([^)]+\))(\^)(\d+)/g, '\\($1^{$3}\\)')
+        // Helper function to match balanced parentheses
+        const findBalancedParens = (str: string, startIdx: number): string => {
+          let depth = 0
+          let i = startIdx
+          const start = i
+          
+          while (i < str.length) {
+            if (str[i] === '(') depth++
+            else if (str[i] === ')') {
+              depth--
+              if (depth === 0) return str.substring(start, i + 1)
+            }
+            i++
+          }
+          return str.substring(start)
+        }
         
-        // Pattern 2: letter^letter -> letter^{letter}
-        processedText = processedText.replace(/([a-zA-Z])(\^)([a-zA-Z])/g, '\\($1^{$3}\\)')
+        // Convert superscripts with nested parentheses: (g(x))^2 -> (g(x))^{2}
+        let i = 0
+        let result = ''
+        while (i < processedText.length) {
+          if (processedText[i] === '(' && processedText.indexOf('^', i) > i) {
+            const parenExpr = findBalancedParens(processedText, i)
+            const afterParen = i + parenExpr.length
+            if (processedText[afterParen] === '^') {
+              // Find the exponent (number or letter)
+              const exponentMatch = processedText.substring(afterParen + 1).match(/^([a-zA-Z0-9]+)/)
+              if (exponentMatch) {
+                result += `\\(${parenExpr}^{${exponentMatch[1]}}\\)`
+                i = afterParen + 1 + exponentMatch[1].length
+                continue
+              }
+            }
+          }
+          result += processedText[i]
+          i++
+        }
+        processedText = result
         
-        // Pattern 3: letter^number -> letter^{number}
-        processedText = processedText.replace(/([a-zA-Z])(\^)(\d+)/g, '\\($1^{$3}\\)')
+        // Convert letter^letter -> letter^{letter}
+        processedText = processedText.replace(/([a-zA-Z])(\^)([a-zA-Z])/g, (match, base, caret, exp) => {
+          if (!match.startsWith('\\(')) return `\\(${base}^{${exp}}\\)`
+          return match
+        })
+        
+        // Convert letter^number -> letter^{number}
+        processedText = processedText.replace(/([a-zA-Z])(\^)(\d+)/g, (match, base, caret, exp) => {
+          if (!match.startsWith('\\(')) return `\\(${base}^{${exp}}\\)`
+          return match
+        })
         
         // Convert fractions: 5/x -> \frac{5}{x}
-        processedText = processedText.replace(/(\d+)\/([a-zA-Z])/g, '\\(\\frac{$1}{$2}\\)')
+        processedText = processedText.replace(/(\d+)\/([a-zA-Z])/g, (match, num, letter) => {
+          if (!match.startsWith('\\(')) return `\\(\\frac{${num}}{${letter}}\\)`
+          return match
+        })
         
         // Convert square roots: √x -> \sqrt{x}
         processedText = processedText.replace(/√\(([^)]+)\)/g, '\\(\\sqrt{$1}\\)')
         processedText = processedText.replace(/√([a-zA-Z0-9]+)/g, '\\(\\sqrt{$1}\\)')
         
         // Convert subscripts: x_1 -> x_{1}
-        processedText = processedText.replace(/([a-zA-Z])(_)(\d+)/g, '\\($1_{$3}\\)')
+        processedText = processedText.replace(/([a-zA-Z])(_)(\d+)/g, (match, base, underscore, sub) => {
+          if (!match.startsWith('\\(')) return `\\(${base}_{${sub}}\\)`
+          return match
+        })
       }
 
       // Replace inline math \(...\) with rendered LaTeX
