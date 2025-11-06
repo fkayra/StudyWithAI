@@ -350,6 +350,7 @@ export default function HistoryPage() {
                         <button
                           onClick={() => {
                             setSelectedItemId(item.id)
+                            setSelectedTargetFolder(item.folder_id || null)
                             setShowMoveDialog(true)
                           }}
                           className="px-4 py-2 border border-white/15 text-slate-300 rounded-xl hover:bg-[#14B8A6]/10 hover:border-[#14B8A6]/30 hover:text-[#14B8A6] transition-all duration-200"
