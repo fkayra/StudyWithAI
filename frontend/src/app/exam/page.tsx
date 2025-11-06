@@ -243,6 +243,11 @@ function ExamPageContent() {
       // Save new exam to currentExam
       sessionStorage.setItem('currentExam', JSON.stringify(response.data))
       
+      // Clear uploaded files after successful generation
+      sessionStorage.removeItem('uploadedFiles')
+      sessionStorage.removeItem('uploadedFileIds')
+      setFiles([])
+      
       // Don't save to history yet - save when exam is completed
       // Just set the exam for now
     } catch (error: any) {
