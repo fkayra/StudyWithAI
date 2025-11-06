@@ -348,7 +348,7 @@ export default function ViewExamPage() {
 
                     {explanation[question.number] && (
                       <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-slate-300 text-sm">
-                        {explanation[question.number]}
+                        <MathText text={explanation[question.number]} />
                       </div>
                     )}
                   </div>
