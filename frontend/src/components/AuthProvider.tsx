@@ -46,11 +46,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return refreshUser(retryCount + 1)
       }
       
-      // If it's a 401 or other auth error, clear user
-      if (error.response?.status === 401 || !isNetworkError) {
+      // If it's a 401, clear user (not authenticated)
+      if (error.response?.status === 401) {
         setUser(null)
       }
-      // For other network errors after retry, keep cookies but don't set user
+      // If it's a 500, log the error details for debugging but don't clear cookies
+      // (might be a temporary backend issue)
+      else if (error.response?.status === 500) {
+        console.error('Server error while fetching user:', error.response?.data?.detail || error.message)
+        // Retry once on 500 errors (might be temporary)
+        if (retryCount < 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          return refreshUser(retryCount + 1)
+        }
+        // After retry, clear user to be safe
+        setUser(null)
+      }
+      // For other errors, clear user
+      else if (!isNetworkError) {
+        setUser(null)
+      }
+      // For network errors after retry, keep cookies but don't set user
       // (user might still be able to login later when network is stable)
     }
   }
