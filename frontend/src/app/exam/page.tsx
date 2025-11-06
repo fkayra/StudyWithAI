@@ -657,7 +657,7 @@ function ExamPageContent() {
 
                       {explanation[question.number] && (
                         <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-slate-300 text-sm">
-                          {explanation[question.number]}
+                          <MathText text={explanation[question.number]} />
                         </div>
                       )}
                     </div>
@@ -708,7 +708,9 @@ function ExamPageContent() {
                         <div className="text-xs text-slate-400 mb-1">
                           {msg.role === 'user' ? 'You' : 'AI Tutor'}
                         </div>
-                        <p className="text-sm text-slate-200 whitespace-pre-wrap">{msg.content}</p>
+                        <div className="text-sm text-slate-200 whitespace-pre-wrap">
+                          <MathText text={msg.content} />
+                        </div>
                       </div>
                     ))}
                     {chatLoading && (
