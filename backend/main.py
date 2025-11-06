@@ -184,14 +184,14 @@ class TrueFalseRequest(BaseModel):
 
 class ExamRequest(BaseModel):
     file_ids: Optional[List[str]] = None
-    level: Optional[str] = "lise"
+    level: Optional[str] = "high-school"
     count: Optional[int] = 5
     language: Optional[str] = "en"
     prompt: Optional[str] = None
 
 class AskRequest(BaseModel):
     prompt: str
-    level: Optional[str] = "lise"
+    level: Optional[str] = "high-school"
     count: Optional[int] = 5
 
 class ExplainRequest(BaseModel):
@@ -353,9 +353,9 @@ def increment_usage(db: Session, user: User, kind: str):
 def get_level_text(level: str) -> str:
     """Map difficulty level to description text"""
     mapping = {
-        "ilkokul-ortaokul": "elementary/middle-school level (core notions, simple language)",
-        "lise": "high-school level (intermediate concepts and applications)",
-        "universite": "university level (advanced concepts; proofs/applications)"
+        "elementary-middle": "elementary/middle-school level (core notions, simple language)",
+        "high-school": "high-school level (intermediate concepts and applications)",
+        "university": "university level (advanced concepts; proofs/applications)"
     }
     return mapping.get(level, "high-school level (intermediate concepts and applications)")
 
