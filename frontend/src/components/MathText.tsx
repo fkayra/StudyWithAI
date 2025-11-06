@@ -16,8 +16,26 @@ export default function MathText({ text, className = '' }: MathTextProps) {
     if (!containerRef.current) return
 
     try {
+      let processedText = text
+
+      // Convert plain text math notation to LaTeX if not already in LaTeX format
+      if (!text.includes('\\(') && !text.includes('\\[')) {
+        // Convert superscripts: x^2 -> x^{2}, x^10 -> x^{10}
+        processedText = processedText.replace(/([a-zA-Z])(\^)(\d+)/g, '\\($1^{$3}\\)')
+        
+        // Convert fractions: 5/x -> \frac{5}{x}, (a+b)/c -> \frac{a+b}{c}
+        processedText = processedText.replace(/(\d+)\/([a-zA-Z])/g, '\\(\\frac{$1}{$2}\\)')
+        
+        // Convert square roots: √x -> \sqrt{x}
+        processedText = processedText.replace(/√\(([^)]+)\)/g, '\\(\\sqrt{$1}\\)')
+        processedText = processedText.replace(/√([a-zA-Z0-9]+)/g, '\\(\\sqrt{$1}\\)')
+        
+        // Convert subscripts: x_1 -> x_{1}
+        processedText = processedText.replace(/([a-zA-Z])(_)(\d+)/g, '\\($1_{$3}\\)')
+      }
+
       // Replace inline math \(...\) with rendered LaTeX
-      let processedText = text.replace(/\\\((.*?)\\\)/g, (match, latex) => {
+      processedText = processedText.replace(/\\\((.*?)\\\)/g, (match, latex) => {
         try {
           return katex.renderToString(latex, {
             throwOnError: false,
