@@ -399,7 +399,9 @@ export default function ViewExamPage() {
                       <div className="text-xs text-slate-400 mb-1">
                         {msg.role === 'user' ? 'You' : 'AI Tutor'}
                       </div>
-                      <p className="text-sm text-slate-200 whitespace-pre-wrap">{msg.content}</p>
+                      <div className="text-sm text-slate-200 whitespace-pre-wrap">
+                        <MathText text={msg.content} />
+                      </div>
                     </div>
                   ))}
                   {chatLoading && (
@@ -497,7 +499,7 @@ export default function ViewExamPage() {
         <div className="glass-card p-6 mb-6">
           <div className="flex items-start justify-between mb-6">
             <h3 className="text-xl font-semibold text-slate-100 flex-1">
-              {currentQuestion.number}. {currentQuestion.question}
+              {currentQuestion.number}. <MathText text={currentQuestion.question} />
             </h3>
           </div>
 
@@ -521,7 +523,7 @@ export default function ViewExamPage() {
                       : 'border-white/10 hover:border-white/30 hover:bg-white/5'
                   }`}
                 >
-                  <span className="font-medium">{key})</span> {value}
+                  <span className="font-medium">{key})</span> <MathText text={value} />
                 </button>
               )
             })}
