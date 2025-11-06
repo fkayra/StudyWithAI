@@ -552,6 +552,7 @@ function ExamPageContent() {
                     sessionStorage.setItem('examSubmitted', 'true')
                     sessionStorage.removeItem('currentExamState')
                     sessionStorage.removeItem('uploadedFileIds')
+                    sessionStorage.removeItem('uploadedFiles')
                     sessionStorage.removeItem('isQuickExam')
                     sessionStorage.removeItem('quickExamPrompt')
                     sessionStorage.removeItem('currentExam')
@@ -560,6 +561,7 @@ function ExamPageContent() {
                     setAnswers({})
                     setCurrentQuestionIndex(0)
                     setShowResults(false)
+                    setFiles([])
                   }}
                   className="btn-primary whitespace-nowrap"
                 >
