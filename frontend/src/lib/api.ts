@@ -9,18 +9,10 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,  // Send cookies with requests
 })
 
-// Add auth token to requests
-apiClient.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('accessToken')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-  }
-  return config
-})
+// No need to manually add auth tokens - cookies are sent automatically
 
 // Handle token refresh on 401
 apiClient.interceptors.response.use(
@@ -35,24 +27,13 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry && typeof window !== 'undefined' && !isAuthEndpoint) {
       originalRequest._retry = true
       
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE}/auth/refresh`, { refresh_token: refreshToken })
-          localStorage.setItem('accessToken', response.data.access_token)
-          localStorage.setItem('refreshToken', response.data.refresh_token)
-          
-          originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`
-          return apiClient(originalRequest)
-        } catch (refreshError) {
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login'
-          }
-        }
-      } else {
-        // No refresh token, redirect to login (but not if we're already on login/register)
+      try {
+        // Try to refresh using cookie-based refresh token
+        await axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true })
+        // Retry original request
+        return apiClient(originalRequest)
+      } catch (refreshError) {
+        // Refresh failed, redirect to login
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           window.location.href = '/login'
         }
@@ -68,20 +49,16 @@ export const historyAPI = {
   // Save history item (if user is logged in, saves to backend; otherwise localStorage)
   // Returns the ID of the saved item (number for backend, string for localStorage)
   async save(item: { type: string; title: string; data: any; score?: any }): Promise<number | string | null> {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    
-    if (token) {
-      // User is logged in, save to backend
-      try {
-        const response = await apiClient.post('/history', item)
-        return response.data.id // Return backend ID
-      } catch (error) {
-        console.error('Failed to save history to backend:', error)
-        // Fallback to localStorage
+    // Try to save to backend first (cookies sent automatically)
+    try {
+      const response = await apiClient.post('/history', item)
+      return response.data.id // Return backend ID
+    } catch (error: any) {
+      // If 401 (not logged in), save to localStorage
+      if (error.response?.status === 401) {
         return this.saveToLocalStorage(item)
       }
-    } else {
-      // Anonymous user, save to localStorage
+      console.error('Failed to save history:', error)
       return this.saveToLocalStorage(item)
     }
   },
@@ -105,20 +82,15 @@ export const historyAPI = {
 
   // Get all history items
   async getAll() {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    
-    if (token) {
-      // User is logged in, fetch from backend
-      try {
-        const response = await apiClient.get('/history')
-        return response.data
-      } catch (error) {
-        console.error('Failed to fetch history from backend:', error)
-        // Fallback to localStorage
+    try {
+      const response = await apiClient.get('/history')
+      return response.data
+    } catch (error: any) {
+      // If 401 (not logged in), use localStorage
+      if (error.response?.status === 401) {
         return this.getFromLocalStorage()
       }
-    } else {
-      // Anonymous user, read from localStorage
+      console.error('Failed to fetch history:', error)
       return this.getFromLocalStorage()
     }
   },
@@ -130,9 +102,7 @@ export const historyAPI = {
 
   // Delete specific item
   async delete(id: string | number) {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    
-    if (token && typeof id === 'number') {
+    if (typeof id === 'number') {
       // Backend ID, delete from backend
       try {
         await apiClient.delete(`/history/${id}`)
@@ -150,9 +120,7 @@ export const historyAPI = {
 
   // Update history item (for adding scores after completion or moving to folder)
   async update(id: string | number, updates: { title?: string; data?: any; score?: any; folder_id?: number | null }) {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    
-    if (token && typeof id === 'number') {
+    if (typeof id === 'number') {
       // Backend ID, update on backend
       try {
         await apiClient.put(`/history/${id}`, updates)
@@ -177,15 +145,10 @@ export const historyAPI = {
 
   // Clear all history
   async clearAll() {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    
-    if (token) {
-      // User is logged in, clear from backend
-      try {
-        await apiClient.delete('/history')
-      } catch (error) {
-        console.error('Failed to clear history from backend:', error)
-      }
+    try {
+      await apiClient.delete('/history')
+    } catch (error) {
+      console.error('Failed to clear history:', error)
     }
     // Also clear localStorage
     if (typeof window !== 'undefined') {
@@ -195,29 +158,21 @@ export const historyAPI = {
 
   // Get history filtered by folder
   async getByFolder(folderId?: number) {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-    
-    if (token) {
-      // Get from backend with filter
-      try {
-        const params = folderId !== undefined ? { folder_id: folderId } : {}
-        const response = await apiClient.get('/history', { params })
-        return response.data
-      } catch (error) {
-        console.error('Failed to get history from backend:', error)
-        return []
+    try {
+      const params = folderId !== undefined ? { folder_id: folderId } : {}
+      const response = await apiClient.get('/history', { params })
+      return response.data
+    } catch (error: any) {
+      // If 401 (not logged in), use localStorage
+      if (error.response?.status === 401 && typeof window !== 'undefined') {
+        const allHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+        if (folderId === undefined) return allHistory
+        if (folderId === 0) return allHistory.filter((item: any) => !item.folder_id)
+        return allHistory.filter((item: any) => item.folder_id === folderId)
       }
+      console.error('Failed to get history:', error)
+      return []
     }
-    
-    // Fallback to localStorage for non-logged-in users
-    if (typeof window !== 'undefined') {
-      const allHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
-      if (folderId === undefined) return allHistory
-      if (folderId === 0) return allHistory.filter((item: any) => !item.folder_id)
-      return allHistory.filter((item: any) => item.folder_id === folderId)
-    }
-    
-    return []
   }
 }
 

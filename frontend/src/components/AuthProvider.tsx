@@ -46,28 +46,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return refreshUser(retryCount + 1)
       }
       
-      // If it's a 401 or other auth error, clear tokens
+      // If it's a 401 or other auth error, clear user
       if (error.response?.status === 401 || !isNetworkError) {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-        }
         setUser(null)
       }
-      // For other network errors after retry, keep tokens but don't set user
+      // For other network errors after retry, keep cookies but don't set user
       // (user might still be able to login later when network is stable)
     }
   }
 
   useEffect(() => {
-    // Check if user is logged in
+    // Check if user is logged in (cookies are sent automatically)
     const checkAuth = async () => {
-      if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('accessToken')
-        if (token) {
-          await refreshUser()
-        }
-      }
+      await refreshUser()
       setLoading(false)
     }
     
@@ -76,11 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await apiClient.post('/auth/login', { email, password })
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('accessToken', response.data.access_token)
-        localStorage.setItem('refreshToken', response.data.refresh_token)
-      }
+      // Cookies are set automatically by the backend
+      await apiClient.post('/auth/login', { email, password })
       await refreshUser()
     } catch (error) {
       // Re-throw the error so it can be caught by the login page
@@ -93,12 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await login(email, password)
   }
 
-  const logout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
+  const logout = async () => {
+    try {
+      // Call backend to clear cookies
+      await apiClient.post('/auth/logout')
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      setUser(null)
     }
-    setUser(null)
   }
 
   return (

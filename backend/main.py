@@ -2,7 +2,7 @@
 AI Study Assistant Backend - FastAPI Application
 Provides grounded document processing, exam generation, and AI tutoring
 """
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Header
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Date, text
@@ -298,11 +298,17 @@ def get_db():
     finally:
         db.close()
 
-def get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> User:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+def get_current_user(request: Request, authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> User:
+    # Try to get token from cookie first (preferred), then fall back to Authorization header
+    token = request.cookies.get("access_token")
     
-    token = authorization.split(" ")[1]
+    # Fallback to Authorization header for backward compatibility
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization")
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_str = payload.get("sub")
@@ -320,13 +326,18 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
     
     return user
 
-def get_optional_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Optional[User]:
+def get_optional_user(request: Request, authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Optional[User]:
     """Get user if authenticated, None otherwise"""
-    if not authorization or not authorization.startswith("Bearer "):
+    # Try to get token from cookie first, then fall back to Authorization header
+    token = request.cookies.get("access_token")
+    
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+    
+    if not token:
         return None
     
     try:
-        token = authorization.split(" ")[1]
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_str = payload.get("sub")
         if user_id_str is None:
@@ -597,8 +608,8 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     
     return {"id": user.id, "email": user.email, "name": user.name, "surname": user.surname, "tier": user.tier}
 
-@app.post("/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin, db: Session = Depends(get_db)):
+@app.post("/auth/login")
+async def login(credentials: UserLogin, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == credentials.email).first()
     
     if not user or not verify_password(credentials.password, user.password_hash):
@@ -607,14 +618,49 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     access_token = create_token(user.id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     refresh_token = create_token(user.id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
     
+    # Set HTTP-only cookies for security
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,  # Only send over HTTPS
+        samesite="none",  # Allow cross-site requests (needed for Vercel + Railway)
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert minutes to seconds
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60  # Convert days to seconds
+    )
+    
+    # Also return tokens in response for backward compatibility
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "surname": user.surname,
+            "tier": user.tier
+        }
     }
 
-@app.post("/auth/refresh", response_model=TokenResponse)
-async def refresh(refresh_token: str):
+@app.post("/auth/refresh")
+async def refresh(request: Request, response: Response, refresh_data: dict = None):
+    # Try to get refresh token from cookie first, then from request body
+    refresh_token = request.cookies.get("refresh_token")
+    
+    if not refresh_token and refresh_data:
+        refresh_token = refresh_data.get("refresh_token")
+    
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Missing refresh token")
+    
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_str = payload.get("sub")
@@ -623,6 +669,24 @@ async def refresh(refresh_token: str):
         access_token = create_token(user_id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
         new_refresh = create_token(user_id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
         
+        # Set new cookies
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=new_refresh,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        )
+        
         return {
             "access_token": access_token,
             "refresh_token": new_refresh,
@@ -630,6 +694,13 @@ async def refresh(refresh_token: str):
         }
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+@app.post("/auth/logout")
+async def logout(response: Response):
+    # Clear cookies
+    response.delete_cookie(key="access_token", samesite="none", secure=True)
+    response.delete_cookie(key="refresh_token", samesite="none", secure=True)
+    return {"message": "Logged out successfully"}
 
 @app.get("/me")
 async def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
