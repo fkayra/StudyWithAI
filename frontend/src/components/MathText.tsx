@@ -20,10 +20,17 @@ export default function MathText({ text, className = '' }: MathTextProps) {
 
       // Convert plain text math notation to LaTeX if not already in LaTeX format
       if (!text.includes('\\(') && !text.includes('\\[')) {
-        // Convert superscripts: x^2 -> x^{2}, x^10 -> x^{10}
+        // Convert superscripts - handle complex expressions
+        // Pattern 1: (expression)^number -> (expression)^{number}
+        processedText = processedText.replace(/(\([^)]+\))(\^)(\d+)/g, '\\($1^{$3}\\)')
+        
+        // Pattern 2: letter^letter -> letter^{letter}
+        processedText = processedText.replace(/([a-zA-Z])(\^)([a-zA-Z])/g, '\\($1^{$3}\\)')
+        
+        // Pattern 3: letter^number -> letter^{number}
         processedText = processedText.replace(/([a-zA-Z])(\^)(\d+)/g, '\\($1^{$3}\\)')
         
-        // Convert fractions: 5/x -> \frac{5}{x}, (a+b)/c -> \frac{a+b}{c}
+        // Convert fractions: 5/x -> \frac{5}{x}
         processedText = processedText.replace(/(\d+)\/([a-zA-Z])/g, '\\(\\frac{$1}{$2}\\)')
         
         // Convert square roots: √x -> \sqrt{x}
