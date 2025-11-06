@@ -18,74 +18,24 @@ export default function MathText({ text, className = '' }: MathTextProps) {
     try {
       let processedText = text
 
-      // Convert plain text math notation to LaTeX if not already in LaTeX format
-      if (!text.includes('\\(') && !text.includes('\\[')) {
-        // Helper function to match balanced parentheses
-        const findBalancedParens = (str: string, startIdx: number): string => {
-          let depth = 0
-          let i = startIdx
-          const start = i
-          
-          while (i < str.length) {
-            if (str[i] === '(') depth++
-            else if (str[i] === ')') {
-              depth--
-              if (depth === 0) return str.substring(start, i + 1)
-            }
-            i++
-          }
-          return str.substring(start)
-        }
-        
-        // Convert superscripts with nested parentheses: (g(x))^2 -> (g(x))^{2}
-        let i = 0
-        let result = ''
-        while (i < processedText.length) {
-          if (processedText[i] === '(' && processedText.indexOf('^', i) > i) {
-            const parenExpr = findBalancedParens(processedText, i)
-            const afterParen = i + parenExpr.length
-            if (processedText[afterParen] === '^') {
-              // Find the exponent (number or letter)
-              const exponentMatch = processedText.substring(afterParen + 1).match(/^([a-zA-Z0-9]+)/)
-              if (exponentMatch) {
-                result += `\\(${parenExpr}^{${exponentMatch[1]}}\\)`
-                i = afterParen + 1 + exponentMatch[1].length
-                continue
-              }
-            }
-          }
-          result += processedText[i]
-          i++
-        }
-        processedText = result
-        
-        // Convert letter^letter -> letter^{letter}
-        processedText = processedText.replace(/([a-zA-Z])(\^)([a-zA-Z])/g, (match, base, caret, exp) => {
-          if (!match.startsWith('\\(')) return `\\(${base}^{${exp}}\\)`
-          return match
-        })
-        
-        // Convert letter^number -> letter^{number}
-        processedText = processedText.replace(/([a-zA-Z])(\^)(\d+)/g, (match, base, caret, exp) => {
-          if (!match.startsWith('\\(')) return `\\(${base}^{${exp}}\\)`
-          return match
-        })
+      // Convert plain text math notation to LaTeX
+      // First, detect if already has LaTeX markers
+      const hasLatex = text.includes('\\(') || text.includes('\\[')
+      
+      if (!hasLatex) {
+        // Auto-detect and wrap entire expressions with ^ in LaTeX
+        // This handles: (g(x))^2, e^x, x^2, etc.
+        processedText = processedText.replace(/([a-zA-Z0-9()]+)\^([a-zA-Z0-9]+)/g, '\\($1^{$2}\\)')
         
         // Convert fractions: 5/x -> \frac{5}{x}
-        processedText = processedText.replace(/(\d+)\/([a-zA-Z])/g, (match, num, letter) => {
-          if (!match.startsWith('\\(')) return `\\(\\frac{${num}}{${letter}}\\)`
-          return match
-        })
+        processedText = processedText.replace(/(\d+)\/([a-zA-Z])/g, '\\(\\frac{$1}{$2}\\)')
         
         // Convert square roots: √x -> \sqrt{x}
         processedText = processedText.replace(/√\(([^)]+)\)/g, '\\(\\sqrt{$1}\\)')
         processedText = processedText.replace(/√([a-zA-Z0-9]+)/g, '\\(\\sqrt{$1}\\)')
         
         // Convert subscripts: x_1 -> x_{1}
-        processedText = processedText.replace(/([a-zA-Z])(_)(\d+)/g, (match, base, underscore, sub) => {
-          if (!match.startsWith('\\(')) return `\\(${base}_{${sub}}\\)`
-          return match
-        })
+        processedText = processedText.replace(/([a-zA-Z])_(\d+)/g, '\\($1_{$2}\\)')
       }
 
       // Replace inline math \(...\) with rendered LaTeX
