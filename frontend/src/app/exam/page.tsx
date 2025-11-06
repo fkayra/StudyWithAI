@@ -64,6 +64,7 @@ function ExamPageContent() {
       sessionStorage.removeItem('examSubmitted')
       sessionStorage.removeItem('currentExamState')
       sessionStorage.removeItem('uploadedFileIds')
+      sessionStorage.removeItem('uploadedFiles')
       sessionStorage.removeItem('isQuickExam')
       sessionStorage.removeItem('quickExamPrompt')
       sessionStorage.removeItem('currentExam')
