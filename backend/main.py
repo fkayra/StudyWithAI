@@ -40,6 +40,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
+# Cookie settings - secure cookies only in production
+IS_PRODUCTION = os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER") or os.getenv("PORT")
+COOKIE_SECURE = IS_PRODUCTION is not None  # True in production, False in development
+COOKIE_SAMESITE = "none" if IS_PRODUCTION else "lax"  # "none" for cross-site (production), "lax" for same-site (dev)
+
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
@@ -166,14 +171,8 @@ async def add_cors_headers(request, call_next):
         response.headers["Access-Control-Max-Age"] = "3600"
         return response
     
-    try:
-        response = await call_next(request)
-    except Exception as e:
-        # Even on errors, return CORS headers
-        response = JSONResponse(
-            content={"detail": str(e)},
-            status_code=500
-        )
+    # Let FastAPI handle the request and catch HTTPExceptions properly
+    response = await call_next(request)
     
     # Set specific origin instead of wildcard when credentials are used
     if origin:
@@ -629,16 +628,16 @@ async def login(credentials: UserLogin, response: Response, db: Session = Depend
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,  # Only send over HTTPS
-        samesite="none",  # Allow cross-site requests (needed for Vercel + Railway)
+        secure=COOKIE_SECURE,  # Only send over HTTPS in production
+        samesite=COOKIE_SAMESITE,  # "none" for cross-site (production), "lax" for dev
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert minutes to seconds
     )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60  # Convert days to seconds
     )
     
@@ -680,16 +679,16 @@ async def refresh(request: Request, response: Response, refresh_data: dict = Non
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=True,
-            samesite="none",
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
             max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
         response.set_cookie(
             key="refresh_token",
             value=new_refresh,
             httponly=True,
-            secure=True,
-            samesite="none",
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
             max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
         )
         
@@ -704,32 +703,44 @@ async def refresh(request: Request, response: Response, refresh_data: dict = Non
 @app.post("/auth/logout")
 async def logout(response: Response):
     # Clear cookies
-    response.delete_cookie(key="access_token", samesite="none", secure=True)
-    response.delete_cookie(key="refresh_token", samesite="none", secure=True)
+    response.delete_cookie(key="access_token", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    response.delete_cookie(key="refresh_token", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return {"message": "Logged out successfully"}
 
 @app.get("/me")
 async def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Get today's usage
-    today = date.today()
-    usage_data = {}
-    
-    for kind in ["exam", "explain", "chat", "upload"]:
-        usage = db.query(Usage).filter(
-            Usage.user_id == current_user.id,
-            Usage.kind == kind,
-            Usage.date == today
-        ).first()
-        usage_data[kind] = usage.count if usage else 0
-    
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "name": current_user.name,
-        "surname": current_user.surname,
-        "tier": current_user.tier,
-        "usage": usage_data
-    }
+    try:
+        # Get today's usage
+        today = date.today()
+        usage_data = {}
+        
+        for kind in ["exam", "explain", "chat", "upload"]:
+            try:
+                usage = db.query(Usage).filter(
+                    Usage.user_id == current_user.id,
+                    Usage.kind == kind,
+                    Usage.date == today
+                ).first()
+                usage_data[kind] = usage.count if usage else 0
+            except Exception as e:
+                # If usage table has issues, set to 0 and continue
+                usage_data[kind] = 0
+        
+        return {
+            "id": current_user.id,
+            "email": current_user.email,
+            "name": current_user.name,
+            "surname": current_user.surname,
+            "tier": current_user.tier,
+            "usage": usage_data
+        }
+    except Exception as e:
+        # Log the error and return a 500 with details
+        import traceback
+        error_details = str(e)
+        traceback_str = traceback.format_exc()
+        print(f"Error in /me endpoint: {error_details}\n{traceback_str}")
+        raise HTTPException(status_code=500, detail=f"Failed to get user info: {error_details}")
 
 # ============================================================================
 # FILE UPLOAD ENDPOINT
