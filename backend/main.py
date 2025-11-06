@@ -5,7 +5,7 @@ Provides grounded document processing, exam generation, and AI tutoring
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Date
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Date, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, timedelta, date
@@ -1590,22 +1590,28 @@ async def clear_history(
 async def migrate_database(db: Session = Depends(get_db)):
     """One-time migration to add name and surname columns to users table"""
     try:
-        # Try to add columns using raw SQL
+        # Try to add columns using raw SQL with text()
         if DATABASE_URL.startswith("sqlite"):
             # SQLite
-            db.execute("ALTER TABLE users ADD COLUMN name TEXT")
-            db.execute("ALTER TABLE users ADD COLUMN surname TEXT")
+            db.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
+            db.execute(text("ALTER TABLE users ADD COLUMN surname TEXT"))
         else:
             # PostgreSQL
-            db.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR")
-            db.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR")
+            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR"))
+            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR"))
         
         db.commit()
-        return {"status": "success", "message": "Database migrated successfully"}
+        return {"status": "success", "message": "Database migrated successfully - name and surname columns added"}
     except Exception as e:
-        # Columns might already exist
+        # Columns might already exist or other error
         db.rollback()
-        return {"status": "already_migrated", "message": str(e)}
+        error_msg = str(e)
+        
+        # Check if columns already exist
+        if "already exists" in error_msg.lower() or "duplicate column" in error_msg.lower():
+            return {"status": "success", "message": "Columns already exist - no migration needed"}
+        
+        return {"status": "error", "message": error_msg}
 
 if __name__ == "__main__":
     import uvicorn
