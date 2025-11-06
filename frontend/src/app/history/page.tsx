@@ -30,13 +30,13 @@ export default function HistoryPage() {
   const router = useRouter()
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
-  const [selectedFolder, setSelectedFolder] = useState<number | null>(null) // null = all, 0 = uncategorized
+  const [selectedFolder, setSelectedFolder] = useState<number | null>(null)
   const [filter, setFilter] = useState<'all' | 'summary' | 'flashcards' | 'truefalse' | 'exam'>('all')
-  const [showNewFolderDialog, setShowNewFolderDialog] = useState(false)
+  const [showFolderManager, setShowFolderManager] = useState(false)
+  const [showMoveDialog, setShowMoveDialog] = useState(false)
+  const [selectedItemId, setSelectedItemId] = useState<string | number | null>(null)
   const [newFolderName, setNewFolderName] = useState('')
   const [newFolderIcon, setNewFolderIcon] = useState('📁')
-  const [newFolderColor, setNewFolderColor] = useState('#3B82F6')
-  const [moveToFolderItemId, setMoveToFolderItemId] = useState<string | number | null>(null)
 
   useEffect(() => {
     loadHistory()
@@ -45,7 +45,7 @@ export default function HistoryPage() {
 
   const loadHistory = async () => {
     try {
-      const items = selectedFolder !== null
+      const items = selectedFolder !== null 
         ? await historyAPI.getByFolder(selectedFolder)
         : await historyAPI.getAll()
       setHistory(items.sort((a: HistoryItem, b: HistoryItem) => b.timestamp - a.timestamp))
@@ -65,17 +65,10 @@ export default function HistoryPage() {
 
   const createFolder = async () => {
     if (!newFolderName.trim()) return
-    
     try {
-      await folderAPI.create({
-        name: newFolderName,
-        icon: newFolderIcon,
-        color: newFolderColor
-      })
-      setShowNewFolderDialog(false)
+      await folderAPI.create({ name: newFolderName, icon: newFolderIcon })
       setNewFolderName('')
       setNewFolderIcon('📁')
-      setNewFolderColor('#3B82F6')
       await loadFolders()
     } catch (e) {
       console.error('Failed to create folder:', e)
@@ -87,9 +80,7 @@ export default function HistoryPage() {
       try {
         await folderAPI.delete(id)
         await loadFolders()
-        if (selectedFolder === id) {
-          setSelectedFolder(null)
-        }
+        if (selectedFolder === id) setSelectedFolder(null)
         await loadHistory()
       } catch (e) {
         console.error('Failed to delete folder:', e)
@@ -97,12 +88,14 @@ export default function HistoryPage() {
     }
   }
 
-  const moveItemToFolder = async (itemId: string | number, folderId: number | null) => {
+  const moveToFolder = async (folderId: number | null) => {
+    if (selectedItemId === null) return
     try {
-      await historyAPI.update(itemId, { folder_id: folderId || 0 })
+      await historyAPI.update(selectedItemId, { folder_id: folderId || 0 })
       await loadHistory()
       await loadFolders()
-      setMoveToFolderItemId(null)
+      setShowMoveDialog(false)
+      setSelectedItemId(null)
     } catch (e) {
       console.error('Failed to move item:', e)
     }
@@ -119,28 +112,55 @@ export default function HistoryPage() {
     await historyAPI.delete(id)
     const newHistory = history.filter(item => item.id !== id)
     setHistory(newHistory)
-    await loadFolders() // Update counts
+    await loadFolders()
   }
 
-  const openItem = (item: HistoryItem) => {
-    const params = new URLSearchParams({
-      from: 'history',
-      id: String(item.id)
-    })
-    
-    if (item.type === 'exam') {
-      router.push(`/view-exam?${params}`)
-    } else if (item.type === 'summary') {
-      router.push(`/summaries?${params}`)
+  const viewItem = (item: HistoryItem) => {
+    // Store the data and navigate to the appropriate page
+    if (item.type === 'summary') {
+      sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
+      router.push('/summaries')
     } else if (item.type === 'flashcards') {
-      router.push(`/flashcards?${params}`)
+      sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
+      router.push('/flashcards')
     } else if (item.type === 'truefalse') {
-      router.push(`/truefalse?${params}`)
+      sessionStorage.setItem('viewHistory', JSON.stringify(item.data))
+      sessionStorage.setItem('viewHistoryTrueFalseId', String(item.id))
+      router.push('/truefalse')
+    } else if (item.type === 'exam') {
+      sessionStorage.setItem('viewHistoryExamId', String(item.id))
+      sessionStorage.setItem('viewHistoryExamTitle', item.title)
+      
+      if (item.data.exam && item.data.answers) {
+        sessionStorage.setItem('viewHistoryExam', JSON.stringify({
+          exam: item.data.exam,
+          answers: item.data.answers,
+          showResults: true
+        }))
+      } else if (item.data.exam) {
+        sessionStorage.setItem('viewHistoryExam', JSON.stringify({
+          exam: item.data.exam,
+          answers: {},
+          showResults: false
+        }))
+      } else if (item.data.questions) {
+        sessionStorage.setItem('viewHistoryExam', JSON.stringify({
+          exam: item.data,
+          answers: {},
+          showResults: false
+        }))
+      }
+      
+      router.push('/view-exam')
     }
   }
 
+  const filteredHistory = filter === 'all' 
+    ? history 
+    : history.filter(item => item.type === filter)
+
   const getTypeIcon = (type: string) => {
-    switch(type) {
+    switch (type) {
       case 'summary': return '📝'
       case 'flashcards': return '🎴'
       case 'truefalse': return '✅❌'
@@ -150,341 +170,296 @@ export default function HistoryPage() {
   }
 
   const getTypeColor = (type: string) => {
-    switch(type) {
-      case 'summary': return 'from-teal-500 to-emerald-500'
-      case 'flashcards': return 'from-cyan-500 to-blue-500'
-      case 'truefalse': return 'from-green-500 to-emerald-500'
-      case 'exam': return 'from-blue-500 to-indigo-500'
-      default: return 'from-slate-500 to-slate-600'
+    switch (type) {
+      case 'summary': return 'from-teal-500/20 to-teal-600/20 border-teal-500/50'
+      case 'flashcards': return 'from-cyan-500/20 to-cyan-600/20 border-cyan-500/50'
+      case 'truefalse': return 'from-green-500/20 to-red-500/20 border-green-500/50'
+      case 'exam': return 'from-emerald-500/20 to-emerald-600/20 border-emerald-500/50'
+      default: return 'from-slate-500/20 to-slate-600/20 border-slate-500/50'
     }
   }
 
-  const filteredHistory = filter === 'all' 
-    ? history 
-    : history.filter(item => item.type === filter)
-
-  // Count items in "All Items"
-  const allItemsCount = history.length
-  
-  // Count uncategorized items
   const uncategorizedCount = history.filter(item => !item.folder_id).length
 
-  const folderIcons = ['📁', '📚', '🎓', '💼', '🏆', '🎯', '⭐', '🔥', '💡', '🚀']
-  const folderColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316']
-
   return (
-    <div className="min-h-screen bg-[#0B1220] pt-20 px-4 pb-12">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8 flex justify-between items-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            Study History
-          </h1>
-          <button
-            onClick={clearHistory}
-            className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl hover:bg-red-500/20 transition-all text-sm"
-          >
-            Clear All
-          </button>
-        </div>
+    <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
+      {/* Animated background */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Folders Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="glass-card p-4 sticky top-24">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-slate-200">Folders</h2>
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="glass-card mb-8 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-4 mb-2">
+                <div className="text-5xl">📚</div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
+                  History
+                </h1>
+              </div>
+              <p className="text-slate-400">
+                View and access your past summaries, flashcards, and exams
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowFolderManager(true)}
+                className="btn-ghost"
+              >
+                📁 Folders
+              </button>
+              {history.length > 0 && (
                 <button
-                  onClick={() => setShowNewFolderDialog(true)}
-                  className="text-teal-400 hover:text-teal-300 transition-colors"
-                  title="Create folder"
+                  onClick={clearHistory}
+                  className="btn-ghost text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  🗑️ Clear All
                 </button>
-              </div>
-
-              {/* All Items */}
-              <button
-                onClick={() => setSelectedFolder(null)}
-                className={`w-full text-left px-3 py-2 rounded-lg mb-1 transition-all ${
-                  selectedFolder === null
-                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                    : 'text-slate-400 hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span>📚</span>
-                    <span className="text-sm font-medium">All Items</span>
-                  </div>
-                  <span className="text-xs opacity-70">{allItemsCount}</span>
-                </div>
-              </button>
-
-              {/* Uncategorized */}
-              <button
-                onClick={() => setSelectedFolder(0)}
-                className={`w-full text-left px-3 py-2 rounded-lg mb-1 transition-all ${
-                  selectedFolder === 0
-                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                    : 'text-slate-400 hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span>📄</span>
-                    <span className="text-sm font-medium">Uncategorized</span>
-                  </div>
-                  <span className="text-xs opacity-70">{uncategorizedCount}</span>
-                </div>
-              </button>
-
-              <div className="border-t border-white/10 my-3"></div>
-
-              {/* User Folders */}
-              <div className="space-y-1">
-                {folders.map((folder) => (
-                  <div key={folder.id} className="group relative">
-                    <button
-                      onClick={() => setSelectedFolder(folder.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                        selectedFolder === folder.id
-                          ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                          : 'text-slate-400 hover:bg-white/5'
-                      }`}
-                      style={selectedFolder === folder.id ? { borderLeftColor: folder.color || '#3B82F6', borderLeftWidth: '3px' } : {}}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span>{folder.icon || '📁'}</span>
-                          <span className="text-sm font-medium truncate">{folder.name}</span>
-                        </div>
-                        <span className="text-xs opacity-70 ml-2">{folder.item_count}</span>
-                      </div>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteFolder(folder.id)
-                      }}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
-                      title="Delete folder"
-                    >
-                      <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
+              )}
             </div>
           </div>
 
-          {/* History Items */}
-          <div className="lg:col-span-3">
-            {/* Type Filter */}
-            <div className="flex gap-2 mb-6 flex-wrap">
-              {(['all', 'summary', 'flashcards', 'truefalse', 'exam'] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setFilter(type)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                    filter === type
-                      ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white'
-                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                  }`}
-                >
-                  {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
-                </button>
+          {/* Filters */}
+          <div className="flex gap-2 mt-6 flex-wrap">
+            {/* Folder filter */}
+            <select
+              value={selectedFolder === null ? 'all' : selectedFolder}
+              onChange={(e) => setSelectedFolder(e.target.value === 'all' ? null : parseInt(e.target.value))}
+              className="px-4 py-2 rounded-xl border border-white/15 bg-[#1F2937] text-slate-300 hover:bg-white/5 transition-all duration-200"
+            >
+              <option value="all">📚 All Folders</option>
+              <option value="0">📄 Uncategorized ({uncategorizedCount})</option>
+              {folders.map(folder => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.icon} {folder.name} ({folder.item_count})
+                </option>
               ))}
-            </div>
+            </select>
 
-            {/* History List */}
-            {filteredHistory.length === 0 ? (
-              <div className="glass-card p-12 text-center">
-                <div className="text-6xl mb-4">📚</div>
-                <p className="text-slate-400 text-lg">No history yet</p>
-                <p className="text-slate-500 text-sm mt-2">Start creating summaries, flashcards, or exams!</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredHistory.map((item) => (
-                  <div key={item.id} className="glass-card p-6 hover:bg-white/5 transition-all group">
+            <div className="border-l border-white/15 mx-2"></div>
+
+            {/* Type filter */}
+            {[
+              { value: 'all', label: 'All', icon: '📚' },
+              { value: 'summary', label: 'Summaries', icon: '📝' },
+              { value: 'flashcards', label: 'Flashcards', icon: '🎴' },
+              { value: 'truefalse', label: 'True/False', icon: '✅❌' },
+              { value: 'exam', label: 'Exams', icon: '🎯' }
+            ].map((item) => (
+              <button
+                key={item.value}
+                onClick={() => setFilter(item.value as any)}
+                className={`px-4 py-2 rounded-xl border transition-all duration-200 ${
+                  filter === item.value
+                    ? 'border-[#14B8A6] bg-gradient-to-r from-[#14B8A6]/20 to-[#06B6D4]/20 text-[#06B6D4]'
+                    : 'border-white/15 text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                {item.icon} {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* History list */}
+        {filteredHistory.length === 0 ? (
+          <div className="glass-card text-center p-12 animate-scale-in">
+            <div className="text-6xl mb-4">📭</div>
+            <h2 className="text-2xl font-semibold text-slate-100 mb-2">
+              No History Yet
+            </h2>
+            <p className="text-slate-400 mb-6">
+              {filter === 'all' 
+                ? 'Start generating summaries, flashcards, or exams to see them here!'
+                : `No ${filter} in your history yet.`}
+            </p>
+            <button onClick={() => router.push('/upload')} className="btn-primary">
+              Upload Documents 📄
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredHistory.map((item, index) => (
+              <div
+                key={item.id}
+                className="glass-card card-hover animate-slide-up group"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Icon */}
+                  <div className={`flex-shrink-0 w-16 h-16 bg-gradient-to-br ${getTypeColor(item.type)} rounded-xl flex items-center justify-center ${item.type === 'truefalse' ? 'text-2xl' : 'text-3xl'} group-hover:scale-110 transition-transform`}>
+                    {getTypeIcon(item.type)}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4 flex-1 min-w-0">
-                        <div className={`p-3 rounded-xl bg-gradient-to-r ${getTypeColor(item.type)}`}>
-                          <span className="text-2xl">{getTypeIcon(item.type)}</span>
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <button
-                            onClick={() => openItem(item)}
-                            className="text-left w-full"
-                          >
-                            <h3 className="text-lg font-semibold text-slate-100 hover:text-teal-400 transition-colors truncate">
-                              {item.title}
-                            </h3>
-                          </button>
-                          
-                          <div className="flex items-center gap-3 mt-2 text-sm text-slate-400">
-                            <span className="capitalize">{item.type}</span>
-                            <span>•</span>
-                            <span>{new Date(item.timestamp).toLocaleDateString()}</span>
-                            {item.score && (
-                              <>
-                                <span>•</span>
-                                <span className={`font-medium ${
-                                  item.score.percentage >= 70 ? 'text-green-400' : 'text-yellow-400'
-                                }`}>
-                                  Score: {item.score.correct}/{item.score.total} ({item.score.percentage}%)
-                                </span>
-                              </>
-                            )}
-                          </div>
-
-                          {item.folder_id && (
-                            <div className="mt-2">
-                              {(() => {
-                                const folder = folders.find(f => f.id === item.folder_id)
-                                return folder ? (
-                                  <span 
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-300"
-                                    style={{ 
-                                      backgroundColor: `${folder.color || '#3B82F6'}20`,
-                                      borderLeft: `2px solid ${folder.color || '#3B82F6'}`
-                                    }}
-                                  >
-                                    <span>{folder.icon || '📁'}</span>
-                                    <span>{folder.name}</span>
-                                  </span>
-                                ) : null
-                              })()}
-                            </div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold text-slate-100 mb-1 truncate">
+                          {item.title}
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm text-slate-400 flex-wrap">
+                          <span className="capitalize">{item.type}</span>
+                          <span>•</span>
+                          <span>{new Date(item.timestamp).toLocaleDateString('tr-TR', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</span>
+                          {item.score && (
+                            <>
+                              <span>•</span>
+                              <span className={`font-semibold px-2 py-0.5 rounded ${
+                                item.score.percentage >= 80 
+                                  ? 'text-green-400 bg-green-500/10' 
+                                  : item.score.percentage >= 60 
+                                  ? 'text-yellow-400 bg-yellow-500/10' 
+                                  : 'text-red-400 bg-red-500/10'
+                              }`}>
+                                {item.score.correct}/{item.score.total} ({item.score.percentage}%)
+                              </span>
+                            </>
                           )}
                         </div>
+                        {/* Folder badge */}
+                        {item.folder_id && (() => {
+                          const folder = folders.find(f => f.id === item.folder_id)
+                          return folder ? (
+                            <div className="mt-2">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs text-slate-300">
+                                <span>{folder.icon || '📁'}</span>
+                                <span>{folder.name}</span>
+                              </span>
+                            </div>
+                          ) : null
+                        })()}
                       </div>
 
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Actions */}
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => setMoveToFolderItemId(item.id)}
-                          className="p-2 hover:bg-teal-500/20 rounded-lg transition-all"
+                          onClick={() => {
+                            setSelectedItemId(item.id)
+                            setShowMoveDialog(true)
+                          }}
+                          className="px-4 py-2 border border-white/15 text-slate-300 rounded-xl hover:bg-[#14B8A6]/10 hover:border-[#14B8A6]/30 hover:text-[#14B8A6] transition-all duration-200"
                           title="Move to folder"
                         >
-                          <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                          </svg>
+                          📁
+                        </button>
+                        <button
+                          onClick={() => viewItem(item)}
+                          className="px-4 py-2 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] text-white rounded-xl hover:shadow-lg hover:shadow-teal-500/25 transition-all duration-200 hover:scale-105"
+                        >
+                          View
                         </button>
                         <button
                           onClick={() => deleteItem(item.id)}
-                          className="p-2 hover:bg-red-500/20 rounded-lg transition-all"
-                          title="Delete"
+                          className="px-4 py-2 border border-white/15 text-slate-300 rounded-xl hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all duration-200"
                         >
-                          <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          🗑️
                         </button>
                       </div>
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
-            )}
+            ))}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* New Folder Dialog */}
-      {showNewFolderDialog && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold text-slate-100 mb-4">Create New Folder</h2>
+      {/* Folder Manager Dialog */}
+      {showFolderManager && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="glass-card p-6 w-full max-w-2xl animate-scale-in">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent mb-6">
+              Manage Folders
+            </h2>
             
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Folder Name</label>
+            {/* Create new folder */}
+            <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
+              <h3 className="text-lg font-semibold text-slate-100 mb-3">Create New Folder</h3>
+              <div className="flex gap-3">
+                <select
+                  value={newFolderIcon}
+                  onChange={(e) => setNewFolderIcon(e.target.value)}
+                  className="px-3 py-2 bg-[#1F2937] border border-white/10 rounded-xl text-2xl"
+                >
+                  {['📁', '📚', '🎓', '💼', '🏆', '🎯', '⭐', '🔥', '💡', '🚀'].map(icon => (
+                    <option key={icon} value={icon}>{icon}</option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="My Study Folder"
-                  className="w-full px-4 py-3 bg-[#1F2937] border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  autoFocus
+                  placeholder="Folder name..."
+                  className="flex-1 px-4 py-2 bg-[#1F2937] border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
+                  onKeyPress={(e) => e.key === 'Enter' && createFolder()}
                 />
+                <button
+                  onClick={createFolder}
+                  disabled={!newFolderName.trim()}
+                  className="px-6 py-2 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] text-white rounded-xl hover:shadow-lg hover:shadow-teal-500/25 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create
+                </button>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Icon</label>
-                <div className="flex gap-2 flex-wrap">
-                  {folderIcons.map((icon) => (
+            {/* Folders list */}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {folders.length === 0 ? (
+                <p className="text-slate-400 text-center py-8">No folders yet. Create one above!</p>
+              ) : (
+                folders.map(folder => (
+                  <div key={folder.id} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{folder.icon || '📁'}</span>
+                      <div>
+                        <div className="text-slate-100 font-medium">{folder.name}</div>
+                        <div className="text-sm text-slate-400">{folder.item_count} items</div>
+                      </div>
+                    </div>
                     <button
-                      key={icon}
-                      onClick={() => setNewFolderIcon(icon)}
-                      className={`text-2xl p-2 rounded-lg transition-all ${
-                        newFolderIcon === icon
-                          ? 'bg-teal-500/20 ring-2 ring-teal-500'
-                          : 'bg-white/5 hover:bg-white/10'
-                      }`}
+                      onClick={() => deleteFolder(folder.id)}
+                      className="opacity-0 group-hover:opacity-100 px-3 py-1 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                     >
-                      {icon}
+                      Delete
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Color</label>
-                <div className="flex gap-2 flex-wrap">
-                  {folderColors.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setNewFolderColor(color)}
-                      className={`w-10 h-10 rounded-lg transition-all ${
-                        newFolderColor === color
-                          ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0B1220]'
-                          : ''
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
+                  </div>
+                ))
+              )}
             </div>
 
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowNewFolderDialog(false)
-                  setNewFolderName('')
-                  setNewFolderIcon('📁')
-                  setNewFolderColor('#3B82F6')
-                }}
-                className="flex-1 px-4 py-3 bg-white/5 text-slate-400 rounded-xl hover:bg-white/10 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createFolder}
-                disabled={!newFolderName.trim()}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-xl hover:shadow-lg hover:shadow-teal-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Create
-              </button>
-            </div>
+            <button
+              onClick={() => setShowFolderManager(false)}
+              className="w-full mt-6 px-4 py-3 border border-white/15 text-slate-300 rounded-xl hover:bg-white/5 transition-all"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
 
       {/* Move to Folder Dialog */}
-      {moveToFolderItemId !== null && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold text-slate-100 mb-4">Move to Folder</h2>
+      {showMoveDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="glass-card p-6 w-full max-w-md animate-scale-in">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent mb-4">
+              Move to Folder
+            </h2>
             
             <div className="space-y-2 max-h-96 overflow-y-auto">
               <button
-                onClick={() => moveItemToFolder(moveToFolderItemId, null)}
-                className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-all text-slate-300"
+                onClick={() => moveToFolder(null)}
+                className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all text-slate-300"
               >
                 <div className="flex items-center gap-2">
                   <span>📄</span>
@@ -492,25 +467,27 @@ export default function HistoryPage() {
                 </div>
               </button>
 
-              {folders.map((folder) => (
+              {folders.map(folder => (
                 <button
                   key={folder.id}
-                  onClick={() => moveItemToFolder(moveToFolderItemId, folder.id)}
-                  className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-all text-slate-300"
-                  style={{ borderLeft: `3px solid ${folder.color || '#3B82F6'}` }}
+                  onClick={() => moveToFolder(folder.id)}
+                  className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all text-slate-300"
                 >
                   <div className="flex items-center gap-2">
                     <span>{folder.icon || '📁'}</span>
                     <span>{folder.name}</span>
-                    <span className="text-xs text-slate-500 ml-auto">({folder.item_count} items)</span>
+                    <span className="text-xs text-slate-500 ml-auto">({folder.item_count})</span>
                   </div>
                 </button>
               ))}
             </div>
 
             <button
-              onClick={() => setMoveToFolderItemId(null)}
-              className="w-full mt-4 px-4 py-3 bg-white/5 text-slate-400 rounded-xl hover:bg-white/10 transition-all"
+              onClick={() => {
+                setShowMoveDialog(false)
+                setSelectedItemId(null)
+              }}
+              className="w-full mt-4 px-4 py-3 border border-white/15 text-slate-300 rounded-xl hover:bg-white/5 transition-all"
             >
               Cancel
             </button>
