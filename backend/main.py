@@ -67,6 +67,8 @@ class User(Base):
     password_hash = Column(String)
     name = Column(String)
     surname = Column(String)
+    oauth_provider = Column(String, nullable=True)  # Legacy - not used
+    oauth_id = Column(String, nullable=True)  # Legacy - not used
     tier = Column(String, default="free")  # "free" or "premium"
     created_at = Column(DateTime, default=datetime.utcnow)
 
