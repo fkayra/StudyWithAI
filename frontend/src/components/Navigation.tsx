@@ -87,13 +87,13 @@ export function Navigation() {
 
             {user ? (
               <>
-                <Link href="/account" className="group">
-                  <span className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 group-hover:scale-105 ${
-                    user.tier === 'premium' 
-                      ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg shadow-yellow-500/25' 
-                      : 'bg-gradient-to-r from-slate-700 to-slate-600 text-slate-300 group-hover:from-slate-600 group-hover:to-slate-500'
-                  }`}>
-                    {user.tier === 'premium' ? '⭐ Premium' : 'Free Plan'}
+                <Link 
+                  href="/account" 
+                  className="group flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-slate-700/50 to-slate-600/50 border border-slate-600/50 hover:border-slate-500 transition-all duration-200 hover:scale-105"
+                >
+                  <span className="text-lg">👤</span>
+                  <span className="text-sm font-medium text-slate-300 group-hover:text-white">
+                    {user.name || 'Profile'}
                   </span>
                 </Link>
                 <button

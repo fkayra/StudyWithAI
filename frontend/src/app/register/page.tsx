@@ -8,6 +8,8 @@ import Link from 'next/link'
 export default function RegisterPage() {
   const router = useRouter()
   const { register } = useAuth()
+  const [name, setName] = useState('')
+  const [surname, setSurname] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -17,6 +19,16 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (!name.trim()) {
+      setError('Name is required')
+      return
+    }
+
+    if (!surname.trim()) {
+      setError('Surname is required')
+      return
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match')
@@ -31,7 +43,7 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
-      await register(email, password)
+      await register(email, password, name, surname)
       router.push('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Registration failed')
@@ -54,6 +66,34 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full px-4 py-3 bg-[#1F2937] border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="John"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Surname
+            </label>
+            <input
+              type="text"
+              value={surname}
+              onChange={(e) => setSurname(e.target.value)}
+              required
+              className="w-full px-4 py-3 bg-[#1F2937] border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Doe"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
               Email

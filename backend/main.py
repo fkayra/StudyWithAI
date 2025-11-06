@@ -65,6 +65,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     password_hash = Column(String)
+    name = Column(String)
+    surname = Column(String)
     tier = Column(String, default="free")  # "free" or "premium"
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -152,6 +154,8 @@ async def add_cors_headers(request, call_next):
 class UserRegister(BaseModel):
     email: EmailStr
     password: str
+    name: str
+    surname: str
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -532,13 +536,15 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     user = User(
         email=user_data.email,
         password_hash=hash_password(user_data.password),
+        name=user_data.name,
+        surname=user_data.surname,
         tier="free"
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
-    return {"id": user.id, "email": user.email, "tier": user.tier}
+    return {"id": user.id, "email": user.email, "name": user.name, "surname": user.surname, "tier": user.tier}
 
 @app.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin, db: Session = Depends(get_db)):
@@ -591,6 +597,8 @@ async def get_me(current_user: User = Depends(get_current_user), db: Session = D
     return {
         "id": current_user.id,
         "email": current_user.email,
+        "name": current_user.name,
+        "surname": current_user.surname,
         "tier": current_user.tier,
         "usage": usage_data
     }

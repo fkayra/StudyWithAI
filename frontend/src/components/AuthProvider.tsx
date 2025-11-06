@@ -6,6 +6,8 @@ import { apiClient } from '@/lib/api'
 interface User {
   id: number
   email: string
+  name: string
+  surname: string
   tier: 'free' | 'premium'
   usage?: {
     exam: number
@@ -18,7 +20,7 @@ interface User {
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, name: string, surname: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
 }
@@ -86,8 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const register = async (email: string, password: string) => {
-    await apiClient.post('/auth/register', { email, password })
+  const register = async (email: string, password: string, name: string, surname: string) => {
+    await apiClient.post('/auth/register', { email, password, name, surname })
     await login(email, password)
   }
 
