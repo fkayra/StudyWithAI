@@ -35,6 +35,9 @@ export default function HistoryPage() {
   const [showFolderManager, setShowFolderManager] = useState(false)
   const [showMoveDialog, setShowMoveDialog] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | number | null>(null)
+  const [selectedTargetFolder, setSelectedTargetFolder] = useState<number | null>(null)
+  const [showDeleteFolderConfirm, setShowDeleteFolderConfirm] = useState(false)
+  const [folderToDelete, setFolderToDelete] = useState<number | null>(null)
   const [newFolderName, setNewFolderName] = useState('')
   const [newFolderIcon, setNewFolderIcon] = useState('📁')
 
@@ -75,27 +78,29 @@ export default function HistoryPage() {
     }
   }
 
-  const deleteFolder = async (id: number) => {
-    if (confirm('Delete this folder? Items will become uncategorized.')) {
-      try {
-        await folderAPI.delete(id)
-        await loadFolders()
-        if (selectedFolder === id) setSelectedFolder(null)
-        await loadHistory()
-      } catch (e) {
-        console.error('Failed to delete folder:', e)
-      }
+  const deleteFolder = async () => {
+    if (folderToDelete === null) return
+    try {
+      await folderAPI.delete(folderToDelete)
+      await loadFolders()
+      if (selectedFolder === folderToDelete) setSelectedFolder(null)
+      await loadHistory()
+      setShowDeleteFolderConfirm(false)
+      setFolderToDelete(null)
+    } catch (e) {
+      console.error('Failed to delete folder:', e)
     }
   }
 
-  const moveToFolder = async (folderId: number | null) => {
+  const moveToFolder = async () => {
     if (selectedItemId === null) return
     try {
-      await historyAPI.update(selectedItemId, { folder_id: folderId || 0 })
+      await historyAPI.update(selectedItemId, { folder_id: selectedTargetFolder || 0 })
       await loadHistory()
       await loadFolders()
       setShowMoveDialog(false)
       setSelectedItemId(null)
+      setSelectedTargetFolder(null)
     } catch (e) {
       console.error('Failed to move item:', e)
     }
@@ -428,7 +433,10 @@ export default function HistoryPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => deleteFolder(folder.id)}
+                      onClick={() => {
+                        setFolderToDelete(folder.id)
+                        setShowDeleteFolderConfirm(true)
+                      }}
                       className="opacity-0 group-hover:opacity-100 px-3 py-1 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                     >
                       Delete
@@ -456,41 +464,100 @@ export default function HistoryPage() {
               Move to Folder
             </h2>
             
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              <button
-                onClick={() => moveToFolder(null)}
-                className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all text-slate-300"
+            <div className="space-y-2 max-h-96 overflow-y-auto mb-6">
+              <label
+                className={`w-full flex items-center px-4 py-3 rounded-xl border transition-all cursor-pointer ${
+                  selectedTargetFolder === null
+                    ? 'bg-[#14B8A6]/10 border-[#14B8A6]/50 text-[#14B8A6]'
+                    : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                }`}
               >
-                <div className="flex items-center gap-2">
-                  <span>📄</span>
-                  <span>Uncategorized</span>
-                </div>
-              </button>
+                <input
+                  type="radio"
+                  name="targetFolder"
+                  checked={selectedTargetFolder === null}
+                  onChange={() => setSelectedTargetFolder(null)}
+                  className="mr-3 w-4 h-4 accent-[#14B8A6]"
+                />
+                <span className="mr-2">📄</span>
+                <span>Uncategorized</span>
+              </label>
 
               {folders.map(folder => (
-                <button
+                <label
                   key={folder.id}
-                  onClick={() => moveToFolder(folder.id)}
-                  className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all text-slate-300"
+                  className={`w-full flex items-center px-4 py-3 rounded-xl border transition-all cursor-pointer ${
+                    selectedTargetFolder === folder.id
+                      ? 'bg-[#14B8A6]/10 border-[#14B8A6]/50 text-[#14B8A6]'
+                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                  }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span>{folder.icon || '📁'}</span>
-                    <span>{folder.name}</span>
-                    <span className="text-xs text-slate-500 ml-auto">({folder.item_count})</span>
-                  </div>
-                </button>
+                  <input
+                    type="radio"
+                    name="targetFolder"
+                    checked={selectedTargetFolder === folder.id}
+                    onChange={() => setSelectedTargetFolder(folder.id)}
+                    className="mr-3 w-4 h-4 accent-[#14B8A6]"
+                  />
+                  <span className="mr-2">{folder.icon || '📁'}</span>
+                  <span className="flex-1">{folder.name}</span>
+                  <span className="text-xs text-slate-500">({folder.item_count})</span>
+                </label>
               ))}
             </div>
 
-            <button
-              onClick={() => {
-                setShowMoveDialog(false)
-                setSelectedItemId(null)
-              }}
-              className="w-full mt-4 px-4 py-3 border border-white/15 text-slate-300 rounded-xl hover:bg-white/5 transition-all"
-            >
-              Cancel
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowMoveDialog(false)
+                  setSelectedItemId(null)
+                  setSelectedTargetFolder(null)
+                }}
+                className="flex-1 px-4 py-3 border border-white/15 text-slate-300 rounded-xl hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={moveToFolder}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] text-white rounded-xl hover:shadow-lg hover:shadow-teal-500/25 transition-all duration-200 hover:scale-105"
+              >
+                ✓ Move
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Folder Confirmation */}
+      {showDeleteFolderConfirm && folderToDelete !== null && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="glass-card p-6 w-full max-w-md animate-scale-in">
+            <h2 className="text-2xl font-bold text-red-400 mb-4">Delete Folder?</h2>
+            
+            <p className="text-slate-300 mb-2">
+              Are you sure you want to delete <strong>{folders.find(f => f.id === folderToDelete)?.name}</strong>?
+            </p>
+            <p className="text-slate-400 text-sm mb-6">
+              All items in this folder will become uncategorized. This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteFolderConfirm(false)
+                  setFolderToDelete(null)
+                }}
+                className="flex-1 px-4 py-3 border border-white/15 text-slate-300 rounded-xl hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteFolder}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:shadow-lg hover:shadow-red-500/25 transition-all duration-200 hover:scale-105"
+              >
+                🗑️ Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
