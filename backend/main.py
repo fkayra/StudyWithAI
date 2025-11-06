@@ -34,8 +34,8 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./study_assistant.db")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-REFRESH_TOKEN_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 43200  # 30 days (30 * 24 * 60)
+REFRESH_TOKEN_EXPIRE_DAYS = 90  # 90 days
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
