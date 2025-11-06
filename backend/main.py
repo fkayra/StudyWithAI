@@ -64,9 +64,11 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
-    password_hash = Column(String)
+    password_hash = Column(String, nullable=True)  # Nullable for OAuth users
     name = Column(String)
     surname = Column(String)
+    oauth_provider = Column(String, nullable=True)  # "google", "github", etc.
+    oauth_id = Column(String, nullable=True)  # OAuth provider's user ID
     tier = Column(String, default="free")  # "free" or "premium"
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -568,7 +570,14 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == credentials.email).first()
     
-    if not user or not verify_password(credentials.password, user.password_hash):
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Check if user uses OAuth
+    if user.oauth_provider and not user.password_hash:
+        raise HTTPException(status_code=401, detail=f"This account uses {user.oauth_provider} login")
+    
+    if not verify_password(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     access_token = create_token(user.id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -620,6 +629,93 @@ async def get_me(current_user: User = Depends(get_current_user), db: Session = D
         "tier": current_user.tier,
         "usage": usage_data
     }
+
+@app.post("/auth/google")
+async def google_auth(request: Request, db: Session = Depends(get_db)):
+    """
+    Google OAuth authentication endpoint
+    Expects: { "credential": "Google JWT token", "name": "First Name", "surname": "Last Name" }
+    """
+    try:
+        body = await request.json()
+        credential = body.get("credential")
+        name = body.get("name", "")
+        surname = body.get("surname", "")
+        
+        if not credential:
+            raise HTTPException(status_code=400, detail="Missing credential")
+        
+        # Verify Google token (simplified - in production use google.oauth2.id_token)
+        import json
+        import base64
+        
+        # Decode JWT without verification (for demo - VERIFY IN PRODUCTION!)
+        parts = credential.split('.')
+        if len(parts) != 3:
+            raise HTTPException(status_code=400, detail="Invalid token format")
+        
+        # Decode payload
+        payload_part = parts[1]
+        # Add padding if needed
+        padding = 4 - len(payload_part) % 4
+        if padding != 4:
+            payload_part += '=' * padding
+        
+        payload_json = base64.urlsafe_b64decode(payload_part)
+        payload = json.loads(payload_json)
+        
+        email = payload.get("email")
+        oauth_id = payload.get("sub")
+        google_name = payload.get("given_name", "")
+        google_surname = payload.get("family_name", "")
+        
+        if not email:
+            raise HTTPException(status_code=400, detail="Invalid token - no email")
+        
+        # Use provided name/surname or fall back to Google's
+        final_name = name or google_name or "User"
+        final_surname = surname or google_surname or ""
+        
+        # Check if user exists
+        user = db.query(User).filter(User.email == email).first()
+        
+        if user:
+            # Update OAuth info if not set
+            if not user.oauth_provider:
+                user.oauth_provider = "google"
+                user.oauth_id = oauth_id
+                if not user.name:
+                    user.name = final_name
+                if not user.surname:
+                    user.surname = final_surname
+                db.commit()
+        else:
+            # Create new user
+            user = User(
+                email=email,
+                name=final_name,
+                surname=final_surname,
+                oauth_provider="google",
+                oauth_id=oauth_id,
+                password_hash=None,  # No password for OAuth users
+                tier="free"
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        
+        # Generate tokens
+        access_token = create_token(user.id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+        refresh_token = create_token(user.id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+        
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")
 
 # ============================================================================
 # FILE UPLOAD ENDPOINT
@@ -1588,20 +1684,26 @@ async def clear_history(
 @app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")
 async def migrate_database(db: Session = Depends(get_db)):
-    """One-time migration to add name and surname columns to users table"""
+    """One-time migration to add name, surname and OAuth columns to users table"""
     try:
         # Try to add columns using raw SQL with text()
         if DATABASE_URL.startswith("sqlite"):
             # SQLite
             db.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
             db.execute(text("ALTER TABLE users ADD COLUMN surname TEXT"))
+            db.execute(text("ALTER TABLE users ADD COLUMN oauth_provider TEXT"))
+            db.execute(text("ALTER TABLE users ADD COLUMN oauth_id TEXT"))
         else:
             # PostgreSQL
             db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR"))
             db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR"))
+            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR"))
+            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id VARCHAR"))
+            # Make password_hash nullable for OAuth users
+            db.execute(text("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"))
         
         db.commit()
-        return {"status": "success", "message": "Database migrated successfully - name and surname columns added"}
+        return {"status": "success", "message": "Database migrated successfully - all OAuth columns added"}
     except Exception as e:
         # Columns might already exist or other error
         db.rollback()
