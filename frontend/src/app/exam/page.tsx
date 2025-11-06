@@ -47,7 +47,7 @@ function ExamPageContent() {
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [level, setLevel] = useState<'ilkokul-ortaokul' | 'lise' | 'universite'>('lise')
+  const [level, setLevel] = useState<'elementary-middle' | 'high-school' | 'university'>('high-school')
   const [prompt, setPrompt] = useState('')
   const [count, setCount] = useState(5)
   const [files, setFiles] = useState<UploadedFile[]>([])
@@ -265,7 +265,7 @@ function ExamPageContent() {
     
     if (unansweredQuestions.length > 0) {
       const confirmSubmit = window.confirm(
-        `Şu sorular henüz işaretlenmedi: ${unansweredQuestions.join(', ')}\n\nYine de sınavı bitirmek istiyor musunuz?`
+        `The following questions are not yet answered: ${unansweredQuestions.join(', ')}\n\nDo you still want to finish the exam?`
       )
       if (!confirmSubmit) return
     }
@@ -834,7 +834,7 @@ function ExamPageContent() {
               onClick={handleSubmit}
               className="btn-primary flex-1"
             >
-              Sınavı Bitir 🏁
+              Finish Exam 🏁
             </button>
             
             <button
@@ -961,9 +961,9 @@ function ExamPageContent() {
             </label>
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: 'ilkokul-ortaokul', label: 'İlk-Ortaokul' },
-                { value: 'lise', label: 'Lise' },
-                { value: 'universite', label: 'Üniversite' }
+                { value: 'elementary-middle', label: 'Elementary-Middle' },
+                { value: 'high-school', label: 'High School' },
+                { value: 'university', label: 'University' }
               ].map((item) => (
                 <button
                   key={item.value}

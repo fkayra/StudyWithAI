@@ -114,7 +114,7 @@ export default function ViewExamPage() {
     
     if (unansweredQuestions.length > 0) {
       const confirmSubmit = window.confirm(
-        `Şu sorular henüz işaretlenmedi: ${unansweredQuestions.join(', ')}\n\nYine de sınavı bitirmek istiyor musunuz?`
+        `The following questions are not yet answered: ${unansweredQuestions.join(', ')}\n\nDo you still want to finish the exam?`
       )
       if (!confirmSubmit) return
     }
@@ -547,7 +547,7 @@ export default function ViewExamPage() {
             onClick={handleSubmit}
             className="btn-primary flex-1"
           >
-            Sınavı Bitir 🏁
+            Finish Exam 🏁
           </button>
           
           <button
