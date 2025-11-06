@@ -190,6 +190,11 @@ export default function FlashcardsPage() {
         title: `${titlePrefix} - ${response.data.cards?.length || count} Cards`,
         data: response.data
       })
+      
+      // Clear uploaded files after successful generation
+      sessionStorage.removeItem('uploadedFiles')
+      sessionStorage.removeItem('uploadedFileIds')
+      setFiles([])
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate flashcards')
     } finally {

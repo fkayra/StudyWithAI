@@ -233,6 +233,11 @@ export default function TrueFalsePage() {
         data: response.data
       })
       setCurrentHistoryId(historyId)
+      
+      // Clear uploaded files after successful generation
+      sessionStorage.removeItem('uploadedFiles')
+      sessionStorage.removeItem('uploadedFileIds')
+      setFiles([])
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to generate True/False cards')
     } finally {

@@ -363,6 +363,11 @@ function ExamPageContent() {
     
     // Mark that this exam has been submitted so we don't reload it
     sessionStorage.setItem('examSubmitted', 'true')
+    
+    // Clear uploaded files after submission
+    sessionStorage.removeItem('uploadedFiles')
+    sessionStorage.removeItem('uploadedFileIds')
+    setFiles([])
   }
 
   const goToQuestion = (index: number) => {
