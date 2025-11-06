@@ -152,10 +152,14 @@ app.add_middleware(
 # Add custom CORS headers to all responses as backup
 @app.middleware("http")
 async def add_cors_headers(request, call_next):
+    # Get origin from request
+    origin = request.headers.get("origin")
+    
     # Handle preflight requests
     if request.method == "OPTIONS":
         response = JSONResponse(content={}, status_code=200)
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "*"
         response.headers["Access-Control-Allow-Headers"] = "*"
@@ -171,7 +175,9 @@ async def add_cors_headers(request, call_next):
             status_code=500
         )
     
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    # Set specific origin instead of wildcard when credentials are used
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "*"
