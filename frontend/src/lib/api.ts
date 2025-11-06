@@ -148,8 +148,8 @@ export const historyAPI = {
     }
   },
 
-  // Update history item (for adding scores after completion)
-  async update(id: string | number, updates: { title?: string; data?: any; score?: any }) {
+  // Update history item (for adding scores after completion or moving to folder)
+  async update(id: string | number, updates: { title?: string; data?: any; score?: any; folder_id?: number | null }) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
     
     if (token && typeof id === 'number') {
@@ -169,6 +169,7 @@ export const historyAPI = {
         if (updates.title) history[index].title = updates.title
         if (updates.data) history[index].data = updates.data
         if (updates.score) history[index].score = updates.score
+        if (updates.folder_id !== undefined) history[index].folder_id = updates.folder_id
         localStorage.setItem('studyHistory', JSON.stringify(history))
       }
     }
@@ -190,5 +191,58 @@ export const historyAPI = {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('studyHistory')
     }
+  },
+
+  // Get history filtered by folder
+  async getByFolder(folderId?: number) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    
+    if (token) {
+      // Get from backend with filter
+      try {
+        const params = folderId !== undefined ? { folder_id: folderId } : {}
+        const response = await apiClient.get('/history', { params })
+        return response.data
+      } catch (error) {
+        console.error('Failed to get history from backend:', error)
+        return []
+      }
+    }
+    
+    // Fallback to localStorage for non-logged-in users
+    if (typeof window !== 'undefined') {
+      const allHistory = JSON.parse(localStorage.getItem('studyHistory') || '[]')
+      if (folderId === undefined) return allHistory
+      if (folderId === 0) return allHistory.filter((item: any) => !item.folder_id)
+      return allHistory.filter((item: any) => item.folder_id === folderId)
+    }
+    
+    return []
+  }
+}
+
+// Folder API
+export const folderAPI = {
+  // Get all folders
+  async getAll() {
+    const response = await apiClient.get('/folders')
+    return response.data
+  },
+
+  // Create a new folder
+  async create(folder: { name: string; color?: string; icon?: string }) {
+    const response = await apiClient.post('/folders', folder)
+    return response.data
+  },
+
+  // Update a folder
+  async update(id: number, updates: { name?: string; color?: string; icon?: string }) {
+    const response = await apiClient.put(`/folders/${id}`, updates)
+    return response.data
+  },
+
+  // Delete a folder
+  async delete(id: number) {
+    await apiClient.delete(`/folders/${id}`)
   }
 }
