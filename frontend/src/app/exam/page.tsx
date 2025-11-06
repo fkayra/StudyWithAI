@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiClient, historyAPI } from '@/lib/api'
+import MathText from '@/components/MathText'
 
 interface Question {
   number: number
@@ -795,7 +796,7 @@ function ExamPageContent() {
           <div className="glass-card p-6 mb-6">
             <div className="flex items-start justify-between mb-6">
               <h3 className="text-xl font-semibold text-slate-100 flex-1">
-                {currentQuestion.number}. {currentQuestion.question}
+                {currentQuestion.number}. <MathText text={currentQuestion.question} />
               </h3>
             </div>
 
@@ -819,7 +820,7 @@ function ExamPageContent() {
                         : 'border-white/10 hover:border-white/30 hover:bg-white/5'
                     }`}
                   >
-                    <span className="font-medium">{key})</span> {value}
+                    <span className="font-medium">{key})</span> <MathText text={value} />
                   </button>
                 )
               })}
