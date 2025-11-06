@@ -56,6 +56,7 @@ function ExamPageContent() {
   const [dragActive, setDragActive] = useState(false)
   const [isQuickExam, setIsQuickExam] = useState(false)
   const [currentHistoryId, setCurrentHistoryId] = useState<number | string | null>(null)
+  const [examTitle, setExamTitle] = useState<string>('')
 
   useEffect(() => {
     // Check if the last exam was just submitted
@@ -233,6 +234,32 @@ function ExamPageContent() {
         return
       }
 
+      // Generate title based on what was provided
+      let titlePrefix = ''
+      if (fileIds) {
+        // If files were provided, use file names
+        const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+        if (uploadedFilesStr) {
+          try {
+            const uploadedFiles = JSON.parse(uploadedFilesStr)
+            titlePrefix = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+            if (uploadedFiles.length > 2) {
+              titlePrefix += ` +${uploadedFiles.length - 2} more`
+            }
+          } catch (e) {
+            titlePrefix = 'Documents'
+          }
+        }
+      } else if (prompt.trim()) {
+        // If only prompt, use truncated prompt
+        titlePrefix = `Topic: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`
+      } else {
+        titlePrefix = 'Exam'
+      }
+      
+      // Save title for later use in history
+      setExamTitle(titlePrefix)
+      
       // Clear old exam states before setting new exam
       sessionStorage.removeItem('currentExam')
       sessionStorage.removeItem('currentExamState')
@@ -291,42 +318,17 @@ function ExamPageContent() {
       sessionStorage.setItem('currentExamState', JSON.stringify(examState))
     }
     
-    // Generate title based on what was provided
-    let titlePrefix = ''
-    const isQuickExamFromStorage = sessionStorage.getItem('isQuickExam') === 'true'
+    // Use the saved exam title from generation
+    let titlePrefix = examTitle || 'Exam'
     
+    // Handle quick exams differently
+    const isQuickExamFromStorage = sessionStorage.getItem('isQuickExam') === 'true'
     if (isQuickExamFromStorage) {
-      // This is a quick exam from home page
       const quickPrompt = sessionStorage.getItem('quickExamPrompt') || 'Quick Test'
       titlePrefix = `Quick: ${quickPrompt.substring(0, 30)}${quickPrompt.length > 30 ? '...' : ''}`
       // Clear the quick exam markers
       sessionStorage.removeItem('isQuickExam')
       sessionStorage.removeItem('quickExamPrompt')
-    } else {
-      // Check what was used to generate
-      const storedFileIds = sessionStorage.getItem('uploadedFileIds')
-      const fileIds = storedFileIds ? JSON.parse(storedFileIds) : null
-      
-      if (fileIds) {
-        // Generated from files
-        const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
-        if (uploadedFilesStr) {
-          try {
-            const uploadedFiles = JSON.parse(uploadedFilesStr)
-            titlePrefix = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
-            if (uploadedFiles.length > 2) {
-              titlePrefix += ` +${uploadedFiles.length - 2} more`
-            }
-          } catch (e) {
-            titlePrefix = 'Documents'
-          }
-        }
-      } else if (prompt.trim()) {
-        // Generated from prompt only
-        titlePrefix = `Topic: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`
-      } else {
-        titlePrefix = 'Exam'
-      }
     }
     
     // Calculate score
