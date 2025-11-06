@@ -824,144 +824,233 @@ async def summarize_from_files(
     current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Advanced summarization endpoint with:
+    - Plan-based limits (free/standard/premium)
+    - Map-reduce for large documents
+    - SHA256 caching for deduplication
+    - Token estimation and adaptive output sizing
+    """
     rate_limit(request)
+    
+    # Import new modular services
+    from app.config import PLAN_LIMITS, ALLOWED_EXTS, TOKEN_PER_CHAR
+    from app.utils.files import (
+        ext_ok, pdf_page_count, approx_tokens_from_text_len,
+        sha256_bytes, choose_max_output_tokens, validate_mime_type, basic_antivirus_check
+    )
+    from app.services.cache import get_cached, set_cached
+    from app.services.summary import map_reduce_summary, summarize_no_files
+    import json
+    import hashlib
+    
+    # Determine user's plan
+    plan = getattr(current_user, "tier", "free") if current_user else "free"
+    # Map "premium" to "pro" if needed
+    if plan == "premium":
+        plan = "pro"
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["standard"])
     
     # Require either file_ids or prompt
     if not req.file_ids and not req.prompt:
         raise HTTPException(status_code=400, detail="Please provide either files or a prompt.")
     
-    # Fetch file contents from database or in-memory storage
-    file_contents = []
-    if req.file_ids:
-        for file_id in req.file_ids:
-            # Try database first
-            upload = db.query(Upload).filter(Upload.file_id == file_id).first()
-            if upload and upload.content:
-                file_contents.append(upload.content)
+    # ========== CASE 1: No files, just prompt ==========
+    if not req.file_ids:
+        try:
+            language = req.language or "en"
+            result_json = summarize_no_files(
+                topic=req.prompt,
+                language=language,
+                out_cap=limits.max_output_cap
+            )
+            
+            # Parse and return
+            result_json = result_json.strip()
+            if result_json.startswith('```'):
+                lines = result_json.split('\n')
+                if lines[0].strip().startswith('```'):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == '```':
+                    lines = lines[:-1]
+                result_json = '\n'.join(lines)
+            
+            try:
+                result = json.loads(result_json)
+            except json.JSONDecodeError:
+                import re
+                json_match = re.search(r'\{.*\}', result_json, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group(0))
+                else:
+                    result = {
+                        "summary": {
+                            "title": "Summary",
+                            "sections": [{"heading": "Content", "bullets": [result_json]}]
+                        },
+                        "citations": []
+                    }
+            
+            return result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
+    
+    # ========== CASE 2: Files provided ==========
+    
+    # Fetch and validate files
+    files_data = []  # [(filename, content_bytes, text_content)]
+    total_mb = 0.0
+    total_pages = 0
+    pdf_count = 0
+    
+    for file_id in req.file_ids:
+        # Try database first
+        upload = db.query(Upload).filter(Upload.file_id == file_id).first()
+        if not upload:
             # Try in-memory storage for anonymous users
-            elif file_id in file_content_store:
-                file_contents.append(file_content_store[file_id]["content"])
+            if file_id in file_content_store:
+                file_info = file_content_store[file_id]
+                filename = file_info["filename"]
+                text_content = file_info["content"]
+                # Reconstruct bytes for validation (approximate)
+                content_bytes = text_content.encode("utf-8", errors="ignore")
+            else:
+                raise HTTPException(status_code=404, detail=f"File not found: {file_id}")
+        else:
+            filename = upload.filename
+            text_content = upload.content  # Already extracted text
+            content_bytes = text_content.encode("utf-8", errors="ignore")
+        
+        # File type validation
+        if not ext_ok(filename, ALLOWED_EXTS):
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {filename}")
+        
+        # Size tracking
+        size_mb = len(content_bytes) / (1024 * 1024)
+        total_mb += size_mb
+        
+        # PDF page count
+        if filename.lower().endswith(".pdf"):
+            pdf_count += 1
+            # For PDF, we'd need original bytes, but we have text already
+            # Skip page count validation if we only have text
+            # In production, store original bytes too
+        
+        # Basic security checks
+        if not basic_antivirus_check(content_bytes):
+            raise HTTPException(status_code=400, detail=f"File failed security check: {filename}")
+        
+        files_data.append((filename, content_bytes, text_content))
     
-    system_prompt = """You are a study assistant. You create study notes from course materials and documents."""
+    # ========== LIMIT CHECKS ==========
+    if len(files_data) > limits.max_files_total:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many files. Your plan allows {limits.max_files_total} files. Upgrade for more."
+        )
     
-    additional_instructions = ""
-    if req.prompt:
-        additional_instructions = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{req.prompt}\n\nMake sure to follow these instructions while creating the summary."
+    if pdf_count > limits.max_pdfs:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many PDFs. Your plan allows {limits.max_pdfs} PDFs. Upgrade for more."
+        )
     
-    language_instruction = ""
-    if req.language == "tr":
-        language_instruction = "\n\nIMPORTANT: Generate the ENTIRE summary in TURKISH language. All headings, bullet points, and explanations must be in Turkish."
-    elif req.language == "en":
-        language_instruction = "\n\nIMPORTANT: Generate the ENTIRE summary in ENGLISH language. All headings, bullet points, and explanations must be in English."
+    if total_mb > limits.max_total_mb:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Total file size ({total_mb:.1f} MB) exceeds your plan limit ({limits.max_total_mb} MB)."
+        )
     
-    if file_contents:
-        user_prompt = f"""Analyze the provided documents as if they are course materials or lecture notes.
-{language_instruction} 
-Create a comprehensive study summary that directly explains the content, NOT what the document contains.
-
-IMPORTANT RULES:
-- Write as if teaching the subject directly (e.g., "Agents perceive..." not "The document discusses agents...")
-- Organize content by topics, not by document structure
-- Extract key concepts, definitions, formulas, and explanations
-- Present information as educational content, like a textbook or study guide
-- Focus on WHAT is taught, not THAT it is taught
-{additional_instructions}
-
-Return ONLY valid JSON, no markdown code blocks, no extra text.
-
-Output format:
-{{
-  "summary": {{
-    "title": "Study Notes: [Topic Name]",
-    "sections": [
-      {{"heading": "Topic Name", "bullets": ["Direct explanation of concept 1", "Direct explanation of concept 2"]}}
-    ]
-  }},
-  "citations": [
-    {{"file_id": "doc", "evidence": "Source of this information"}}
-  ]
-}}"""
-    else:
-        # No files, just prompt
-        user_prompt = f"""Create a comprehensive study summary on the topic requested by the user.
-{language_instruction}
-
-IMPORTANT RULES:
-- Write as if teaching the subject directly
-- Organize content by topics
-- Include key concepts, definitions, formulas, and explanations
-- Present information as educational content, like a textbook or study guide
-
-USER REQUEST:
-{req.prompt}
-
-Return ONLY valid JSON, no markdown code blocks, no extra text.
-
-Output format:
-{{
-  "summary": {{
-    "title": "Study Notes: [Topic Name]",
-    "sections": [
-      {{"heading": "Topic Name", "bullets": ["Direct explanation of concept 1", "Direct explanation of concept 2"]}}
-    ]
-  }},
-  "citations": [
-    {{"file_id": "doc", "evidence": "Source of this information"}}
-  ]
-}}
-
-Return pure JSON only, no ```json``` markers."""
+    # Merge all text content
+    merged_text = "\n\n".join([text for _, _, text in files_data if text])
+    
+    # Token estimation
+    estimated_tokens = approx_tokens_from_text_len(len(merged_text), TOKEN_PER_CHAR)
+    
+    if estimated_tokens > limits.max_input_tokens:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Content too large (~{estimated_tokens} tokens). Your plan allows {limits.max_input_tokens} tokens. Try fewer/shorter files or upgrade."
+        )
+    
+    # ========== CACHE CHECK ==========
+    # Create cache key from: plan, language, prompt, file hashes
+    cache_key_data = {
+        "plan": plan,
+        "language": req.language or "en",
+        "prompt": req.prompt or "",
+        "file_hashes": [sha256_bytes(content) for _, content, _ in files_data]
+    }
+    cache_key = hashlib.sha256(
+        json.dumps(cache_key_data, sort_keys=True).encode()
+    ).hexdigest()
+    
+    # Check cache
+    cached_result = get_cached(cache_key, db)
+    if cached_result:
+        print(f"[CACHE HIT] Returning cached summary for {cache_key[:12]}...")
+        return json.loads(cached_result)
+    
+    # ========== GENERATE SUMMARY ==========
+    print(f"[CACHE MISS] Generating new summary...")
     
     try:
-        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        language = req.language or "en"
+        additional_instructions = req.prompt or ""
         
-        # Clean the response to extract JSON
-        import json
-        import re
+        # Use map-reduce pipeline
+        result_json = map_reduce_summary(
+            full_text=merged_text,
+            language=language,
+            additional_instructions=additional_instructions,
+            out_cap=limits.max_output_cap
+        )
         
-        # Remove markdown code blocks if present
-        response_text = response_text.strip()
-        if response_text.startswith('```'):
-            # Remove code block markers
-            lines = response_text.split('\n')
-            # Remove first line if it's ```json or ```
+        # Clean and parse JSON
+        result_json = result_json.strip()
+        if result_json.startswith('```'):
+            lines = result_json.split('\n')
             if lines[0].strip().startswith('```'):
                 lines = lines[1:]
-            # Remove last line if it's ```
             if lines and lines[-1].strip() == '```':
                 lines = lines[:-1]
-            response_text = '\n'.join(lines)
+            result_json = '\n'.join(lines)
         
         try:
-            result = json.loads(response_text)
+            result = json.loads(result_json)
         except json.JSONDecodeError:
-            # Try to find JSON in the text
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            import re
+            json_match = re.search(r'\{.*\}', result_json, re.DOTALL)
             if json_match:
                 try:
                     result = json.loads(json_match.group(0))
                 except:
-                    # If still fails, wrap in basic structure
                     result = {
                         "summary": {
                             "title": "Summary",
-                            "sections": [{"heading": "Content", "bullets": [response_text]}]
+                            "sections": [{"heading": "Content", "bullets": [result_json]}]
                         },
                         "citations": []
                     }
             else:
-                # If not JSON, wrap in a basic structure
                 result = {
                     "summary": {
                         "title": "Summary",
-                        "sections": [{"heading": "Content", "bullets": [response_text]}]
+                        "sections": [{"heading": "Content", "bullets": [result_json]}]
                     },
                     "citations": []
                 }
         
+        # Cache the result
+        set_cached(cache_key, json.dumps(result), db)
+        
         return result
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[SUMMARY ERROR] {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
 
 @app.post("/flashcards-from-files")
 async def flashcards_from_files(
