@@ -1585,6 +1585,7 @@ async def clear_history(
     
     return {"status": "success"}
 
+@app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")
 async def migrate_database(db: Session = Depends(get_db)):
     """One-time migration to add name and surname columns to users table"""
