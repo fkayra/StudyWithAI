@@ -39,6 +39,7 @@ export default function ViewExamPage() {
   const [chatLoading, setChatLoading] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
   const [historyItemId, setHistoryItemId] = useState<string | null>(null)
+  const [examTitle, setExamTitle] = useState<string>('')
 
   useEffect(() => {
     // Only run once - check if already loaded
@@ -360,9 +361,9 @@ export default function ViewExamPage() {
             <button
               onClick={() => {
                 // Navigate to exam page with current exam loaded
-                // Keep history ID so it updates the same record
+                // Keep history ID and title so it updates the same record
                 sessionStorage.setItem('currentExam', JSON.stringify(exam))
-                // Don't remove viewHistoryExamId - we need it for updating
+                // Don't remove viewHistoryExamId and viewHistoryExamTitle - we need them for updating
                 router.push('/exam')
               }}
               className="btn-primary px-8"

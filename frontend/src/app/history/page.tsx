@@ -69,8 +69,9 @@ export default function HistoryPage() {
         dataKeys: Object.keys(item.data)
       })
       
-      // Store the history item ID so we can update it later
+      // Store the history item ID and title so we can update it later
       sessionStorage.setItem('viewHistoryExamId', String(item.id))
+      sessionStorage.setItem('viewHistoryExamTitle', item.title)
       
       // For exams, use separate page (/view-exam) to avoid navigation confusion
       // Check if data has exam and answers (completed exam) or if data IS the exam

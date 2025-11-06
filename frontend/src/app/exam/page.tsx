@@ -87,9 +87,14 @@ function ExamPageContent() {
 
     // Check if we're restarting from history (need to update existing record)
     const historyExamId = sessionStorage.getItem('viewHistoryExamId')
+    const historyExamTitle = sessionStorage.getItem('viewHistoryExamTitle')
     if (historyExamId) {
       const id = isNaN(Number(historyExamId)) ? historyExamId : Number(historyExamId)
       setCurrentHistoryId(id)
+      // Also load the title
+      if (historyExamTitle) {
+        setExamTitle(historyExamTitle)
+      }
       // Don't remove yet - keep it until submission
     }
 
