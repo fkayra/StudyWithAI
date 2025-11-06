@@ -1567,6 +1567,27 @@ async def clear_history(
     
     return {"status": "success"}
 
+@app.post("/admin/migrate-database")
+async def migrate_database(db: Session = Depends(get_db)):
+    """One-time migration to add name and surname columns to users table"""
+    try:
+        # Try to add columns using raw SQL
+        if DATABASE_URL.startswith("sqlite"):
+            # SQLite
+            db.execute("ALTER TABLE users ADD COLUMN name TEXT")
+            db.execute("ALTER TABLE users ADD COLUMN surname TEXT")
+        else:
+            # PostgreSQL
+            db.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR")
+            db.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR")
+        
+        db.commit()
+        return {"status": "success", "message": "Database migrated successfully"}
+    except Exception as e:
+        # Columns might already exist
+        db.rollback()
+        return {"status": "already_migrated", "message": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
