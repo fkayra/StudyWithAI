@@ -590,7 +590,8 @@ def map_reduce_summary(
     
     # Decide whether to use map-reduce
     # Use chunking if: forced, OR estimated tokens > threshold
-    use_chunking = force_chunking or estimated_tokens > 8000
+    # Threshold increased to 10000 to allow longer single-pass summaries
+    use_chunking = force_chunking or estimated_tokens > 10000
     
     if not use_chunking:
         # Small document: single-pass summary
