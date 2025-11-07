@@ -2142,8 +2142,29 @@ async def submit_feedback(
 @app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")
 async def migrate_database(db: Session = Depends(get_db)):
-    """One-time migration to add name, surname, and folder columns"""
+    """One-time migration to add name, surname, folder columns, and telemetry tables"""
     try:
+        # Import telemetry models to register them
+        from app.models.telemetry import SummaryQuality, UserFeedback, ModelPerformance
+        
+        # Create all tables if they don't exist
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        
+        # Create telemetry tables if missing
+        if "summary_quality" not in existing_tables:
+            SummaryQuality.__table__.create(engine)
+            print("[MIGRATION] Created summary_quality table")
+        
+        if "user_feedback" not in existing_tables:
+            UserFeedback.__table__.create(engine)
+            print("[MIGRATION] Created user_feedback table")
+        
+        if "model_performance" not in existing_tables:
+            ModelPerformance.__table__.create(engine)
+            print("[MIGRATION] Created model_performance table")
+        
         # Try to add columns using raw SQL with text()
         if DATABASE_URL.startswith("sqlite"):
             # SQLite
