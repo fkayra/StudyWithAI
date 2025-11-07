@@ -83,8 +83,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      // Cookies are set automatically by the backend
-      await apiClient.post('/auth/login', { email, password })
+      // Login and get tokens
+      const response = await apiClient.post('/auth/login', { email, password })
+      
+      // Save tokens to localStorage for Authorization header
+      if (response.data.access_token) {
+        localStorage.setItem('access_token', response.data.access_token)
+      }
+      if (response.data.refresh_token) {
+        localStorage.setItem('refresh_token', response.data.refresh_token)
+      }
+      
       await refreshUser()
     } catch (error) {
       // Re-throw the error so it can be caught by the login page
@@ -104,6 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
+      // Clear tokens from localStorage
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
       setUser(null)
     }
   }
