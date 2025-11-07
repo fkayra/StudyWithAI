@@ -194,6 +194,27 @@ def validate_and_enhance_quality(result: Dict[str, Any]) -> Tuple[Dict[str, Any]
     Returns:
         (enhanced_result, repair_prompts): Enhanced JSON and list of repair prompts if needed
     """
+    # Vague example patterns to detect
+    VAGUE_EXAMPLE_PATTERNS = [
+        r'consider\s+a\s+simple\s+case',
+        r'imagine\s+a\s+scenario',
+        r'suppose\s+we\s+have',
+        r'let\'?s\s+say',
+        r'for\s+example\s*:?\s*$',  # "For example:" with nothing after
+        r'e\.?g\.?,?\s*$',  # "e.g." or "e.g.," with nothing after
+    ]
+    
+    # Control flow keywords for algorithm detection
+    CONTROL_FLOW_KEYWORDS = ['if', 'for', 'while', 'return', 'else', 'loop', 'repeat']
+    
+    # Hype number patterns to detect
+    HYPE_PATTERNS = [
+        r'\d+\^\d+\s+to\s+\d+',  # e.g., "35^100 to 5"
+        r'from\s+\d+\^\d+',  # e.g., "from 35^100"
+        r'exponential.*manageable',
+        r'astronomical.*practical',
+    ]
+    
     repair_prompts = []
     
     if "summary" not in result:
