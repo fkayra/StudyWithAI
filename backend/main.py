@@ -992,11 +992,11 @@ async def summarize_from_files(
     # If content is large (>50% of plan limit), force map-reduce
     force_map_reduce = estimated_tokens > (limits.max_input_tokens // 2)
     
-    # Adaptive output cap based on input size
-    out_cap = min(
-        choose_max_output_tokens(estimated_tokens, limits.max_output_cap),
-        limits.max_output_cap
-    )
+    # Use plan's max output cap directly (always use max for quality)
+    # Adaptive sizing was causing too-low limits
+    out_cap = limits.max_output_cap
+    
+    print(f"[SUMMARY CONFIG] Plan: {plan}, max_output_cap: {limits.max_output_cap}, using: {out_cap}")
     
     # ========== CACHE CHECK ==========
     # Create cache key from: plan, language, prompt, file hashes, out_cap, model

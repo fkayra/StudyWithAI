@@ -68,19 +68,51 @@ def get_final_merge_prompt(language: str = "en", additional_instructions: str = 
     
     additional = f"\n\nUSER'S CUSTOM REQUIREMENTS (MUST FOLLOW):\n{additional_instructions}" if additional_instructions else ""
     
-    return f"""Based on the bullet-point summaries provided, create a comprehensive, exam-ready study guide.
+    return f"""Based on the source material, create a COMPREHENSIVE exam-ready study guide.
 
 {lang_instr}{additional}
 
-MANDATORY QUALITY REQUIREMENTS:
-1. Cover ALL major concepts from the source material
-2. Each concept must have: clear definition + detailed explanation (2-3 paragraphs) + concrete example + exam tips
-3. Formula sheet: Include ALL formulas with worked examples and common mistakes
-4. Glossary: Include ALL key terms (minimum 10 terms)
-5. Exam practice: Include questions covering main concepts
-6. Use the EXACT JSON structure below - complete it fully
+⚠️ MANDATORY COVERAGE CHECKLIST (ALL REQUIRED):
+□ ALL major concepts, definitions, theories from the material
+□ ALL algorithms: step-by-step procedure, complexity, prerequisites, pitfalls
+□ ALL formulas: full derivation or proof sketch, variable meanings, worked example, common mistakes
+□ For each concept: WHY it matters, HOW it works, WHEN to use, WHAT can go wrong
+□ Real exam scenarios and typical question patterns
+□ Connections between concepts (don't teach in isolation)
 
-CRITICAL: Generate COMPLETE and VALID JSON. Do not truncate. Finish all arrays and objects properly.
+🚫 FORBIDDEN (ZERO TOLERANCE):
+✗ Generic exam tips like "Review this concept" or "Study carefully"
+✗ Shallow definitions without context
+✗ Examples without numbers/calculations
+✗ Formulas without worked examples
+✗ Glossary terms without substantive definitions
+✗ Teaching what the document says instead of teaching the actual subject
+
+✅ QUALITY STANDARDS:
+Each concept must include:
+  - Definition: Precise, technical definition
+  - Explanation: 2-3 paragraphs covering: purpose, mechanism, applications, edge cases
+  - Example: Concrete example with NUMBERS and step-by-step solution
+  - Exam tips: SPECIFIC pitfalls, quick checks, formula variations, typical mistakes (NOT generic "review this")
+
+Each formula must include:
+  - Expression: Mathematical notation
+  - Variables: Complete list with units and constraints
+  - Derivation: Brief proof or intuition
+  - Worked example: Full calculation with numbers
+  - Common mistakes: Specific errors students make
+
+Exam practice must include:
+  - Questions that mirror actual exam difficulty
+  - Explanations showing problem-solving approach
+  - Coverage of all main topics
+
+CRITICAL JSON REQUIREMENTS:
+- Output COMPLETE, VALID JSON (no truncation)
+- Close all brackets, braces, quotes properly
+- Use EXACT schema below (no variations)
+- Options as ARRAY: ["option1", "option2", "option3", "option4"]
+- Answer as INDEX: 0, 1, 2, or 3 (not letter)
 
 Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
 
