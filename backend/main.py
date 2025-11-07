@@ -1058,7 +1058,7 @@ async def summarize_from_files(
         result = enforce_exam_ready(result)
         
         # Validate and check if self-repair needed
-        from app.utils.quality import create_self_repair_prompt
+        from app.utils.quality import create_self_repair_prompt, validate_summary_completeness
         from app.services.summary import call_openai, SYSTEM_PROMPT
         
         warnings, needs_repair = validate_summary_completeness(result)
