@@ -514,10 +514,6 @@ def map_reduce_summary(
     domain = detect_domain(full_text)
     print(f"[DOMAIN DETECTION] Detected: {domain}")
     
-    # Append domain hint to instructions
-    domain_hint = f"Content domain: {domain}. Adjust depth and style accordingly."
-    enhanced_instructions = f"{additional_instructions}\n\n{domain_hint}" if additional_instructions else domain_hint
-    
     # Estimate input tokens
     estimated_tokens = approx_tokens_from_text_len(len(full_text))
     
@@ -527,6 +523,10 @@ def map_reduce_summary(
         additional_instructions = (additional_instructions or "") + \
             "\nUse 'Density Boost' compression mode: merge minor topics into compact short sections (1 concept each), keep all themes visible, prefer dense phrasing. Avoid dropping any topic."
         print(f"[DENSITY BOOST] Enabled (estimated_tokens={estimated_tokens} > {DENSITY_BOOST_THRESHOLD})")
+    
+    # Append domain hint to instructions
+    domain_hint = f"Content domain: {domain}. Adjust depth and style accordingly."
+    enhanced_instructions = f"{additional_instructions}\n\n{domain_hint}" if additional_instructions else domain_hint
     
     # Decide whether to use map-reduce
     # Use chunking if: forced, OR estimated tokens > threshold
