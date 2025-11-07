@@ -109,9 +109,9 @@ Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
     "formula_sheet": [
       {{
         "name": "Formula Name",
-        "formula": "Mathematical notation or rule",
-        "variables": "What each variable represents",
-        "when_to_use": "Application scenarios"
+        "expression": "Mathematical notation or rule",
+        "variables": {{"x": "variable meaning", "y": "another variable"}},
+        "notes": "When to use, conditions, shortcuts"
       }}
     ],
     "glossary": [
@@ -121,16 +121,16 @@ Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
       "multiple_choice": [
         {{
           "question": "Practice question text",
-          "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
-          "correct": "A",
-          "explanation": "Why this is correct"
+          "options": ["A) option text", "B) option text", "C) option text", "D) option text"],
+          "answer": "A",
+          "explanation": "Why A is correct and why B, C, D are wrong"
         }}
       ],
       "short_answer": [
-        {{"question": "Short answer prompt", "key_points": ["Point 1", "Point 2"]}}
+        {{"question": "Short answer prompt", "answer": "Expected answer with key points"}}
       ],
       "problem_solving": [
-        {{"problem": "Problem description", "approach": "Solution strategy", "solution": "Step-by-step solution"}}
+        {{"prompt": "Problem description", "solution": "Step-by-step solution", "answer": "Final answer"}}
       ]
     }}
   }},
@@ -139,11 +139,30 @@ Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
   ]
 }}
 
+MUST INCLUDE IN CONTENT (do not omit these critical topics):
+- AND–OR solution conditions: (1) leaves are goal states, (2) one action per OR node, (3) all outcomes per AND node
+- Slippery Vacuum + cyclic plan: "while not clean do Suck" vs "eventually succeeds" vs "never succeeds with wrong key"
+- Partial observability: belief state definition, sensorless vs partial, example: [A,Dirty] ⇒ {{S1,S3}}, belief-tested conditional plan (if Bstate={{6}} then Suck)
+- ONLINE-DFS-AGENT: reversible actions requirement, each edge ≤2 traversals, competitive ratio risks
+- Competitive ratio: definition and when it becomes infinite
+- LRTA* algorithm: update rule H(s)=c(s,a,s')+H(s'), guarantees in finite+safely-explorable spaces (worst O(n²)), no completeness guarantee in infinite spaces
+
+FORMULA REQUIREMENTS:
+- Each formula MUST define all variables and include at least one worked example
+- Use 'expression' field (not 'formula'), 'notes' field (not 'when_to_use')
+- Variables must be a dictionary: {{"symbol": "meaning"}}
+
+EXAM PRACTICE REQUIREMENTS:
+- Minimum: 4 multiple-choice, 3 short-answer, 2 problem-solving questions
+- MCQ options MUST be an array: ["A) option", "B) option", ...] (not an object)
+- Include 'answer' field (not 'correct')
+
 CRITICAL: 
 - Output PURE JSON only (no ```json``` markers)
 - Include ALL sections from the schema
 - Make content exam-focused and actionable
-- Use the language specified above for ALL text"""
+- Use the language specified above for ALL text
+- Complete all arrays and objects - do not truncate"""
 
 
 def get_no_files_prompt(topic: str, language: str = "en") -> str:
