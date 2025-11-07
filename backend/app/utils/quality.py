@@ -155,12 +155,13 @@ def validate_summary_completeness(result: Dict[str, Any]) -> Tuple[List[str], bo
 def create_self_repair_prompt(result: Dict[str, Any], warnings: List[str], language: str = "en") -> str:
     """
     Create a focused prompt for self-repair of incomplete summary
+    Focus on DEPTH, not practice questions
     """
     lang_instr = "Write in TURKISH." if language == "tr" else "Write in ENGLISH."
     
     issues = "\n".join(f"- {w}" for w in warnings)
     
-    return f"""Your previous summary output has critical quality issues. Fix them now.
+    return f"""Your previous study notes output has quality issues. Fix them by adding DEPTH.
 
 {lang_instr}
 
@@ -174,12 +175,13 @@ INSTRUCTIONS:
 1. Keep ALL existing good content (concepts, formulas, examples that are already complete)
 2. Fix ONLY the issues listed above:
    - Add missing learning objectives
-   - Expand sections with no concepts
-   - Add worked examples to formulas missing them
-   - Add MCQ/short-answer/problem-solving questions to reach minimums
-   - Expand glossary to at least 8 terms
-3. DO NOT add generic content like "Review carefully" or "Important for exams"
-4. Every addition must be specific and derived from the source material
+   - Expand shallow explanations to 3-4 detailed paragraphs
+   - Add multiple worked examples (2-3 per concept) with step-by-step calculations
+   - Add formula derivations and multiple worked examples
+   - Expand glossary to at least 10 substantive terms
+3. DO NOT add practice questions (MCQ, short-answer, problem-solving)
+4. USE token budget for DEPTH: longer explanations, more examples, derivations
+5. Every addition must be specific and derived from the source material
 
-Output the COMPLETE corrected summary as valid JSON (same schema as before).
+Output the COMPLETE improved study notes as valid JSON (NO exam_practice field).
 """
