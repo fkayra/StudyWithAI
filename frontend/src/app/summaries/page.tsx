@@ -327,7 +327,7 @@ export default function SummariesPage() {
 
           {/* Main Content Sections */}
           <div className="space-y-8">
-            {summary.sections.map((section, sectionIdx) => (
+            {summary.sections && summary.sections.map((section, sectionIdx) => (
               <div key={sectionIdx} className="glass-card animate-slide-up" style={{ animationDelay: `${sectionIdx * 0.1}s` }}>
                 <div className="flex items-start gap-4 mb-6">
                   <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/30 rounded-xl flex items-center justify-center text-teal-400 font-bold">
@@ -409,15 +409,23 @@ export default function SummariesPage() {
                 {summary.formula_sheet.map((formula, idx) => (
                   <div key={idx} className="p-5 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl hover:border-purple-500/50 transition-all">
                     <div className="text-lg font-semibold text-slate-100 mb-2">{formula.name}</div>
-                    <div className="text-2xl font-mono text-purple-300 mb-3 p-3 bg-black/20 rounded-lg">{formula.formula}</div>
-                    <div className="text-sm text-slate-300 mb-2">
-                      <span className="text-purple-400 font-semibold">Variables: </span>
-                      {formula.variables}
-                    </div>
-                    <div className="text-sm text-slate-300">
-                      <span className="text-purple-400 font-semibold">When to use: </span>
-                      {formula.when_to_use}
-                    </div>
+                    {(formula.formula || formula.expression) && (
+                      <div className="text-2xl font-mono text-purple-300 mb-3 p-3 bg-black/20 rounded-lg">
+                        {formula.expression || formula.formula}
+                      </div>
+                    )}
+                    {formula.variables && (
+                      <div className="text-sm text-slate-300 mb-2">
+                        <span className="text-purple-400 font-semibold">Variables: </span>
+                        {typeof formula.variables === 'string' ? formula.variables : JSON.stringify(formula.variables)}
+                      </div>
+                    )}
+                    {(formula.when_to_use || formula.notes) && (
+                      <div className="text-sm text-slate-300">
+                        <span className="text-purple-400 font-semibold">Notes: </span>
+                        {formula.notes || formula.when_to_use}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -451,7 +459,7 @@ export default function SummariesPage() {
               </div>
               
               {/* Multiple Choice */}
-              {summary.exam_practice.multiple_choice && summary.exam_practice.multiple_choice.length > 0 && (
+              {summary.exam_practice?.multiple_choice && summary.exam_practice.multiple_choice.length > 0 && (
                 <div className="mb-8">
                   <h3 className="text-xl font-semibold text-slate-200 mb-4">Multiple Choice Questions</h3>
                   <div className="space-y-4">
@@ -459,7 +467,7 @@ export default function SummariesPage() {
                       <div key={idx} className="p-5 bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl">
                         <div className="font-semibold text-slate-100 mb-3">{idx + 1}. {q.question}</div>
                         <div className="space-y-2 mb-3">
-                          {Object.entries(q.options).map(([key, value]) => (
+                          {q.options && Object.entries(q.options).map(([key, value]) => (
                             <div key={key} className={`p-3 rounded-lg ${key === q.correct ? 'bg-green-500/20 border border-green-500/50' : 'bg-slate-800/30'}`}>
                               <span className="font-semibold text-slate-200">{key}) </span>
                               <span className="text-slate-300">{value}</span>
@@ -467,10 +475,12 @@ export default function SummariesPage() {
                             </div>
                           ))}
                         </div>
-                        <div className="text-sm text-slate-400 italic">
-                          <span className="text-orange-400 font-semibold">Explanation: </span>
-                          {q.explanation}
-                        </div>
+                        {q.explanation && (
+                          <div className="text-sm text-slate-400 italic">
+                            <span className="text-orange-400 font-semibold">Explanation: </span>
+                            {q.explanation}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -478,22 +488,32 @@ export default function SummariesPage() {
               )}
 
               {/* Short Answer */}
-              {summary.exam_practice.short_answer && summary.exam_practice.short_answer.length > 0 && (
+              {summary.exam_practice?.short_answer && summary.exam_practice.short_answer.length > 0 && (
                 <div className="mb-8">
                   <h3 className="text-xl font-semibold text-slate-200 mb-4">Short Answer Questions</h3>
                   <div className="space-y-4">
                     {summary.exam_practice.short_answer.map((q, idx) => (
                       <div key={idx} className="p-5 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/30 rounded-xl">
                         <div className="font-semibold text-slate-100 mb-3">{idx + 1}. {q.question}</div>
-                        <div className="text-sm text-blue-400 font-semibold mb-2">Key Points to Include:</div>
-                        <ul className="space-y-1">
-                          {q.key_points.map((point, i) => (
-                            <li key={i} className="text-slate-300 text-sm flex items-start">
-                              <span className="text-blue-400 mr-2">•</span>
-                              {point}
-                            </li>
-                          ))}
-                        </ul>
+                        {q.answer && (
+                          <div className="text-sm text-slate-300 mt-2">
+                            <span className="text-blue-400 font-semibold">Answer: </span>
+                            {q.answer}
+                          </div>
+                        )}
+                        {q.key_points && q.key_points.length > 0 && (
+                          <>
+                            <div className="text-sm text-blue-400 font-semibold mb-2 mt-3">Key Points to Include:</div>
+                            <ul className="space-y-1">
+                              {q.key_points.map((point, i) => (
+                                <li key={i} className="text-slate-300 text-sm flex items-start">
+                                  <span className="text-blue-400 mr-2">•</span>
+                                  {point}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -501,7 +521,7 @@ export default function SummariesPage() {
               )}
 
               {/* Problem Solving */}
-              {summary.exam_practice.problem_solving && summary.exam_practice.problem_solving.length > 0 && (
+              {summary.exam_practice?.problem_solving && summary.exam_practice.problem_solving.length > 0 && (
                 <div>
                   <h3 className="text-xl font-semibold text-slate-200 mb-4">Problem Solving</h3>
                   <div className="space-y-4">
