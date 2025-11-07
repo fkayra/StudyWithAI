@@ -17,21 +17,30 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # ========== PROMPTS ==========
 
-SYSTEM_PROMPT = """You are StudyWithAI, a world-class academic tutor and study guide creator. Your mission is to transform course materials into comprehensive, exam-ready study guides that maximize student learning and retention.
+SYSTEM_PROMPT = """You are StudyWithAI, an elite academic tutor specializing in exam preparation. Your mission: transform course materials into comprehensive, exam-ready study guides that guarantee student success.
 
-Core Principles:
-1. **Exam-Ready Focus**: Structure all content to directly support exam preparation
-2. **Active Learning**: Include examples, applications, and practice problems
-3. **Clear Hierarchy**: Organize from foundational concepts to advanced applications
-4. **Practical Application**: Show how concepts apply in real scenarios
-5. **Memory Aids**: Use analogies, mnemonics, and visual descriptions
+CORE PRINCIPLES (NON-NEGOTIABLE):
+1. **Complete Coverage**: Cover EVERY major concept, formula, and algorithm in the material
+2. **Exam Focus**: Every section must prepare students for exam questions
+3. **Depth Over Breadth**: Detailed explanations with worked examples
+4. **Teach Directly**: Write as if teaching the student, not describing the document
+5. **Quality Standards**:
+   - Each concept: definition, detailed explanation (2-3 paragraphs), concrete example, exam tips
+   - Each formula: full variable definitions, when to use, worked example, common mistakes
+   - Each algorithm: purpose, step-by-step procedure, complexity, typical pitfalls
 
-Your summaries should be:
-- Comprehensive yet concise
-- Logically structured
-- Rich with examples
-- Practice-oriented
-- Easy to review before exams"""
+OUTPUT REQUIREMENTS:
+- COMPREHENSIVE: Cover all major topics (minimum 3-5 sections)
+- DETAILED: Each concept needs substantive explanation (not just definitions)
+- ACTIONABLE: Include exam tips, common mistakes, quick checks
+- COMPLETE: Formula sheet, glossary, and exam practice questions REQUIRED
+- JSON ONLY: Output pure JSON (no markdown, no extra text)
+
+BEFORE FINALIZING:
+- Verify all formulas have worked examples
+- Ensure glossary has ALL key terms
+- Check that exam practice covers main concepts
+- Validate JSON structure is complete and valid"""
 
 
 def get_chunk_summary_prompt(language: str = "en") -> str:
@@ -55,13 +64,23 @@ Do not include meta-commentary like "This document discusses...". Present the ac
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "") -> str:
     """Prompt for merging chunk summaries into final JSON (reduce phase)"""
-    lang_instr = "Generate the ENTIRE summary in TURKISH language." if language == "tr" else "Generate the ENTIRE summary in ENGLISH language."
+    lang_instr = "Generate the ENTIRE summary in TURKISH language. All text must be in Turkish." if language == "tr" else "Generate the ENTIRE summary in ENGLISH language. All text must be in English."
     
-    additional = f"\n\nADDITIONAL USER INSTRUCTIONS:\n{additional_instructions}" if additional_instructions else ""
+    additional = f"\n\nUSER'S CUSTOM REQUIREMENTS (MUST FOLLOW):\n{additional_instructions}" if additional_instructions else ""
     
-    return f"""Based on the bullet-point summaries provided, create a comprehensive exam-ready study guide.
+    return f"""Based on the bullet-point summaries provided, create a comprehensive, exam-ready study guide.
 
 {lang_instr}{additional}
+
+MANDATORY QUALITY REQUIREMENTS:
+1. Cover ALL major concepts from the source material
+2. Each concept must have: clear definition + detailed explanation (2-3 paragraphs) + concrete example + exam tips
+3. Formula sheet: Include ALL formulas with worked examples and common mistakes
+4. Glossary: Include ALL key terms (minimum 10 terms)
+5. Exam practice: Include questions covering main concepts
+6. Use the EXACT JSON structure below - complete it fully
+
+CRITICAL: Generate COMPLETE and VALID JSON. Do not truncate. Finish all arrays and objects properly.
 
 Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
 
@@ -152,10 +171,11 @@ def call_openai(
     user_prompt: str,
     max_output_tokens: int,
     temperature: float = TEMPERATURE,
-    top_p: float = TOP_P
+    top_p: float = TOP_P,
+    retry_on_length: bool = True
 ) -> str:
     """
-    Call OpenAI API with given prompts
+    Call OpenAI API with given prompts and automatic retry on truncation
     Returns the response text
     """
     if not OPENAI_API_KEY:
@@ -172,26 +192,43 @@ def call_openai(
         {"role": "user", "content": user_prompt}
     ]
     
-    payload = {
-        "model": OPENAI_MODEL,
-        "messages": messages,
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": max_output_tokens
-    }
+    attempt = 0
+    current_max_tokens = max_output_tokens
     
-    print(f"[OPENAI REQUEST] Model: {OPENAI_MODEL}, max_tokens: {max_output_tokens}")
+    while attempt < 2:  # Max 2 attempts
+        attempt += 1
+        
+        payload = {
+            "model": OPENAI_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": current_max_tokens
+        }
+        
+        print(f"[OPENAI REQUEST] Attempt {attempt}, Model: {OPENAI_MODEL}, max_tokens: {current_max_tokens}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=180)
+        
+        if response.status_code != 200:
+            error_detail = response.text[:500]
+            raise Exception(f"OpenAI API call failed ({response.status_code}): {error_detail}")
+        
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
+        finish_reason = result["choices"][0].get("finish_reason")
+        
+        print(f"[OPENAI RESPONSE] Returned {len(content)} chars, finish_reason: {finish_reason}")
+        
+        # If truncated and retry enabled, try with 20% more tokens
+        if finish_reason == "length" and retry_on_length and attempt < 2:
+            current_max_tokens = min(int(current_max_tokens * 1.2), 16000)
+            print(f"[OPENAI RETRY] Response truncated, retrying with {current_max_tokens} tokens")
+            continue
+        
+        return content
     
-    response = requests.post(url, headers=headers, json=payload, timeout=120)
-    
-    if response.status_code != 200:
-        error_detail = response.text[:500]
-        raise Exception(f"OpenAI API call failed ({response.status_code}): {error_detail}")
-    
-    result = response.json()
-    content = result["choices"][0]["message"]["content"]
-    finish_reason = result["choices"][0].get("finish_reason")
-    print(f"[OPENAI RESPONSE] Returned {len(content)} chars, finish_reason: {finish_reason}")
+    # If still truncated after retry, return what we have
     return content
 
 

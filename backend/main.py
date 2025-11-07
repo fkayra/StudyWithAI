@@ -981,18 +981,32 @@ async def summarize_from_files(
     # Token estimation
     estimated_tokens = approx_tokens_from_text_len(len(merged_text), TOKEN_PER_CHAR)
     
-    if estimated_tokens > limits.max_input_tokens:
+    # Hard cap to prevent abuse (5x plan limit)
+    HARD_CAP = limits.max_input_tokens * 5
+    if estimated_tokens > HARD_CAP:
         raise HTTPException(
             status_code=400,
-            detail=f"Content too large (~{estimated_tokens} tokens). Your plan allows {limits.max_input_tokens} tokens. Try fewer/shorter files or upgrade."
+            detail=f"Content extremely large (~{estimated_tokens} tokens). Maximum is {HARD_CAP} tokens. Please split the upload."
         )
     
+    # If content is large (>50% of plan limit), force map-reduce
+    force_map_reduce = estimated_tokens > (limits.max_input_tokens // 2)
+    
+    # Adaptive output cap based on input size
+    out_cap = min(
+        choose_max_output_tokens(estimated_tokens, limits.max_output_cap),
+        limits.max_output_cap
+    )
+    
     # ========== CACHE CHECK ==========
-    # Create cache key from: plan, language, prompt, file hashes
+    # Create cache key from: plan, language, prompt, file hashes, out_cap, model
+    from app.config import OPENAI_MODEL
     cache_key_data = {
         "plan": plan,
         "language": req.language or "en",
-        "prompt": req.prompt or "",
+        "prompt": (req.prompt or "")[:1000],  # Limit prompt length in cache key
+        "out_cap": out_cap,
+        "model": OPENAI_MODEL,
         "file_hashes": [sha256_bytes(content) for _, content, _ in files_data]
     }
     cache_key = hashlib.sha256(
@@ -1006,9 +1020,12 @@ async def summarize_from_files(
         return json.loads(cached_result)
     
     # ========== GENERATE SUMMARY ==========
-    print(f"[CACHE MISS] Generating new summary...")
+    print(f"[CACHE MISS] Generating new summary (estimated={estimated_tokens} tokens, out_cap={out_cap}, force_map_reduce={force_map_reduce})...")
     
     try:
+        from app.utils.json_helpers import parse_json_robust, create_error_response
+        from app.utils.quality import enforce_exam_ready, validate_summary_completeness
+        
         language = req.language or "en"
         additional_instructions = req.prompt or ""
         
@@ -1017,69 +1034,32 @@ async def summarize_from_files(
             full_text=merged_text,
             language=language,
             additional_instructions=additional_instructions,
-            out_cap=limits.max_output_cap
+            out_cap=out_cap,
+            force_chunking=force_map_reduce
         )
         
-        # Clean and parse JSON
-        result_json = result_json.strip()
-        if result_json.startswith('```'):
-            lines = result_json.split('\n')
-            if lines[0].strip().startswith('```'):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == '```':
-                lines = lines[:-1]
-            result_json = '\n'.join(lines)
-        
+        # Parse JSON with robust error handling
         try:
-            result = json.loads(result_json)
-        except json.JSONDecodeError as e:
-            import re
-            print(f"[SUMMARY ERROR] JSON parse failed: {e}")
-            print(f"[SUMMARY ERROR] Response length: {len(result_json)} chars")
-            print(f"[SUMMARY ERROR] First 200 chars: {result_json[:200]}")
-            print(f"[SUMMARY ERROR] Last 200 chars: {result_json[-200:]}")
-            
-            # Try to extract JSON from response
-            json_match = re.search(r'\{.*\}', result_json, re.DOTALL)
-            if json_match:
-                try:
-                    result = json.loads(json_match.group(0))
-                    print("[SUMMARY ERROR] Successfully parsed with regex extraction")
-                except Exception as e2:
-                    print(f"[SUMMARY ERROR] Regex extraction also failed: {e2}")
-                    # Last resort: return error message
-                    result = {
-                        "summary": {
-                            "title": "Summary Generation Error",
-                            "sections": [{
-                                "heading": "Error",
-                                "bullets": [
-                                    "Failed to parse AI response. This may be due to response size limits.",
-                                    "Please try with a shorter document or fewer files.",
-                                    f"Response length: {len(result_json)} characters"
-                                ]
-                            }]
-                        },
-                        "citations": []
-                    }
-            else:
-                print("[SUMMARY ERROR] No JSON pattern found in response")
-                result = {
-                    "summary": {
-                        "title": "Summary Generation Error",
-                        "sections": [{
-                            "heading": "Error",
-                            "bullets": [
-                                "AI response did not contain valid JSON.",
-                                "Please try again or use a different document."
-                            ]
-                        }]
-                    },
-                    "citations": []
-                }
+            result = parse_json_robust(result_json)
+            print("[SUMMARY] JSON parsed successfully")
+        except ValueError as e:
+            print(f"[SUMMARY] All JSON parse attempts failed: {e}")
+            result = create_error_response(
+                "Failed to parse AI response. This may be due to response format issues.",
+                len(result_json)
+            )
         
-        # Cache the result
-        set_cached(cache_key, json.dumps(result), db)
+        # Enforce exam-ready quality standards
+        result = enforce_exam_ready(result)
+        
+        # Validate and log warnings
+        warnings = validate_summary_completeness(result)
+        if warnings:
+            print(f"[SUMMARY QUALITY] Warnings: {warnings}")
+        
+        # Cache the result (only if not error)
+        if "error" not in result.get("summary", {}).get("title", "").lower():
+            set_cached(cache_key, json.dumps(result), db)
         
         return result
         
