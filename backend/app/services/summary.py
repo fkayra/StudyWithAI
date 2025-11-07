@@ -207,127 +207,86 @@ def quality_score(result: dict) -> float:
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
-    Two-phase "plan then write" prompt for merging chunk summaries into final JSON (reduce phase)
-    Automatically adapts to any academic domain
+    Domain-agnostic prompt with concrete example requirements (numeric OR anchored)
     """
     lang_instr = (
-        "Generate the ENTIRE summary in TURKISH. All headings and explanations must be in Turkish."
-        if language == "tr"
-        else "Generate the ENTIRE summary in ENGLISH."
+        "Use TURKISH for ALL output." if language == "tr"
+        else "Use ENGLISH for ALL output."
     )
-    
-    additional = f"\n\nUSER ADDITIONAL REQUIREMENTS:\n{additional_instructions}" if additional_instructions else ""
-    
-    # New plan-then-write core prompt
-    plan_and_write_core = """
-You are StudyWithAI — a domain-agnostic academic tutor that transforms any uploaded document (lecture notes, textbook chapters, research papers, slides, etc.) into a self-contained, exam-ready study guide.
+    additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
 
-Your single goal: help a student fully understand and study for their final exam using only this summary, without needing to read the original document.
+    return f"""GOAL
+Create a comprehensive, exam-ready study guide from the provided material. It must stand alone as the only thing a student needs before a final.
 
-=====================================================
-🔁 TWO-PHASE BEHAVIOR (MUST ALWAYS FOLLOW)
-=====================================================
+LANGUAGE
+{lang_instr}
 
-1️⃣ **PLAN PHASE — internal reasoning**
-- Read and analyze the full text of the uploaded document.
-- Identify its **academic domain** (e.g., computer science, medicine, economics, law, literature, etc.).
-- Outline 4–8 logical sections that together cover the entire topic.
-- For each section:
-  - Note 2–5 central **concepts, theories, or ideas**.
-  - Detect any **formulas, frameworks, or structured models**.
-  - Choose at least one **worked example or scenario** (numeric if STEM, descriptive if theoretical).
-  - List **common pitfalls or misconceptions**.
-- Map how the sections connect (hierarchy, cause–effect, comparison, application).
-- After the structure is clear → move to writing.
+CONSTRAINTS (no exceptions)
+- Single pass, one JSON object. No markdown code fences, no extra prose.
+- Do NOT include any question bank or practice items.
+- Be domain-agnostic; do NOT assume a specific textbook or course.
+- Prefer concrete, worked examples over vague ones.
+- No empty arrays. Omit a field if you cannot populate it meaningfully.{additional}
 
-2️⃣ **WRITE PHASE — teaching-level explanation**
-- Write as if you're tutoring a student before an exam.
-- Keep tone academic, clear, and self-contained.
-- Include:
-  - A short **overview** (2–3 sentences) defining scope and purpose.
-  - 3–6 **learning objectives** describing what mastery means.
-  - 4–8 **sections**, each containing:
-    - **Concepts:** definition + multi-paragraph explanation (2–3 paragraphs).
-    - **Example:** at least one concrete, step-by-step example (include a number if the domain allows).
-    - **Key points:** 2–4 concise takeaways.
-    - **Pitfalls:** 1–2 frequent errors or misconceptions.
-    - **When to use / Limitations:** short guidance bullets (if applicable).
-  - A **formula sheet** or **framework list** summarizing quantitative or procedural elements.
-  - A **glossary** of 10–15 key terms with short one-sentence definitions.
+SILENT PLANNING (do internally before writing):
+1) Skim the material → list 4–8 top themes actually present.
+2) For each theme, list 2–4 concepts that the source truly covers.
+3) For each concept, choose ONE concrete example:
+   - NUMERIC domains → a short worked example with at least one digit (0–9) and steps.
+   - NON-NUMERIC domains → an anchored example (date, named event/person/work, ≤12-word quote, stanza/chapter reference).
+4) Collect formulas/algorithms/methods explicitly present or strongly implied. Note variables/roles and one worked example.
 
-=====================================================
-🎯 QUALITY AND DEPTH STANDARDS
-=====================================================
-- **Coverage:** all essential ideas from the document must appear.
-- **Depth:** every core concept must be explained, not just named.
-- **Universality:** automatically adapt tone and example style:
-  - STEM → numerical or procedural examples.
-  - Social sciences → case or scenario examples.
-  - Humanities → thematic or interpretive examples.
-- **Self-sufficiency:** summary must fully teach the material.
-- **Balance:** ~60–70% explanation, 20–30% examples, 10% summaries/glossaries.
-- **Language awareness:** if the system detects the document or user language ≠ English, generate the summary in that language.
-
-=====================================================
-⚙️ OUTPUT FORMAT (STRICT JSON)
-=====================================================
-Return *only* valid JSON with this structure:
-
-{
-  "summary": {
-    "title": "Study Notes: [Detected Topic]",
-    "overview": "2–3 sentence overview",
-    "learning_objectives": ["Objective 1", "Objective 2", "..."],
+OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
+{{
+  "summary": {{
+    "title": "Study Notes: <topic>",
+    "overview": "<2–4 sentences on scope and importance>",
+    "learning_objectives": [
+      "Verb-led, outcome-focused objective 1",
+      "Verb-led, outcome-focused objective 2"
+    ],
     "sections": [
-      {
-        "heading": "Section Title",
+      {{
+        "heading": "<theme>",
         "concepts": [
-          {
-            "term": "Concept Name",
-            "definition": "Short academic definition.",
-            "explanation": "Full explanation (2–3 paragraphs).",
-            "example": "Concrete step-by-step or scenario-based example.",
-            "key_points": ["Key point 1", "Key point 2"],
-            "pitfalls": ["Common misunderstanding 1", "Common misunderstanding 2"],
-            "when_to_use": ["Situations or contexts where this concept applies"],
-            "limitations": ["Boundaries or constraints of the concept"]
-          }
+          {{
+            "term": "<concept>",
+            "definition": "<precise, syllabus-level definition>",
+            "explanation": "<2–3 dense paragraphs teaching mechanism, intuition, edge cases>",
+            "example": "<worked example (numeric OR anchored, as appropriate)>",
+            "key_points": ["<short fact>", "<short fact>"],
+            "pitfalls": ["<common error>", "<boundary condition>"]
+          }}
         ]
-      }
+      }}
     ],
     "formula_sheet": [
-      {
-        "name": "Formula or Framework Name",
-        "expression": "Equation, principle, or structured model",
-        "variables": {"x": "meaning", "y": "meaning"},
-        "worked_example": "Short, realistic demonstration or calculation"
-      }
+      {{
+        "name": "<formula / algorithm / method>",
+        "expression": "<math notation or pseudocode or stepwise method>",
+        "variables": {{"symbol_or_role": "meaning"}},
+        "worked_example": "<short numeric OR anchored example with steps>",
+        "notes": "<when it applies, constraints, quick checks>"
+      }}
     ],
     "glossary": [
-      {"term": "Term", "definition": "One-sentence definition"}
+      {{"term": "<term>", "definition": "<one-line, testable definition>"}}
     ]
-  },
+  }},
   "citations": [
-    {
-      "file_id": "source",
-      "heading": "Chapter or section title",
-      "evidence": "Quoted or paraphrased supporting line"
-    }
+    {{"file_id": "source", "section": "<where in the material>", "evidence": "<short quoted/paraphrased anchor>"}}
   ]
-}
+}}
 
-=====================================================
-🚫 RESTRICTIONS
-=====================================================
-- Do NOT include any exam questions, quizzes, or user instructions.
-- Do NOT refer to "the document" or "the user."
-- Output must be *pure JSON*, no markdown, no code fences.
-- Must work equally well for all academic disciplines.
-"""
-    
-    return f"""{plan_and_write_core}
-
-{lang_instr}{additional}
+QUALITY GATES (self-check before returning JSON)
+- At least 4 sections (themes); each section has ≥2 concepts pulled from the source.
+- Each concept has ONE concrete example:
+  • numeric domains → include at least one digit (0–9) and steps;
+  • non-numeric domains → include anchored specifics (date/name/event/quote/stanza/case).
+- Formula_sheet: include every formula/algorithm/method present; each has variables/roles + a worked_example.
+- Remove empty/placeholder fields or arrays.
+- Keep wording specific to the uploaded material; avoid generic filler like "review this concept".
+- Validate JSON: balanced braces, quoted keys/strings, no trailing commas.
 
 =====================
 📚 SOURCE DATA FORMAT
