@@ -2054,12 +2054,14 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+@app.get("/admin/clear-cache")
 @app.delete("/admin/clear-cache")
 async def clear_cache(db: Session = Depends(get_db)):
     """Clear all summary cache (admin only - no auth for now)"""
     try:
+        from app.services.cache import SummaryCache
         deleted = db.query(SummaryCache).delete()
         db.commit()
-        return {"status": "success", "deleted": deleted}
+        return {"status": "success", "deleted": deleted, "message": "Cache cleared successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}

@@ -62,12 +62,16 @@ TOKEN_PER_CHAR = 0.25
 # Chunking configuration for map-reduce
 CHUNK_INPUT_TARGET = 2400  # target tokens per chunk for map phase
 CHUNK_OUTPUT_BUDGET = (200, 300)  # min, max output tokens per chunk summary
-MERGE_OUTPUT_BUDGET = (2000, 4000)  # min, max output tokens for final merge (increased for exam-ready schema)
+MERGE_OUTPUT_BUDGET = (3000, 8000)  # min, max output tokens for final merge (DRAMATICALLY increased for exam-ready schema)
 
 # OpenAI configuration
 OPENAI_MODEL = "gpt-4o-mini"  # or "gpt-4o" for better quality
 TEMPERATURE = 0.0
 TOP_P = 1.0
+
+# Ensure we request enough tokens to complete JSON
+# gpt-4o-mini can output up to 16k tokens
+MAX_OUTPUT_TOKENS_ABSOLUTE = 16000
 
 # Cache TTL (in seconds)
 CACHE_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
