@@ -454,8 +454,23 @@ export default function SummariesPage() {
                         {typeof formula.variables === 'string' ? formula.variables : JSON.stringify(formula.variables)}
                       </div>
                     )}
+                    
+                    {formula.worked_example && (
+                      <div className="mt-3 p-3 bg-black/20 rounded-lg border border-purple-500/20">
+                        <div className="text-xs text-purple-400 font-semibold mb-2 uppercase tracking-wide">Worked Example</div>
+                        <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{formula.worked_example}</div>
+                      </div>
+                    )}
+                    
+                    {formula.complexity && (
+                      <div className="text-sm text-slate-300 mt-3">
+                        <span className="text-purple-400 font-semibold">Complexity: </span>
+                        <span className="font-mono text-purple-300">{formula.complexity}</span>
+                      </div>
+                    )}
+                    
                     {(formula.when_to_use || formula.notes) && (
-                      <div className="text-sm text-slate-300">
+                      <div className="text-sm text-slate-400 mt-3">
                         <span className="text-purple-400 font-semibold">Notes: </span>
                         {formula.notes || formula.when_to_use}
                       </div>
