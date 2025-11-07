@@ -1,5 +1,6 @@
 """
 AI-powered summary service with map-reduce for large documents
+Includes domain detection and quality guardrails for consistent output
 """
 from typing import List, Optional
 import os
@@ -62,63 +63,166 @@ Format: Plain text bullets, no JSON. Keep it dense and factual.
 Do not include meta-commentary like "This document discusses...". Present the actual knowledge directly."""
 
 
-def get_final_merge_prompt(language: str = "en", additional_instructions: str = "") -> str:
-    """Prompt for merging chunk summaries into final JSON (reduce phase)"""
-    lang_instr = "Generate the ENTIRE summary in TURKISH language. All text must be in Turkish." if language == "tr" else "Generate the ENTIRE summary in ENGLISH language. All text must be in English."
+def detect_domain(text: str) -> str:
+    """
+    Automatically detect document domain from content to adjust summary style.
+    Returns: 'technical', 'social', 'procedural', or 'general'
+    """
+    sample = text[:4000].lower()
     
-    additional = f"\n\nUSER'S CUSTOM REQUIREMENTS (MUST FOLLOW):\n{additional_instructions}" if additional_instructions else ""
+    # Technical/scientific indicators
+    technical_keywords = ["equation", "theorem", "proof", "algorithm", "derivative", 
+                         "integral", "matrix", "function", "variable", "formula",
+                         "calculate", "compute", "solve"]
     
-    return f"""Based on the source material, create a COMPREHENSIVE exam-ready study guide.
+    # Social sciences indicators
+    social_keywords = ["policy", "sociology", "history", "philosophy", "ethics",
+                      "society", "culture", "theory", "political", "economic",
+                      "psychology", "social"]
+    
+    # Procedural/manual indicators
+    procedural_keywords = ["step", "procedure", "manual", "instruction", "how to",
+                          "guide", "process", "method", "implementation", "install"]
+    
+    technical_count = sum(1 for k in technical_keywords if k in sample)
+    social_count = sum(1 for k in social_keywords if k in sample)
+    procedural_count = sum(1 for k in procedural_keywords if k in sample)
+    
+    if technical_count >= 3:
+        return "technical"
+    elif social_count >= 3:
+        return "social"
+    elif procedural_count >= 3:
+        return "procedural"
+    return "general"
 
-{lang_instr}{additional}
 
-⚠️ MANDATORY COVERAGE CHECKLIST (ALL REQUIRED):
-□ ALL major concepts, definitions, theories from the material
-□ ALL algorithms: step-by-step procedure, complexity, prerequisites, pitfalls
-□ ALL formulas: full derivation or proof sketch, variable meanings, worked example, common mistakes
-□ For each concept: WHY it matters, HOW it works, WHEN to use, WHAT can go wrong
-□ Real exam scenarios and typical question patterns
-□ Connections between concepts (don't teach in isolation)
+def quality_score(result: dict) -> float:
+    """
+    Calculate quality score (0.0-1.0) based on content richness.
+    Checks: number of concepts, formulas, exam questions, glossary terms
+    """
+    try:
+        s = result.get("summary", {})
+        sections = s.get("sections", [])
+        
+        # Count concepts across all sections
+        num_concepts = sum(len(sec.get("concepts", [])) for sec in sections)
+        
+        # Count formulas
+        num_formulas = len(s.get("formula_sheet", []))
+        
+        # Count exam questions
+        exam = s.get("exam_practice", {})
+        num_mcq = len(exam.get("multiple_choice", []))
+        num_short = len(exam.get("short_answer", []))
+        num_problems = len(exam.get("problem_solving", []))
+        num_questions = num_mcq + num_short + num_problems
+        
+        # Count glossary terms
+        num_glossary = len(s.get("glossary", []))
+        
+        # Calculate weighted score
+        score = (
+            (min(num_concepts, 10) / 10) * 0.35 +  # Max 10 concepts worth 35%
+            (min(num_formulas, 5) / 5) * 0.15 +    # Max 5 formulas worth 15%
+            (min(num_questions, 9) / 9) * 0.35 +   # Min 9 questions worth 35%
+            (min(num_glossary, 8) / 8) * 0.15      # Min 8 terms worth 15%
+        )
+        
+        print(f"[QUALITY SCORE] Concepts: {num_concepts}, Formulas: {num_formulas}, Questions: {num_questions}, Glossary: {num_glossary}, Score: {score:.2f}")
+        return round(score, 2)
+    except Exception as e:
+        print(f"[QUALITY SCORE] Error calculating: {e}")
+        return 0.5  # Default to medium quality on error
 
-🚫 FORBIDDEN (ZERO TOLERANCE):
-✗ Generic exam tips like "Review this concept" or "Study carefully"
-✗ Shallow definitions without context
-✗ Examples without numbers/calculations
-✗ Formulas without worked examples
-✗ Glossary terms without substantive definitions
-✗ Teaching what the document says instead of teaching the actual subject
 
-✅ QUALITY STANDARDS:
-Each concept must include:
-  - Definition: Precise, technical definition
-  - Explanation: 2-3 paragraphs covering: purpose, mechanism, applications, edge cases
-  - Example: Concrete example with NUMBERS and step-by-step solution
-  - Exam tips: SPECIFIC pitfalls, quick checks, formula variations, typical mistakes (NOT generic "review this")
+def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
+    """
+    Domain-adaptive prompt for merging chunk summaries into final JSON (reduce phase)
+    Adjusts emphasis based on detected content type (technical/social/procedural/general)
+    """
+    # Language instruction
+    lang_instr = (
+        "Generate the ENTIRE summary in TURKISH. All headings, explanations, and content must be in Turkish."
+        if language == "tr"
+        else "Generate the ENTIRE summary in ENGLISH."
+    )
+    
+    # Domain-specific guidance
+    domain_guidance = {
+        "technical": "This is TECHNICAL/SCIENTIFIC content. Emphasize: formulas with derivations, algorithms with complexity analysis, mathematical proofs, numerical examples with step-by-step calculations, and precise technical definitions.",
+        "social": "This is SOCIAL SCIENCES content. Emphasize: theoretical frameworks, conceptual relationships, historical context, real-world applications, case studies, critical analysis, and diverse perspectives.",
+        "procedural": "This is PROCEDURAL/MANUAL content. Emphasize: step-by-step processes, decision trees, implementation guidelines, prerequisites, common errors, troubleshooting tips, and practical application.",
+        "general": "Adapt your approach based on the content. Balance conceptual understanding with practical application."
+    }
+    
+    domain_instr = domain_guidance.get(domain, domain_guidance["general"])
+    additional = f"\n\nUSER ADDITIONAL REQUIREMENTS:\n{additional_instructions}" if additional_instructions else ""
+    
+    return f"""You are StudyWithAI, an elite academic tutor. Your mission: merge the source summaries into a single, exam-ready study guide.
 
-Each formula must include:
-  - Expression: Mathematical notation
-  - Variables: Complete list with units and constraints
-  - Derivation: Brief proof or intuition
-  - Worked example: Full calculation with numbers
-  - Common mistakes: Specific errors students make
+{lang_instr}
 
-Exam practice must include:
-  - Questions that mirror actual exam difficulty
-  - Explanations showing problem-solving approach
-  - Coverage of all main topics
+🎯 DOMAIN CONTEXT:
+{domain_instr}{additional}
 
-CRITICAL JSON REQUIREMENTS:
-- Output COMPLETE, VALID JSON (no truncation)
-- Close all brackets, braces, quotes properly
-- Use EXACT schema below (no variations)
-- Options as ARRAY: ["option1", "option2", "option3", "option4"]
-- Answer as INDEX: 0, 1, 2, or 3 (not letter)
+📚 COVERAGE LOGIC (apply to every document):
+1. Identify every MAJOR TOPIC or HEADING in the material (concept, theory, method, model, algorithm, formula group)
+2. For each topic, provide:
+   • Clear definition and purpose
+   • Detailed explanation (HOW it works, WHY it matters, WHEN to apply)
+   • Key formalism or equation (if applicable)
+   • Concrete example or case study (with numbers when possible)
+   • Common pitfalls or misconceptions
+   • Exam-style insight (how this is typically tested)
+3. Create an EXAM PRACTICE KIT with realistic questions:
+   • Multiple-choice (≥4 questions)
+   • Short-answer (≥3 questions)
+   • Problem-solving (≥2 questions)
 
-Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
+🚫 ABSOLUTE PROHIBITIONS:
+✗ Describe the document → ✓ Teach the subject directly
+✗ Generic phrases ("review carefully", "important for exams") → ✓ Specific actionable tips
+✗ Formulas without variables defined → ✓ Every symbol explained with at least one worked example
+✗ Questions without answers → ✓ Every question has clear answer + explanation
+
+✅ MANDATORY QUALITY STANDARDS:
+
+**Concepts:**
+- Definition: Precise, technical
+- Explanation: 2-3 paragraphs (mechanism + motivation + application + limitations)
+- Example: Concrete with actual numbers/values
+- Exam Tips: Specific mistakes, shortcuts, how it appears in tests
+
+**Formulas:**
+- Expression: Full mathematical notation
+- Variables: Dictionary format {{"symbol": "meaning with units"}}
+- Notes: Derivation intuition, when to use, common errors
+- Must include at least ONE worked numerical example in explanation
+
+**Exam Practice:**
+- Multiple-choice: Options as object {{"A": "text", "B": "text", "C": "text", "D": "text"}}
+- Correct answer: Use "correct" field with letter ("A", "B", "C", or "D")
+- Every question needs "explanation" field with reasoning
+
+**Glossary:**
+- Minimum 8 terms covering all major vocabulary
+- Substantive definitions (not just dictionary)
+- Include: technical meaning, relevance, distinctions from related terms
+
+🔒 JSON OUTPUT REQUIREMENTS:
+✓ Pure JSON only (NO markdown fences like ```json```)
+✓ Complete structure (close all brackets, braces, quotes)
+✓ No trailing commas
+✓ Valid syntax throughout
+✓ Match schema exactly
+
+📐 EXACT JSON SCHEMA:
 
 {{
   "summary": {{
-    "title": "Study Guide: [Topic Name]",
+    "title": "Study Guide: [Detected Topic]",
     "overview": "2-3 sentence overview of what this material covers",
     "learning_objectives": [
       "Objective 1: What students should be able to do",
@@ -126,14 +230,15 @@ Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
     ],
     "sections": [
       {{
-        "heading": "Section Title",
+        "heading": "Main Topic Name",
         "concepts": [
           {{
             "term": "Concept Name",
-            "definition": "Clear, concise definition",
-            "explanation": "Detailed explanation with context, 2-3 paragraphs",
-            "example": "Concrete example showing application",
-            "key_points": ["Important point 1", "Important point 2"]
+            "definition": "Precise, technical definition",
+            "explanation": "Detailed explanation (2-3 paragraphs covering: how it works, why it matters, when to apply, limitations)",
+            "example": "Concrete example with actual numbers/values and step-by-step work",
+            "key_points": ["Critical point 1", "Critical point 2"],
+            "exam_tips": ["Specific mistake to avoid", "Quick check method", "How this appears in tests"]
           }}
         ]
       }}
@@ -141,28 +246,28 @@ Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
     "formula_sheet": [
       {{
         "name": "Formula Name",
-        "expression": "Mathematical notation or rule",
-        "variables": {{"x": "variable meaning", "y": "another variable"}},
-        "notes": "When to use, conditions, shortcuts"
+        "expression": "Full mathematical notation",
+        "variables": {{"x": "meaning with units", "y": "meaning with constraints"}},
+        "notes": "Derivation intuition, when to use, common errors, worked example"
       }}
     ],
     "glossary": [
-      {{"term": "Term", "definition": "Quick definition"}}
+      {{"term": "Technical Term", "definition": "Substantive definition with context and relevance"}}
     ],
     "exam_practice": {{
       "multiple_choice": [
         {{
-          "question": "Practice question text",
-          "options": ["A) option text", "B) option text", "C) option text", "D) option text"],
-          "answer": "A",
-          "explanation": "Why A is correct and why B, C, D are wrong"
+          "question": "Question text testing understanding",
+          "options": {{"A": "Option A text", "B": "Option B text", "C": "Option C text", "D": "Option D text"}},
+          "correct": "A",
+          "explanation": "Why A is correct; why B, C, D are incorrect"
         }}
       ],
       "short_answer": [
         {{"question": "Short answer prompt", "answer": "Expected answer with key points"}}
       ],
       "problem_solving": [
-        {{"prompt": "Problem description", "solution": "Step-by-step solution", "answer": "Final answer"}}
+        {{"prompt": "Problem description", "solution": "Step-by-step solution showing all work", "answer": "Final answer with units"}}
       ]
     }}
   }},
@@ -171,22 +276,15 @@ Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
   ]
 }}
 
-FORMULA REQUIREMENTS:
-- Each formula MUST define all variables and include at least one worked example
-- Use 'expression' field (not 'formula'), 'notes' field (not 'when_to_use')
-- Variables must be a dictionary: {{"symbol": "meaning"}}
+🔍 PRE-FINALIZATION CHECKLIST:
+✔ Coverage — every major topic from the material is represented
+✔ Depth — each concept has explanation + example + exam tip
+✔ Accuracy — formulas consistent with text; variables defined
+✔ Completeness — exam_practice ≥4 MCQ, ≥3 short-answer, ≥2 problems
+✔ Glossary — ≥8 terms with substantive definitions
+✔ JSON validity — all brackets and arrays closed; no markdown fences
 
-EXAM PRACTICE REQUIREMENTS:
-- Minimum: 4 multiple-choice, 3 short-answer, 2 problem-solving questions
-- MCQ options MUST be an array: ["A) option", "B) option", ...] (not an object)
-- Include 'answer' field (not 'correct')
-
-CRITICAL: 
-- Output PURE JSON only (no ```json``` markers)
-- Include ALL sections from the schema
-- Make content exam-focused and actionable
-- Use the language specified above for ALL text
-- Complete all arrays and objects - do not truncate"""
+OUTPUT PURE JSON NOW (no other text):"""
 
 
 def get_no_files_prompt(topic: str, language: str = "en") -> str:
@@ -305,7 +403,8 @@ def merge_summaries(
     chunk_summaries: List[str],
     language: str = "en",
     additional_instructions: str = "",
-    out_budget: int = 1500
+    out_budget: int = 1500,
+    domain: str = "general"
 ) -> str:
     """
     Merge chunk summaries into final JSON summary (REDUCE phase)
@@ -314,7 +413,7 @@ def merge_summaries(
     # Combine all chunk summaries
     combined = merge_texts(chunk_summaries, separator="\n\n---SECTION BREAK---\n\n")
     
-    user_prompt = get_final_merge_prompt(language, additional_instructions)
+    user_prompt = get_final_merge_prompt(language, additional_instructions, domain)
     user_prompt += f"\n\nSOURCE SUMMARIES:\n{combined}"
     
     return call_openai(
@@ -333,6 +432,7 @@ def map_reduce_summary(
 ) -> str:
     """
     Main map-reduce pipeline for large document summarization
+    Includes domain detection and quality guardrails
     
     Args:
         full_text: Complete text to summarize
@@ -344,6 +444,14 @@ def map_reduce_summary(
     Returns:
         JSON string with complete summary
     """
+    # 1. DETECT DOMAIN
+    domain = detect_domain(full_text)
+    print(f"[DOMAIN DETECTION] Detected: {domain}")
+    
+    # Append domain hint to instructions
+    domain_hint = f"Content domain: {domain}. Adjust depth and style accordingly."
+    enhanced_instructions = f"{additional_instructions}\n\n{domain_hint}" if additional_instructions else domain_hint
+    
     # Estimate input tokens
     estimated_tokens = approx_tokens_from_text_len(len(full_text))
     
@@ -353,7 +461,7 @@ def map_reduce_summary(
     
     if not use_chunking:
         # Small document: single-pass summary
-        user_prompt = get_final_merge_prompt(language, additional_instructions)
+        user_prompt = get_final_merge_prompt(language, enhanced_instructions, domain)
         user_prompt += f"\n\nCOURSE MATERIAL:\n{full_text}"
         
         return call_openai(
@@ -365,11 +473,11 @@ def map_reduce_summary(
     # Large document: map-reduce
     print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using chunking")
     
-    # 1. SPLIT into chunks
+    # 2. SPLIT into chunks
     chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
     print(f"[MAP-REDUCE] Split into {len(chunks)} chunks")
     
-    # 2. MAP: Summarize each chunk
+    # 3. MAP: Summarize each chunk
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
         print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}...")
@@ -381,13 +489,14 @@ def map_reduce_summary(
         )
         chunk_summaries.append(summary)
     
-    # 3. REDUCE: Merge into final JSON
-    print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries...")
+    # 4. REDUCE: Merge into final JSON
+    print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
     final_summary = merge_summaries(
         chunk_summaries,
         language=language,
-        additional_instructions=additional_instructions,
-        out_budget=min(out_cap, MERGE_OUTPUT_BUDGET[1])
+        additional_instructions=enhanced_instructions,
+        out_budget=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        domain=domain
     )
     
     print("[MAP-REDUCE] Complete!")

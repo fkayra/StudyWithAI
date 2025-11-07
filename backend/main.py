@@ -1025,6 +1025,7 @@ async def summarize_from_files(
     try:
         from app.utils.json_helpers import parse_json_robust, create_error_response
         from app.utils.quality import enforce_exam_ready, validate_summary_completeness
+        from app.services.summary import quality_score
         
         language = req.language or "en"
         additional_instructions = req.prompt or ""
@@ -1048,6 +1049,10 @@ async def summarize_from_files(
                 "Failed to parse AI response. This may be due to response format issues.",
                 len(result_json)
             )
+        
+        # Calculate quality score
+        score = quality_score(result)
+        print(f"[QUALITY GUARDRAIL] Score: {score}/1.0 (threshold: 0.7)")
         
         # Enforce exam-ready quality standards
         result = enforce_exam_ready(result)
