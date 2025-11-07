@@ -72,21 +72,24 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
     payload = _trim(payload)
     summary = payload.get("summary", {})
 
-    # 2) Minimum coverage
+    # 2) Minimum coverage - SOFT enforcement (don't drop sections aggressively)
     sections: List[Dict[str, Any]] = summary.get("sections") or []
-    # Drop empty sections
-    sections = [s for s in sections if isinstance(s, dict) and s.get("concepts")]
-    # Keep only sections with ≥2 concepts
+    # Only drop completely empty sections
+    sections = [s for s in sections if isinstance(s, dict) and (s.get("concepts") or s.get("heading"))]
+    
+    # Filter concepts but keep sections even if they have only 1 concept (SHORT sections allowed)
     filtered_sections = []
     for s in sections:
         concepts = s.get("concepts") or []
+        # Only require term + (definition OR explanation) - very lenient
         concepts = [c for c in concepts if isinstance(c, dict) and c.get("term") and (c.get("definition") or c.get("explanation"))]
-        if len(concepts) >= 2:
+        if len(concepts) >= 1:  # Allow SHORT sections (1 concept)
             s["concepts"] = concepts
             filtered_sections.append(s)
-    # If still < 4 sections, keep best ones (by concept count) up to what we have
+    
+    # Sort by concept count but keep ALL sections (Soft Merge mode)
     filtered_sections.sort(key=lambda x: len(x.get("concepts", [])), reverse=True)
-    summary["sections"] = filtered_sections[:max(len(filtered_sections), 4)] if filtered_sections else []
+    summary["sections"] = filtered_sections  # Keep all, don't limit to 4
 
     # 3) Ensure concrete example per concept (domain-conditional)
     for sec in summary.get("sections", []):
