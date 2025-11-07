@@ -1030,6 +1030,9 @@ async def summarize_from_files(
         language = req.language or "en"
         additional_instructions = req.prompt or ""
         
+        # Track generation start time
+        generation_start = time.time()
+        
         # Use map-reduce pipeline
         result_json = map_reduce_summary(
             full_text=merged_text,
@@ -1066,8 +1069,13 @@ async def summarize_from_files(
         if warnings:
             print(f"[SUMMARY QUALITY] Warnings ({len(warnings)}): {warnings}")
         
+        # Track self-repair metrics
+        self_repair_triggered = False
+        self_repair_improvement = None
+        
         # Self-repair if critical issues exist (low score or critical warnings)
         if needs_repair and score < 0.7:
+            self_repair_triggered = True
             print(f"[SELF-REPAIR] Triggering repair (score: {score}, issues: {len(warnings)})")
             try:
                 repair_prompt = create_self_repair_prompt(result, warnings, language)
@@ -1087,14 +1095,65 @@ async def summarize_from_files(
                     print(f"[SELF-REPAIR] Score after repair: {repaired_score}/1.0")
                     
                     if repaired_score > score:
-                        print(f"[SELF-REPAIR] Accepted (improvement: +{repaired_score - score:.2f})")
+                        self_repair_improvement = repaired_score - score
+                        print(f"[SELF-REPAIR] Accepted (improvement: +{self_repair_improvement:.2f})")
                         result = repaired_result
+                        score = repaired_score  # Update score
                     else:
                         print(f"[SELF-REPAIR] Rejected (no improvement)")
                 except Exception as e:
                     print(f"[SELF-REPAIR] Parse failed: {e}, keeping original")
             except Exception as e:
                 print(f"[SELF-REPAIR] Failed: {e}, keeping original")
+        
+        # Calculate generation time and metrics
+        generation_time = time.time() - generation_start
+        
+        # Extract quality metrics for telemetry
+        summary = result.get("summary", {})
+        num_concepts = sum(len(sec.get("concepts", [])) for sec in summary.get("sections", []))
+        num_formulas = len(summary.get("formula_sheet", []))
+        exam_practice = summary.get("exam_practice", {})
+        num_exam_questions = (
+            len(exam_practice.get("multiple_choice", [])) +
+            len(exam_practice.get("short_answer", [])) +
+            len(exam_practice.get("problem_solving", []))
+        )
+        num_glossary = len(summary.get("glossary", []))
+        
+        # Record telemetry (non-blocking)
+        try:
+            from app.services.telemetry import record_summary_quality
+            from app.services.summary import detect_domain
+            
+            # Detect domain from original text
+            domain = detect_domain(merged_text)
+            
+            # Estimate total tokens used (rough approximation)
+            total_tokens_used = estimated_tokens + out_cap
+            
+            record_summary_quality(
+                db=db,
+                request_hash=cache_key,
+                user_id=current_user.id if current_user else None,
+                plan=plan,
+                domain=domain,
+                language=language,
+                input_tokens=estimated_tokens,
+                num_chunks=len(files_data),  # Rough estimate
+                quality_score=score,
+                num_concepts=num_concepts,
+                num_formulas=num_formulas,
+                num_exam_questions=num_exam_questions,
+                num_glossary_terms=num_glossary,
+                self_repair_triggered=self_repair_triggered,
+                self_repair_improvement=self_repair_improvement,
+                total_tokens_used=total_tokens_used,
+                generation_time_seconds=generation_time,
+                warnings=warnings
+            )
+        except Exception as telemetry_error:
+            print(f"[TELEMETRY WARNING] Failed to record: {telemetry_error}")
         
         # Cache the result (only if not error)
         if "error" not in result.get("summary", {}).get("title", "").lower():
@@ -2016,6 +2075,69 @@ async def delete_folder(
     db.commit()
     
     return {"status": "success"}
+
+@app.get("/admin/quality-stats")
+async def get_quality_stats_endpoint(days: int = 7, db: Session = Depends(get_db)):
+    """Get quality statistics for recent summaries (admin only)"""
+    try:
+        from app.services.telemetry import get_quality_stats
+        stats = get_quality_stats(db, days=days)
+        return stats
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/admin/low-quality-patterns")
+async def get_low_quality_patterns_endpoint(
+    threshold: float = 0.6,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Get patterns in low-quality summaries for improvement (admin only)"""
+    try:
+        from app.services.telemetry import get_low_quality_patterns
+        patterns = get_low_quality_patterns(db, threshold=threshold, limit=limit)
+        return {"patterns": patterns, "threshold": threshold}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+class FeedbackRequest(BaseModel):
+    request_hash: str
+    feedback_type: str  # 'rating', 'report_issue', 'suggestion'
+    rating: Optional[int] = None
+    issue_category: Optional[str] = None  # 'shallow', 'incorrect', 'incomplete', 'formatting'
+    comment: Optional[str] = None
+    viewed_sections: Optional[List[str]] = None
+    time_on_page_seconds: Optional[int] = None
+
+
+@app.post("/feedback")
+async def submit_feedback(
+    req: FeedbackRequest,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Submit user feedback on a summary"""
+    try:
+        from app.services.telemetry import record_user_feedback
+        
+        record_user_feedback(
+            db=db,
+            request_hash=req.request_hash,
+            user_id=current_user.id if current_user else None,
+            feedback_type=req.feedback_type,
+            rating=req.rating,
+            issue_category=req.issue_category,
+            comment=req.comment,
+            viewed_sections=req.viewed_sections,
+            time_on_page_seconds=req.time_on_page_seconds
+        )
+        
+        return {"status": "success", "message": "Feedback recorded"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 
 @app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")

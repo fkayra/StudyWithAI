@@ -253,6 +253,11 @@ YOUR TASK:
 - Substantive definitions (not just dictionary)
 - Include: technical meaning, relevance, distinctions from related terms
 
+**Citations:**
+- For each concept/formula, preserve _source metadata if present
+- Transform into citations array with format: {{"section": "heading_path", "content_type": "concept|formula", "term": "..."}}
+- Provide specific references students can trace back to source material
+
 🔒 JSON OUTPUT REQUIREMENTS:
 ✓ Pure JSON only (NO markdown fences like ```json```)
 ✓ Complete structure (close all brackets, braces, quotes)
@@ -452,7 +457,8 @@ def merge_summaries(
     language: str = "en",
     additional_instructions: str = "",
     out_budget: int = 1500,
-    domain: str = "general"
+    domain: str = "general",
+    chunk_citations: List[Dict] = None
 ) -> str:
     """
     Merge structured chunk JSONs into final exam-ready summary (REDUCE phase)
@@ -484,6 +490,28 @@ def merge_summaries(
                 "example": ""
             })
     
+    # Enrich concepts with source citations
+    if chunk_citations:
+        for i, chunk_json in enumerate(chunk_summaries):
+            try:
+                chunk_data = json.loads(chunk_json)
+                citation_info = chunk_citations[i] if i < len(chunk_citations) else {}
+                
+                # Add citation metadata to each concept
+                for concept in chunk_data.get("concepts", []):
+                    concept["_source"] = {
+                        "chunk": i + 1,
+                        "heading": citation_info.get("heading_path", "Unknown")
+                    }
+                
+                for formula in chunk_data.get("formulas", []):
+                    formula["_source"] = {
+                        "chunk": i + 1,
+                        "heading": citation_info.get("heading_path", "Unknown")
+                    }
+            except:
+                pass
+    
     # Create structured source material for REDUCE
     aggregated_knowledge = {
         "total_concepts": len(all_concepts),
@@ -493,7 +521,8 @@ def merge_summaries(
         "concepts": all_concepts,
         "formulas": all_formulas,
         "theorems": all_theorems,
-        "examples": all_examples
+        "examples": all_examples,
+        "source_structure": chunk_citations if chunk_citations else []
     }
     
     user_prompt = get_final_merge_prompt(language, additional_instructions, domain)
@@ -515,7 +544,7 @@ def map_reduce_summary(
 ) -> str:
     """
     Main map-reduce pipeline for large document summarization
-    Includes domain detection and quality guardrails
+    Includes domain detection, structure-aware chunking, and quality guardrails
     
     Args:
         full_text: Complete text to summarize
@@ -553,17 +582,48 @@ def map_reduce_summary(
             max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1])
         )
     
-    # Large document: map-reduce
-    print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using chunking")
+    # Large document: map-reduce with structure-aware chunking
+    print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using structure-aware chunking")
     
-    # 2. SPLIT into chunks
-    chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
-    print(f"[MAP-REDUCE] Split into {len(chunks)} chunks")
+    # 2. EXTRACT STRUCTURE
+    from app.utils.structure_parser import extract_heading_hierarchy, chunk_by_headings, blocks_to_text
     
-    # 3. MAP: Summarize each chunk (with adaptive budgeting)
+    try:
+        blocks = extract_heading_hierarchy(full_text)
+        structured_chunks = chunk_by_headings(blocks, target_tokens=CHUNK_INPUT_TARGET)
+        print(f"[STRUCTURE] Extracted {len(blocks)} blocks, {len(structured_chunks)} structured chunks")
+        
+        # Convert structured chunks back to text with heading context
+        chunks_with_context = []
+        chunk_metadata = []
+        
+        for chunk_blocks, heading_path in structured_chunks:
+            chunk_text = blocks_to_text(chunk_blocks)
+            chunks_with_context.append(chunk_text)
+            chunk_metadata.append({
+                "heading_path": heading_path,
+                "block_count": len(chunk_blocks)
+            })
+        
+        chunks = chunks_with_context
+        print(f"[STRUCTURE] Heading-aware chunks: {[m['heading_path'] for m in chunk_metadata]}")
+        
+    except Exception as e:
+        # Fallback to simple chunking if structure extraction fails
+        print(f"[STRUCTURE WARNING] Failed to extract structure: {e}, using simple chunking")
+        chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
+        chunk_metadata = [{"heading_path": f"Chunk {i+1}", "block_count": 0} for i in range(len(chunks))]
+    
+    print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
+    
+    # 3. MAP: Summarize each chunk (with adaptive budgeting and citation tracking)
     chunk_summaries = []
+    chunk_citations = []
+    
     for i, chunk in enumerate(chunks):
-        print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}...")
+        heading_path = chunk_metadata[i].get("heading_path", f"Chunk {i+1}")
+        print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}: {heading_path}")
+        
         summary = summarize_chunk(
             chunk,
             language=language,
@@ -571,15 +631,24 @@ def map_reduce_summary(
             out_budget=None  # Let adaptive budget calculate
         )
         chunk_summaries.append(summary)
+        
+        # Track citation metadata for this chunk
+        chunk_citations.append({
+            "chunk_id": i + 1,
+            "heading_path": heading_path,
+            "char_start": sum(len(chunks[j]) for j in range(i)),
+            "char_end": sum(len(chunks[j]) for j in range(i+1))
+        })
     
-    # 4. REDUCE: Merge into final JSON
+    # 4. REDUCE: Merge into final JSON with citation tracking
     print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
     final_summary = merge_summaries(
         chunk_summaries,
         language=language,
         additional_instructions=enhanced_instructions,
         out_budget=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
-        domain=domain
+        domain=domain,
+        chunk_citations=chunk_citations
     )
     
     print("[MAP-REDUCE] Complete!")
