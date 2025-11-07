@@ -34,7 +34,9 @@ def ensure_concrete_example(example_text: str, context_text: str) -> str:
     # Already good?
     if domain == "quant" and re.search(r"\d", text):
         return text
-    if domain == "qual" and re.search(r"\b(1[5-9]\d{2}|20\d{2})\b|".+?"|'.+?'|[A-Z][a-z]+ [A-Z][a-z]+", text):
+    # Check for qual anchors: dates (1500-2099), quotes, or proper names
+    qual_pattern = r'''\b(1[5-9]\d{2}|20\d{2})\b|".+?"|'.+?'|[A-Z][a-z]+ [A-Z][a-z]+'''
+    if domain == "qual" and re.search(qual_pattern, text):
         return text
 
     # Inject minimal, domain-appropriate postfix
