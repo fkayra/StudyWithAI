@@ -46,10 +46,10 @@ def clamp(v: float, lo: float, hi: float) -> float:
 def choose_max_output_tokens(t_in: int, cap: int) -> int:
     """
     Choose adaptive max_output_tokens based on input size
-    Target: ~25% of input, but at least 1200, capped at plan limit
+    Target: ~40% of input, but at least 4000 (exam-ready needs space), capped at plan limit
     """
-    raw = int(t_in * 0.25)  # 25% output target
-    return int(clamp(max(1200, raw), 600, cap))
+    raw = int(t_in * 0.4)  # 40% output target (exam-ready is detailed)
+    return int(clamp(max(4000, raw), 4000, cap))  # Minimum 4000 for exam-ready schema
 
 
 def estimate_file_tokens(content: bytes, token_per_char: float = 0.25) -> int:
