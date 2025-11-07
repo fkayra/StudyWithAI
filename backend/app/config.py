@@ -23,7 +23,7 @@ PLAN_LIMITS = {
         max_total_mb=20,
         max_pages_total=80,
         max_input_tokens=12000,
-        max_output_cap=1200,
+        max_output_cap=4000,  # Increased from 1200 for exam-ready summaries
         rate_limit_24h=10
     ),
     "standard": PlanLimits(
@@ -32,7 +32,7 @@ PLAN_LIMITS = {
         max_total_mb=50,
         max_pages_total=200,
         max_input_tokens=40000,
-        max_output_cap=8000,
+        max_output_cap=8000,  # Adequate for full exam-ready summaries
         rate_limit_24h=50
     ),
     "premium": PlanLimits(  # also handle "pro" alias
