@@ -40,10 +40,16 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-# Cookie settings - secure cookies only in production
-IS_PRODUCTION = os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER") or os.getenv("PORT")
-COOKIE_SECURE = IS_PRODUCTION is not None  # True in production, False in development
-COOKIE_SAMESITE = "none" if IS_PRODUCTION else "lax"  # "none" for cross-site (production), "lax" for same-site (dev)
+# Cookie settings - Railway/production detection
+# Railway always sets PORT env var, use that as production indicator
+IS_PRODUCTION = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER") or os.getenv("PORT"))
+
+# For Railway (production), always use secure cookies with SameSite=none for cross-origin (Vercel + Railway)
+# Railway provides HTTPS by default, so secure=True is safe
+COOKIE_SECURE = IS_PRODUCTION  # True in production (Railway), False in local dev
+COOKIE_SAMESITE = "none" if IS_PRODUCTION else "lax"
+
+print(f"[AUTH CONFIG] IS_PRODUCTION={IS_PRODUCTION}, COOKIE_SECURE={COOKIE_SECURE}, COOKIE_SAMESITE={COOKIE_SAMESITE}")
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
