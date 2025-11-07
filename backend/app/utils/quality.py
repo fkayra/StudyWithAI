@@ -3,6 +3,8 @@ Quality enforcement for exam-ready summaries
 NO PLACEHOLDER GENERATION - only validation and self-repair triggers
 """
 from typing import Dict, Any, List, Tuple
+import re
+import json
 
 
 def enforce_exam_ready(result: Dict[str, Any]) -> Dict[str, Any]:
