@@ -252,7 +252,7 @@ Ensure every part of your outline is reflected in the final JSON.
 Cross-check: did you include all topics? Multiple examples per concept? Detailed formulas?
 """
     
-    return f"""You are StudyWithAI, an elite academic tutor. Your mission: transform structured knowledge into a complete, exam-ready study guide.
+    return f"""You are StudyWithAI, an elite academic tutor. Your mission: transform structured knowledge into comprehensive, deeply explanatory study notes.
 
 {lang_instr}
 
@@ -416,16 +416,16 @@ def get_no_files_prompt(topic: str, language: str = "en") -> str:
     """Prompt for generating summary without uploaded files"""
     lang_instr = "Generate in TURKISH." if language == "tr" else "Generate in ENGLISH."
     
-    return f"""Create a comprehensive study guide on this topic: {topic}
+    return f"""Create comprehensive study notes on this topic: {topic}
 
 {lang_instr}
 
-Use the same JSON structure as file-based summaries. Include exam-ready content:
+Use the same JSON structure as file-based summaries. Focus on depth, NOT practice questions:
 - Learning objectives
-- Core concepts with explanations and examples  
-- Formula sheet (if applicable)
-- Glossary of key terms
-- Practice questions
+- Core concepts with extensive explanations (3-4 paragraphs) and multiple worked examples
+- Formula sheet with derivations and worked examples (if applicable)
+- Glossary of key terms (minimum 10 terms)
+- DO NOT include practice questions - use all tokens for explanations and examples
 
 Output valid JSON only (no markdown code blocks)."""
 
