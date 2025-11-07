@@ -11,6 +11,7 @@ interface Concept {
   explanation: string
   example?: string
   key_points?: string[]
+  pitfalls?: string[]  // New field from plan-then-write prompt
 }
 
 interface Section {
