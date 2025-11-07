@@ -59,7 +59,7 @@ interface Summary {
   sections: Section[]
   formula_sheet?: Formula[]
   glossary?: GlossaryTerm[]
-  exam_practice?: ExamPractice
+  // exam_practice removed - no longer generated
 }
 
 interface Citation {
