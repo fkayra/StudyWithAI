@@ -185,3 +185,154 @@ INSTRUCTIONS:
 
 Output the COMPLETE improved study notes as valid JSON (NO exam_practice field).
 """
+
+
+def validate_and_enhance_quality(result: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    Post-processing validator to enforce domain-agnostic quality rules.
+    
+    Returns:
+        (enhanced_result, repair_prompts): Enhanced JSON and list of repair prompts if needed
+    """
+    repair_prompts = []
+    
+    if "summary" not in result:
+        return result, repair_prompts
+    
+    summary = result["summary"]
+    sections = summary.get("sections", [])
+    
+    # 1. Validate examples (reject vague ones)
+    vague_examples = []
+    for i, section in enumerate(sections):
+        for j, concept in enumerate(section.get("concepts", [])):
+            example = concept.get("example", "")
+            if example:
+                # Check if example is vague
+                is_vague = any(re.search(pattern, example.lower()) for pattern in VAGUE_EXAMPLE_PATTERNS)
+                # Check if example is too short (likely incomplete)
+                is_too_short = len(example.split()) < 10
+                
+                if is_vague or is_too_short:
+                    vague_examples.append(f"Section '{section.get('heading', i+1)}', Concept '{concept.get('term', j+1)}'")
+    
+    if vague_examples:
+        repair_prompts.append(
+            f"The following concepts have vague or incomplete examples:\n" +
+            "\n".join(f"- {ex}" for ex in vague_examples) +
+            "\n\nFor EACH listed concept, append a concrete, step-wise worked example:\n" +
+            "- If STEM/Economics/CS: include numeric values with calculations\n" +
+            "- If Law/Literature: provide realistic scenario with clear steps\n" +
+            "Do NOT rewrite existing content. ONLY add the concrete examples."
+        )
+    
+    # 2. Check algorithms for pseudo-code
+    missing_pseudocode = []
+    for i, section in enumerate(sections):
+        heading_lower = section.get("heading", "").lower()
+        # Check if this is likely an algorithm section
+        is_algorithm = any(word in heading_lower for word in ['algorithm', 'search', 'sort', 'tree', 'graph', 'dynamic'])
+        
+        if is_algorithm:
+            for j, concept in enumerate(section.get("concepts", [])):
+                explanation = concept.get("explanation", "")
+                # Check if pseudo-code is present
+                has_control_flow = any(keyword in explanation.lower() for keyword in CONTROL_FLOW_KEYWORDS)
+                has_code_structure = any(char in explanation for char in ['{', '}', '←', '→'])
+                
+                if not (has_control_flow or has_code_structure):
+                    missing_pseudocode.append(f"Section '{section.get('heading', i+1)}', Concept '{concept.get('term', j+1)}'")
+    
+    if missing_pseudocode:
+        repair_prompts.append(
+            f"The following algorithm concepts lack pseudo-code:\n" +
+            "\n".join(f"- {alg}" for alg in missing_pseudocode) +
+            "\n\nFor EACH listed algorithm, append a 6-8 line pseudo-code block in plain text.\n" +
+            "Include control flow (if/for/while/return) and state time/space complexity.\n" +
+            "Do NOT rewrite existing content. ONLY add the pseudo-code."
+        )
+    
+    # 3. Validate formulas
+    formula_issues = []
+    formulas = summary.get("formula_sheet", [])
+    for i, formula in enumerate(formulas):
+        expression = formula.get("expression", "")
+        worked_example = formula.get("worked_example", "")
+        
+        # Check if expression is actually control flow (should be in worked_example instead)
+        has_control_in_expr = any(keyword in expression.lower() for keyword in CONTROL_FLOW_KEYWORDS)
+        if has_control_in_expr and len(expression) > 100:  # Long control flow text
+            formula_issues.append(f"Formula '{formula.get('name', i+1)}' has control flow in expression (move to worked_example)")
+        
+        # Check if worked example is missing or vague
+        if not worked_example or len(worked_example.split()) < 10:
+            formula_issues.append(f"Formula '{formula.get('name', i+1)}' lacks concrete worked example")
+    
+    if formula_issues:
+        repair_prompts.append(
+            f"Formula sheet issues:\n" +
+            "\n".join(f"- {issue}" for issue in formula_issues) +
+            "\n\nFix by:\n" +
+            "1. Moving control flow from 'expression' to 'worked_example' or 'notes'\n" +
+            "2. Adding concrete worked examples with actual numbers and step-by-step calculations\n" +
+            "Do NOT rewrite existing content. ONLY fix the listed issues."
+        )
+    
+    # 4. Enhance citations (add headings if missing)
+    citations = result.get("citations", [])
+    enhanced_citations = []
+    for citation in citations:
+        if "section" not in citation or not citation.get("section"):
+            # Try to extract heading from evidence
+            evidence = citation.get("evidence", "")
+            # Best-effort: use first sentence or truncate
+            heading = evidence.split('.')[0][:50] if evidence else "Source"
+            citation["section"] = heading
+        
+        # Truncate evidence to ≤30 words if too long
+        evidence = citation.get("evidence", "")
+        words = evidence.split()
+        if len(words) > 30:
+            citation["evidence"] = ' '.join(words[:30]) + "..."
+        
+        enhanced_citations.append(citation)
+    
+    result["citations"] = enhanced_citations
+    
+    # 5. Remove hype numbers from explanations
+    for section in sections:
+        for concept in section.get("concepts", []):
+            explanation = concept.get("explanation", "")
+            for pattern in HYPE_PATTERNS:
+                if re.search(pattern, explanation, re.IGNORECASE):
+                    # Replace with generic "asymptotically better" or similar
+                    explanation = re.sub(pattern, "asymptotically better", explanation, flags=re.IGNORECASE)
+                    concept["explanation"] = explanation
+    
+    # 6. Check glossary size
+    glossary = summary.get("glossary", [])
+    if len(glossary) < 12:
+        repair_prompts.append(
+            f"Glossary has only {len(glossary)} terms (target: 12-15).\n" +
+            f"Add {12 - len(glossary)} more key technical terms with single-sentence definitions.\n" +
+            "Do NOT rewrite existing content. ONLY add the missing glossary terms."
+        )
+    
+    return result, repair_prompts
+
+
+def has_concrete_example(example: str) -> bool:
+    """Check if an example is concrete (has numbers or specific details)"""
+    if not example or len(example.split()) < 10:
+        return False
+    
+    # Check for vague patterns
+    is_vague = any(re.search(pattern, example.lower()) for pattern in VAGUE_EXAMPLE_PATTERNS)
+    if is_vague:
+        return False
+    
+    # Check for concrete indicators (numbers, specific terms, steps)
+    has_numbers = bool(re.search(r'\d+', example))
+    has_steps = any(word in example.lower() for word in ['step', 'first', 'then', 'finally', 'given', 'result'])
+    
+    return has_numbers or has_steps
