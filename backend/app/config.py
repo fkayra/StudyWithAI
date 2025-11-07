@@ -65,7 +65,7 @@ CHUNK_OUTPUT_BUDGET = (200, 300)  # min, max output tokens per chunk summary
 MERGE_OUTPUT_BUDGET = (3000, 8000)  # min, max output tokens for final merge (DRAMATICALLY increased for exam-ready schema)
 
 # OpenAI configuration
-OPENAI_MODEL = "gpt-4o-mini"  # or "gpt-4o" for better quality
+OPENAI_MODEL = "gpt-4o"  # Best quality model (was gpt-4o-mini)
 TEMPERATURE = 0.0
 TOP_P = 1.0
 
