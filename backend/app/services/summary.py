@@ -37,11 +37,16 @@ OUTPUT REQUIREMENTS:
 - COMPLETE: Formula sheet, glossary, and exam practice questions REQUIRED
 - JSON ONLY: Output pure JSON (no markdown, no extra text)
 
-BEFORE FINALIZING:
-- Verify all formulas have worked examples
-- Ensure glossary has ALL key terms
-- Check that exam practice covers main concepts
-- Validate JSON structure is complete and valid"""
+⚠️ PRE-FINALIZATION SELF-CHECK:
+Before outputting, verify your work against your internal plan:
+✓ Did you cover all topics from your outline?
+✓ Does every formula have: expression + variables + worked example?
+✓ Are there ≥4 MCQ, ≥3 short-answer, ≥2 problem-solving questions?
+✓ Does glossary have ≥8 substantive terms?
+✓ Is JSON structure complete and valid (all brackets closed)?
+✓ Did you avoid generic exam tips? (Each tip must be concept-specific)
+
+If any check fails, revise before output."""
 
 
 def get_chunk_summary_prompt(language: str = "en") -> str:
@@ -176,6 +181,7 @@ def quality_score(result: dict) -> float:
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
     Domain-adaptive prompt for merging chunk summaries into final JSON (reduce phase)
+    Includes chain-of-thought planning for higher quality single-call output
     Adjusts emphasis based on detected content type (technical/social/procedural/general)
     """
     # Language instruction
@@ -196,9 +202,30 @@ def get_final_merge_prompt(language: str = "en", additional_instructions: str = 
     domain_instr = domain_guidance.get(domain, domain_guidance["general"])
     additional = f"\n\nUSER ADDITIONAL REQUIREMENTS:\n{additional_instructions}" if additional_instructions else ""
     
+    # Chain-of-thought planning instruction
+    planning_instr = """
+⚡ CRITICAL: TWO-STEP INTERNAL PROCESS (DO NOT OUTPUT THE PLAN)
+
+STEP 1 - INTERNAL PLANNING (think, don't write):
+Before generating the JSON, mentally build a complete outline:
+1. List ALL major topics and subtopics from the source material
+2. Identify which concepts need formulas, which need worked examples
+3. Map out exam question coverage (which topics → MCQ, which → problems)
+4. Note critical formulas that MUST have variables + worked examples
+5. Plan glossary terms (technical vocabulary, key definitions)
+6. Structure sections logically (foundational concepts → advanced applications)
+
+STEP 2 - EXECUTION (write the JSON):
+Now produce the complete study guide following your internal plan.
+Ensure every part of your outline is reflected in the final JSON.
+Cross-check: did you include all topics? All formulas with examples? Sufficient exam questions?
+"""
+    
     return f"""You are StudyWithAI, an elite academic tutor. Your mission: transform structured knowledge into a complete, exam-ready study guide.
 
 {lang_instr}
+
+{planning_instr}
 
 🎯 DOMAIN CONTEXT:
 {domain_instr}{additional}
