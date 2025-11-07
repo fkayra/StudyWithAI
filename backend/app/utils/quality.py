@@ -61,15 +61,16 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(summary, dict):
         return payload
 
-    # 1) Trim empty arrays/fields recursively
-    def _trim(x):
+    # 1) Light trim - only remove None and empty strings (keep empty arrays for now)
+    def _trim_light(x):
         if isinstance(x, dict):
-            return {k: _trim(v) for k, v in x.items() if v not in (None, "", [], {})}
+            return {k: _trim_light(v) for k, v in x.items() if v is not None and v != ""}
         if isinstance(x, list):
-            return [ _trim(v) for v in x if v not in (None, "", [], {}) ]
+            # Keep the list, just trim its contents
+            return [_trim_light(item) for item in x if item is not None and item != ""]
         return x
 
-    payload = _trim(payload)
+    # Don't trim yet - work with original data
     summary = payload.get("summary", {})
 
     # 2) Minimum coverage - SOFT enforcement (don't drop sections aggressively)
@@ -143,9 +144,16 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
             if c.get("explanation"):
                 c["explanation"] = defill(c["explanation"])
     
-    # 6) Remove any lingering empties again
-    payload["summary"] = _trim(summary)
-    return _trim(payload)
+    # 6) Final cleanup - remove only truly empty fields, keep structure
+    def _final_trim(x):
+        if isinstance(x, dict):
+            return {k: _final_trim(v) for k, v in x.items() if v is not None and v != "" and v != []}
+        if isinstance(x, list):
+            return [_final_trim(item) for item in x if item is not None and item != "" and item != {}]
+        return x
+    
+    payload["summary"] = summary
+    return _final_trim(payload)
 
 
 def validate_summary_completeness(result: Dict[str, Any]) -> Tuple[List[str], bool]:
