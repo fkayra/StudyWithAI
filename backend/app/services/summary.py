@@ -45,22 +45,58 @@ BEFORE FINALIZING:
 
 
 def get_chunk_summary_prompt(language: str = "en") -> str:
-    """Prompt for summarizing individual chunks (map phase)"""
+    """
+    Prompt for summarizing individual chunks (MAP phase)
+    Returns structured mini-JSON to preserve concept/formula/example separation
+    """
     lang_instr = "Write in TURKISH." if language == "tr" else "Write in ENGLISH."
     
-    return f"""Summarize this course excerpt into compact, information-dense bullet points.
+    return f"""Extract structured knowledge from this course excerpt.
 
 {lang_instr}
 
-Include:
-- Key concepts and definitions
-- Important formulas or principles
-- One concrete example per major point
-- Critical facts to remember
+OUTPUT AS VALID JSON (no markdown fences):
 
-Format: Plain text bullets, no JSON. Keep it dense and factual.
+{{
+  "concepts": [
+    {{
+      "term": "Concept name",
+      "definition": "Precise definition",
+      "explanation": "How it works, why it matters (2-3 sentences)",
+      "example": "Concrete example with numbers if applicable"
+    }}
+  ],
+  "formulas": [
+    {{
+      "name": "Formula name",
+      "expression": "Mathematical notation",
+      "variables": {{"x": "meaning", "y": "meaning"}},
+      "worked_example": "Step-by-step calculation with actual numbers"
+    }}
+  ],
+  "theorems": [
+    {{
+      "name": "Theorem/Principle name",
+      "statement": "Formal statement",
+      "proof_sketch": "Key proof steps or intuition",
+      "application": "When/how to use it"
+    }}
+  ],
+  "examples": [
+    {{
+      "context": "What problem/scenario",
+      "solution": "Step-by-step solution with calculations",
+      "key_insight": "Why this approach works"
+    }}
+  ]
+}}
 
-Do not include meta-commentary like "This document discusses...". Present the actual knowledge directly."""
+RULES:
+- Include ALL concepts, formulas, theorems, and worked examples from the text
+- NO meta-commentary ("this text discusses...") - extract direct knowledge
+- If no formulas/theorems, return empty arrays []
+- Every formula MUST have worked_example with actual numbers
+- Output ONLY valid JSON, no extra text"""
 
 
 def detect_domain(text: str) -> str:
@@ -160,26 +196,32 @@ def get_final_merge_prompt(language: str = "en", additional_instructions: str = 
     domain_instr = domain_guidance.get(domain, domain_guidance["general"])
     additional = f"\n\nUSER ADDITIONAL REQUIREMENTS:\n{additional_instructions}" if additional_instructions else ""
     
-    return f"""You are StudyWithAI, an elite academic tutor. Your mission: merge the source summaries into a single, exam-ready study guide.
+    return f"""You are StudyWithAI, an elite academic tutor. Your mission: transform structured knowledge into a complete, exam-ready study guide.
 
 {lang_instr}
 
 🎯 DOMAIN CONTEXT:
 {domain_instr}{additional}
 
-📚 COVERAGE LOGIC (apply to every document):
-1. Identify every MAJOR TOPIC or HEADING in the material (concept, theory, method, model, algorithm, formula group)
-2. For each topic, provide:
-   • Clear definition and purpose
-   • Detailed explanation (HOW it works, WHY it matters, WHEN to apply)
-   • Key formalism or equation (if applicable)
-   • Concrete example or case study (with numbers when possible)
-   • Common pitfalls or misconceptions
-   • Exam-style insight (how this is typically tested)
-3. Create an EXAM PRACTICE KIT with realistic questions:
-   • Multiple-choice (≥4 questions)
-   • Short-answer (≥3 questions)
-   • Problem-solving (≥2 questions)
+📚 SOURCE DATA FORMAT:
+You will receive pre-extracted structured knowledge with:
+- concepts[] (already has term/definition/explanation/example)
+- formulas[] (already has expression/variables/worked_example)
+- theorems[] (already has statement/proof_sketch/application)
+- examples[] (already has context/solution/key_insight)
+
+YOUR TASK:
+1. **Organize by topic**: Group related concepts/formulas/theorems into logical sections
+2. **Deduplicate**: If same concept appears multiple times, merge into single entry (keep best explanation + all examples)
+3. **Enrich**: Add exam_tips to each concept (specific pitfalls, how it's tested, quick checks)
+4. **Complete**: Build formula_sheet, glossary, and exam_practice from the source material
+5. **Verify**: Every formula has worked_example, every concept has concrete example
+
+🎯 QUALITY REQUIREMENTS:
+- **NO generic tips**: "Study carefully" → ❌ | "Sign error common in step 3" → ✅
+- **NO placeholder content**: If source lacks info, use what's there (don't invent generic content)
+- **Preserve all worked examples**: Source examples must appear in your output
+- **Minimum coverage**: ≥4 MCQ, ≥3 short-answer, ≥2 problem-solving questions
 
 🚫 ABSOLUTE PROHIBITIONS:
 ✗ Describe the document → ✓ Teach the subject directly
@@ -379,18 +421,24 @@ def summarize_chunk(
     chunk_text: str,
     language: str = "en",
     additional_instructions: str = "",
-    out_budget: int = 300
+    out_budget: int = None
 ) -> str:
     """
     Summarize a single chunk of text (MAP phase)
-    Returns plain text bullet points
+    Returns structured mini-JSON with concepts/formulas/theorems/examples
     """
+    # Adaptive budget based on chunk content
+    if out_budget is None:
+        from app.utils.adaptive_budget import calculate_chunk_budget
+        out_budget = calculate_chunk_budget(chunk_text)
+        print(f"[MAP ADAPTIVE] Allocated {out_budget} tokens for this chunk")
+    
     user_prompt = get_chunk_summary_prompt(language)
     
     if additional_instructions:
         user_prompt += f"\n\nUser preferences: {additional_instructions}"
     
-    user_prompt += f"\n\nTEXT TO SUMMARIZE:\n{chunk_text}"
+    user_prompt += f"\n\nTEXT TO EXTRACT FROM:\n{chunk_text}"
     
     return call_openai(
         system_prompt=SYSTEM_PROMPT,
@@ -407,14 +455,49 @@ def merge_summaries(
     domain: str = "general"
 ) -> str:
     """
-    Merge chunk summaries into final JSON summary (REDUCE phase)
-    Returns JSON string
+    Merge structured chunk JSONs into final exam-ready summary (REDUCE phase)
+    Now receives structured mini-JSONs from MAP phase
+    Returns final JSON string
     """
-    # Combine all chunk summaries
-    combined = merge_texts(chunk_summaries, separator="\n\n---SECTION BREAK---\n\n")
+    import json
+    
+    # Parse chunk JSONs and aggregate
+    all_concepts = []
+    all_formulas = []
+    all_theorems = []
+    all_examples = []
+    
+    for i, chunk_json in enumerate(chunk_summaries):
+        try:
+            chunk_data = json.loads(chunk_json)
+            all_concepts.extend(chunk_data.get("concepts", []))
+            all_formulas.extend(chunk_data.get("formulas", []))
+            all_theorems.extend(chunk_data.get("theorems", []))
+            all_examples.extend(chunk_data.get("examples", []))
+        except json.JSONDecodeError as e:
+            print(f"[REDUCE WARNING] Chunk {i+1} JSON parse failed: {e}")
+            # Fallback: treat as plain text
+            all_concepts.append({
+                "term": f"Content from chunk {i+1}",
+                "definition": "Raw content (parse failed)",
+                "explanation": chunk_json[:500],
+                "example": ""
+            })
+    
+    # Create structured source material for REDUCE
+    aggregated_knowledge = {
+        "total_concepts": len(all_concepts),
+        "total_formulas": len(all_formulas),
+        "total_theorems": len(all_theorems),
+        "total_examples": len(all_examples),
+        "concepts": all_concepts,
+        "formulas": all_formulas,
+        "theorems": all_theorems,
+        "examples": all_examples
+    }
     
     user_prompt = get_final_merge_prompt(language, additional_instructions, domain)
-    user_prompt += f"\n\nSOURCE SUMMARIES:\n{combined}"
+    user_prompt += f"\n\nSTRUCTURED SOURCE KNOWLEDGE (from {len(chunk_summaries)} chunks):\n{json.dumps(aggregated_knowledge, indent=2, ensure_ascii=False)}"
     
     return call_openai(
         system_prompt=SYSTEM_PROMPT,
@@ -477,7 +560,7 @@ def map_reduce_summary(
     chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
     print(f"[MAP-REDUCE] Split into {len(chunks)} chunks")
     
-    # 3. MAP: Summarize each chunk
+    # 3. MAP: Summarize each chunk (with adaptive budgeting)
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
         print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}...")
@@ -485,7 +568,7 @@ def map_reduce_summary(
             chunk,
             language=language,
             additional_instructions=additional_instructions,
-            out_budget=CHUNK_OUTPUT_BUDGET[1]
+            out_budget=None  # Let adaptive budget calculate
         )
         chunk_summaries.append(summary)
     

@@ -60,9 +60,14 @@ MAX_IMAGE_MB = 5
 TOKEN_PER_CHAR = 0.25
 
 # Chunking configuration for map-reduce
-CHUNK_INPUT_TARGET = 2400  # target tokens per chunk for map phase
-CHUNK_OUTPUT_BUDGET = (200, 300)  # min, max output tokens per chunk summary
-MERGE_OUTPUT_BUDGET = (3000, 8000)  # min, max output tokens for final merge (DRAMATICALLY increased for exam-ready schema)
+CHUNK_INPUT_TARGET = 3500  # target tokens per chunk for map phase
+
+# Adaptive chunk output budget based on content density
+CHUNK_OUTPUT_BASE = 400  # Base budget for simple text
+CHUNK_OUTPUT_FORMULA_BOOST = 150  # Extra tokens if chunk has formulas
+CHUNK_OUTPUT_THEOREM_BOOST = 200  # Extra tokens if chunk has theorems/proofs
+
+MERGE_OUTPUT_BUDGET = (3000, 8000)  # min, max output tokens for final merge
 
 # OpenAI configuration
 OPENAI_MODEL = "gpt-4o"  # Best quality model (was gpt-4o-mini)

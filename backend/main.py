@@ -1054,13 +1054,47 @@ async def summarize_from_files(
         score = quality_score(result)
         print(f"[QUALITY GUARDRAIL] Score: {score}/1.0 (threshold: 0.7)")
         
-        # Enforce exam-ready quality standards
+        # Enforce exam-ready quality standards (NO placeholders)
         result = enforce_exam_ready(result)
         
-        # Validate and log warnings
-        warnings = validate_summary_completeness(result)
+        # Validate and check if self-repair needed
+        from app.utils.quality import create_self_repair_prompt
+        from app.services.summary import call_openai, SYSTEM_PROMPT
+        
+        warnings, needs_repair = validate_summary_completeness(result)
+        
         if warnings:
-            print(f"[SUMMARY QUALITY] Warnings: {warnings}")
+            print(f"[SUMMARY QUALITY] Warnings ({len(warnings)}): {warnings}")
+        
+        # Self-repair if critical issues exist (low score or critical warnings)
+        if needs_repair and score < 0.7:
+            print(f"[SELF-REPAIR] Triggering repair (score: {score}, issues: {len(warnings)})")
+            try:
+                repair_prompt = create_self_repair_prompt(result, warnings, language)
+                repaired_json = call_openai(
+                    system_prompt=SYSTEM_PROMPT,
+                    user_prompt=repair_prompt,
+                    max_output_tokens=min(out_cap, 8000),
+                    retry_on_length=False  # Don't retry on repair
+                )
+                
+                # Try to parse repaired output
+                try:
+                    repaired_result = parse_json_robust(repaired_json)
+                    
+                    # Check if repair improved quality
+                    repaired_score = quality_score(repaired_result)
+                    print(f"[SELF-REPAIR] Score after repair: {repaired_score}/1.0")
+                    
+                    if repaired_score > score:
+                        print(f"[SELF-REPAIR] Accepted (improvement: +{repaired_score - score:.2f})")
+                        result = repaired_result
+                    else:
+                        print(f"[SELF-REPAIR] Rejected (no improvement)")
+                except Exception as e:
+                    print(f"[SELF-REPAIR] Parse failed: {e}, keeping original")
+            except Exception as e:
+                print(f"[SELF-REPAIR] Failed: {e}, keeping original")
         
         # Cache the result (only if not error)
         if "error" not in result.get("summary", {}).get("title", "").lower():
