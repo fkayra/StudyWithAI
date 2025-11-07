@@ -361,6 +361,20 @@ export default function SummariesPage() {
                                 </ul>
                               </div>
                             )}
+                            
+                            {concept.pitfalls && concept.pitfalls.length > 0 && (
+                              <div className="mt-3">
+                                <div className="text-xs font-semibold text-amber-400 mb-2 uppercase tracking-wide">⚠️ Common Pitfalls</div>
+                                <ul className="space-y-2">
+                                  {concept.pitfalls.map((pitfall, i) => (
+                                    <li key={i} className="flex items-start text-sm">
+                                      <span className="text-amber-400 mr-2">⚠</span>
+                                      <span className="text-slate-300">{pitfall}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
