@@ -1060,10 +1060,15 @@ async def summarize_from_files(
         # Enforce exam-ready quality standards (NO placeholders)
         result = enforce_exam_ready(result)
         
-        # Validate and check if self-repair needed
-        from app.utils.quality import create_self_repair_prompt, validate_summary_completeness
+        # POST-PROCESSING VALIDATION (new domain-agnostic quality rules)
+        from app.utils.quality import create_self_repair_prompt, validate_summary_completeness, validate_and_enhance_quality
         from app.services.summary import call_openai, SYSTEM_PROMPT
         
+        # Step 1: Enhance and validate (auto-fixes citations, removes hype numbers)
+        result, repair_prompts = validate_and_enhance_quality(result)
+        print(f"[POST-PROCESSING] Auto-enhancements applied, {len(repair_prompts)} repair prompts generated")
+        
+        # Step 2: Completeness check (for telemetry warnings)
         warnings, needs_repair = validate_summary_completeness(result)
         
         if warnings:
@@ -1073,15 +1078,24 @@ async def summarize_from_files(
         self_repair_triggered = False
         self_repair_improvement = None
         
-        # Self-repair if critical issues exist (low score or critical warnings)
-        if needs_repair and score < 0.7:
+        # Step 3: Trigger self-repair if needed (domain-agnostic validators OR completeness issues)
+        if (repair_prompts or needs_repair) and score < 0.7:
             self_repair_triggered = True
-            print(f"[SELF-REPAIR] Triggering repair (score: {score}, issues: {len(warnings)})")
+            
+            # Combine all repair prompts
+            combined_repairs = []
+            if repair_prompts:
+                combined_repairs.extend(repair_prompts)
+            if needs_repair and warnings:
+                combined_repairs.append(create_self_repair_prompt(result, warnings, language))
+            
+            repair_instruction = "\n\n---\n\n".join(combined_repairs)
+            print(f"[SELF-REPAIR] Triggering repair (score: {score}, {len(combined_repairs)} issues)")
+            
             try:
-                repair_prompt = create_self_repair_prompt(result, warnings, language)
                 repaired_json = call_openai(
                     system_prompt=SYSTEM_PROMPT,
-                    user_prompt=repair_prompt,
+                    user_prompt=f"Fix the following issues in this summary:\n\n{repair_instruction}",
                     max_output_tokens=min(out_cap, 8000),
                     retry_on_length=False  # Don't retry on repair
                 )
