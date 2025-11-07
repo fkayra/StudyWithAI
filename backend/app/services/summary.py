@@ -207,52 +207,59 @@ def quality_score(result: dict) -> float:
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
-    Domain-adaptive prompt for merging chunk summaries into final JSON (reduce phase)
-    Includes chain-of-thought planning for higher quality single-call output
-    Adjusts emphasis based on detected content type (technical/social/procedural/general)
+    Two-phase "plan then write" prompt for merging chunk summaries into final JSON (reduce phase)
+    Automatically adapts to any academic domain
     """
-    # Language instruction
     lang_instr = (
-        "Generate the ENTIRE summary in TURKISH. All headings, explanations, and content must be in Turkish."
+        "Generate the ENTIRE summary in TURKISH. All headings and explanations must be in Turkish."
         if language == "tr"
         else "Generate the ENTIRE summary in ENGLISH."
     )
     
-    # Domain-specific guidance
-    domain_guidance = {
-        "technical": "This is TECHNICAL/SCIENTIFIC content. Emphasize: formulas with derivations, algorithms with complexity analysis, mathematical proofs, numerical examples with step-by-step calculations, and precise technical definitions.",
-        "social": "This is SOCIAL SCIENCES content. Emphasize: theoretical frameworks, conceptual relationships, historical context, real-world applications, case studies, critical analysis, and diverse perspectives.",
-        "procedural": "This is PROCEDURAL/MANUAL content. Emphasize: step-by-step processes, decision trees, implementation guidelines, prerequisites, common errors, troubleshooting tips, and practical application.",
-        "general": "Adapt your approach based on the content. Balance conceptual understanding with practical application."
-    }
-    
-    domain_instr = domain_guidance.get(domain, domain_guidance["general"])
     additional = f"\n\nUSER ADDITIONAL REQUIREMENTS:\n{additional_instructions}" if additional_instructions else ""
     
-    # Chain-of-thought planning instruction
-    planning_instr = """
-⚡ CRITICAL: TWO-STEP INTERNAL PROCESS (DO NOT OUTPUT THE PLAN)
+    # New plan-then-write core prompt
+    plan_and_write_core = """
+You are StudyWithAI, an elite academic tutor trained to turn any uploaded course material into a self-contained, exam-ready study guide.
 
-STEP 1 - INTERNAL PLANNING (think, don't write):
-Before generating the JSON, mentally build a complete outline:
-1. List ALL major topics and subtopics from the source material
-2. Identify which concepts need formulas and multiple worked examples
-3. Plan where to add numerical examples, edge cases, and complexity analysis
-4. Note critical formulas that MUST have variables + multiple worked examples
-5. Plan glossary terms (technical vocabulary, key definitions)
-6. Structure sections logically (foundational concepts → advanced applications)
-7. Allocate token budget: prioritize depth over breadth
+Your goal: produce a comprehensive summary that lets a student fully understand the subject and prepare for a final exam — without the original file.
 
-STEP 2 - EXECUTION (write the JSON):
-Now produce the comprehensive study notes following your internal plan.
-DO NOT include any practice questions (multiple-choice, short-answer, or problem-solving).
-Use all available token budget to deepen explanations, add numeric worked examples,
-include algorithm complexity notes, and clarify formulas with multiple examples.
-Ensure every part of your outline is reflected in the final JSON.
-Cross-check: did you include all topics? Multiple examples per concept? Detailed formulas?
+=====================
+🔁 TWO-PHASE WORKFLOW
+=====================
+1. PLAN PHASE:
+   - Analyze the material and detect its academic domain (math, biology, economics, literature, etc.).
+   - Identify 4–8 main sections that cover all key topics.
+   - For each section, plan:
+       • 2–4 core concepts or theories
+       • any important formulas, processes, or definitions
+       • 1 realistic example (with numeric or contextual details if possible)
+       • 1–2 common pitfalls or misconceptions
+   - Determine the logical teaching flow: which ideas depend on which.
+   - Only after the plan is clear, proceed to the write phase.
+
+2. WRITE PHASE:
+   - Teach the subject directly and deeply, not just summarize it.
+   - Include a 2–3 sentence overview and clear learning objectives.
+   - For each section:
+       • Term, definition, detailed explanation (2–3 paragraphs)
+       • Concrete example (use numbers or realistic cases when relevant)
+       • Key points and pitfalls
+   - Add a formula sheet (if applicable) with variable definitions and one worked example per formula.
+   - Add a glossary (10–15 key terms with simple definitions).
+   - Exclude any exam questions or user instructions.
+
+=====================
+✅ QUALITY TARGETS
+=====================
+- Coverage: capture every major concept.
+- Depth: explain each idea as if teaching a final review lecture.
+- Clarity: academic yet clear language; no jargon without definition.
+- Adaptation: structure and examples adjust automatically to the subject.
+- Universality: works for any discipline.
 """
     
-    return f"""You are StudyWithAI, an elite academic tutor. Your mission: transform structured knowledge into comprehensive, deeply explanatory study notes.
+    return f"""{plan_and_write_core}
 
 {lang_instr}{additional}
 
@@ -268,7 +275,7 @@ You will receive pre-extracted structured knowledge with:
 YOUR TASK:
 1. **Organize by topic**: Group related concepts/formulas/theorems into logical sections
 2. **Deduplicate**: If same concept appears multiple times, merge into single entry (keep best explanation + all examples)
-3. **Enrich deeply**: Add realistic examples, edge cases, complexity analysis to each concept
+3. **Enrich deeply**: Add realistic examples, edge cases, and practical insights to each concept
 4. **Complete**: Build comprehensive formula_sheet and glossary from the source material
 5. **Verify depth**: Every formula has worked examples, every concept has concrete examples
 
