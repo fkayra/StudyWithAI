@@ -80,3 +80,6 @@ MAX_OUTPUT_TOKENS_ABSOLUTE = 16000
 
 # Cache TTL (in seconds)
 CACHE_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
+
+# Density Boost mode threshold
+DENSITY_BOOST_THRESHOLD = 15000  # Auto-enable for very large documents

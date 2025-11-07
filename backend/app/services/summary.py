@@ -521,6 +521,13 @@ def map_reduce_summary(
     # Estimate input tokens
     estimated_tokens = approx_tokens_from_text_len(len(full_text))
     
+    # Auto "Density Boost" for very large inputs
+    from app.config import DENSITY_BOOST_THRESHOLD
+    if estimated_tokens > DENSITY_BOOST_THRESHOLD:
+        additional_instructions = (additional_instructions or "") + \
+            "\nUse 'Density Boost' compression mode: merge minor topics into compact short sections (1 concept each), keep all themes visible, prefer dense phrasing. Avoid dropping any topic."
+        print(f"[DENSITY BOOST] Enabled (estimated_tokens={estimated_tokens} > {DENSITY_BOOST_THRESHOLD})")
+    
     # Decide whether to use map-reduce
     # Use chunking if: forced, OR estimated tokens > threshold
     # Threshold increased to 10000 to allow longer single-pass summaries
