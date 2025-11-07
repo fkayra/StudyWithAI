@@ -243,10 +243,17 @@ Your goal: produce a comprehensive summary that lets a student fully understand 
    - Include a 2–3 sentence overview and clear learning objectives.
    - For each section:
        • Term, definition, detailed explanation (2–3 paragraphs)
-       • Concrete example (use numbers or realistic cases when relevant)
-       • Key points and pitfalls
-   - Add a formula sheet (if applicable) with variable definitions and one worked example per formula.
-   - Add a glossary (10–15 key terms with simple definitions).
+       • Concrete, step-wise example:
+         - STEM/Economics/CS: include at least one numeric value with step-by-step calculation
+         - Law/Literature/Social: provide realistic scenario with clear steps and criteria
+         - NO vague phrases like "consider a simple case" without actual steps
+       • When to use (conditions, scenarios where this concept applies)
+       • Limitations / common pitfalls (edge cases, mistakes to avoid)
+   - Add a formula sheet (if applicable):
+       • Define ALL variables with units/constraints
+       • Include one worked example per formula with actual numbers
+       • For algorithms (e.g., alpha-beta pruning): use 6-8 line pseudo-code instead of misleading formulas
+   - Add a glossary (12–15 key terms with single-sentence definitions).
    - Exclude any exam questions or user instructions.
 
 =====================
@@ -255,6 +262,9 @@ Your goal: produce a comprehensive summary that lets a student fully understand 
 - Coverage: capture every major concept.
 - Depth: explain each idea as if teaching a final review lecture.
 - Clarity: academic yet clear language; no jargon without definition.
+- Worked Examples: Every concept and formula must have concrete, step-wise examples (numeric when applicable).
+- Algorithms: Include 6–8 line pseudo-code in plain text + Big-O time/space complexity.
+- Sources: Each section should cite at least one source with heading/slide title + short quote (≤30 words).
 - Adaptation: structure and examples adjust automatically to the subject.
 - Universality: works for any discipline.
 """
@@ -297,9 +307,11 @@ Return valid JSON only (no markdown). Use this structure exactly:
             "term": "Concept Name",
             "definition": "...",
             "explanation": "...",
-            "example": "...",
+            "example": "Concrete step-wise example with numbers (STEM) or realistic scenario with steps (other domains)",
             "key_points": ["..."],
-            "pitfalls": ["..."]
+            "pitfalls": ["..."],
+            "when_to_use": ["When condition A holds", "When you need property B"],
+            "limitations": ["Does not work when X", "Common mistake: Y"]
           }}
         ]
       }}
@@ -307,14 +319,19 @@ Return valid JSON only (no markdown). Use this structure exactly:
     "formula_sheet": [
       {{
         "name": "Formula Name (if any)",
-        "expression": "...",
-        "variables": {{"x":"meaning","y":"meaning"}},
-        "worked_example": "..."
+        "expression": "Mathematical notation or 6-8 line pseudo-code for algorithms",
+        "variables": {{"x":"meaning with units","y":"meaning with constraints"}},
+        "worked_example": "Step-by-step calculation with actual numbers",
+        "complexity": "Time: O(n log n), Space: O(1)"
       }}
     ],
-    "glossary": [{{"term":"...","definition":"..."}}]
+    "glossary": [
+      {{"term":"...","definition":"Single clear sentence (12-15 entries total)"}}
+    ]
   }},
-  "citations": [{{"file_id":"source","evidence":"..."}}]
+  "citations": [
+    {{"file_id":"source","section":"Heading or slide title","evidence":"Short quote ≤30 words backing key claim"}}
+  ]
 }}
 
 =====================
@@ -322,13 +339,18 @@ Return valid JSON only (no markdown). Use this structure exactly:
 =====================
 Before outputting, verify:
 ✔ Coverage — every major concept is captured
-✔ Depth — each concept has 2–3 paragraph explanation + realistic example
-✔ Formula completeness — variables defined + one worked example per formula
-✔ Glossary — 10–15 terms with simple definitions
+✔ Depth — each concept has 2–3 paragraph explanation + concrete step-wise example
+✔ Examples — NO vague phrases like "consider a simple case"; ALL examples must have actual steps/numbers
+✔ Algorithms — include 6-8 line pseudo-code (with if/for/return) + Big-O complexity
+✔ Formulas — define ALL variables + worked example with numbers; use pseudo-code for algorithms (not misleading math notation)
+✔ Citations — each section has ≥1 citation with heading + short quote (≤30 words)
+✔ When to use & Limitations — each concept explains application conditions and edge cases
+✔ Glossary — 12-15 terms with single-sentence definitions
 ✔ JSON validity — all brackets and arrays closed; no markdown fences
 ✔ NO practice questions — confirm no MCQ, short-answer, or problem-solving sections
+✔ NO hype numbers — avoid exaggerated claims like "from 35^100 to manageable"; use correct Big-O instead
 
-Goal: produce a teaching-grade summary rich enough that a student could study it alone and pass their final exam.
+Goal: produce a final-ready study guide that works for ANY domain (STEM, law, literature, etc.).
 
 OUTPUT PURE JSON NOW (no other text):"""
 
