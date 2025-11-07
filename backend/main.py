@@ -1032,25 +1032,48 @@ async def summarize_from_files(
         
         try:
             result = json.loads(result_json)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             import re
+            print(f"[SUMMARY ERROR] JSON parse failed: {e}")
+            print(f"[SUMMARY ERROR] Response length: {len(result_json)} chars")
+            print(f"[SUMMARY ERROR] First 200 chars: {result_json[:200]}")
+            print(f"[SUMMARY ERROR] Last 200 chars: {result_json[-200:]}")
+            
+            # Try to extract JSON from response
             json_match = re.search(r'\{.*\}', result_json, re.DOTALL)
             if json_match:
                 try:
                     result = json.loads(json_match.group(0))
-                except:
+                    print("[SUMMARY ERROR] Successfully parsed with regex extraction")
+                except Exception as e2:
+                    print(f"[SUMMARY ERROR] Regex extraction also failed: {e2}")
+                    # Last resort: return error message
                     result = {
                         "summary": {
-                            "title": "Summary",
-                            "sections": [{"heading": "Content", "bullets": [result_json]}]
+                            "title": "Summary Generation Error",
+                            "sections": [{
+                                "heading": "Error",
+                                "bullets": [
+                                    "Failed to parse AI response. This may be due to response size limits.",
+                                    "Please try with a shorter document or fewer files.",
+                                    f"Response length: {len(result_json)} characters"
+                                ]
+                            }]
                         },
                         "citations": []
                     }
             else:
+                print("[SUMMARY ERROR] No JSON pattern found in response")
                 result = {
                     "summary": {
-                        "title": "Summary",
-                        "sections": [{"heading": "Content", "bullets": [result_json]}]
+                        "title": "Summary Generation Error",
+                        "sections": [{
+                            "heading": "Error",
+                            "bullets": [
+                                "AI response did not contain valid JSON.",
+                                "Please try again or use a different document."
+                            ]
+                        }]
                     },
                     "citations": []
                 }
