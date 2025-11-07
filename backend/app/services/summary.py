@@ -207,12 +207,9 @@ def quality_score(result: dict) -> float:
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
-    Domain-agnostic prompt with concrete example requirements (numeric OR anchored)
+    Soft Merge mode: covers all themes, scales sections dynamically (FULL or SHORT)
     """
-    lang_instr = (
-        "Use TURKISH for ALL output." if language == "tr"
-        else "Use ENGLISH for ALL output."
-    )
+    lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
 
     return f"""GOAL
@@ -221,20 +218,24 @@ Create a comprehensive, exam-ready study guide from the provided material. It mu
 LANGUAGE
 {lang_instr}
 
-CONSTRAINTS (no exceptions)
-- Single pass, one JSON object. No markdown code fences, no extra prose.
-- Do NOT include any question bank or practice items.
-- Be domain-agnostic; do NOT assume a specific textbook or course.
-- Prefer concrete, worked examples over vague ones.
-- No empty arrays. Omit a field if you cannot populate it meaningfully.{additional}
+CONSTRAINTS
+- Single pass, one JSON object. No markdown fences, no meta commentary.
+- Do NOT include any practice questions.
+- Be domain-agnostic; do NOT assume a specific book or course.
+- Prefer concrete, worked examples over vague prose.
+- No empty arrays; omit a field if you cannot populate it meaningfully.{additional}
 
 SILENT PLANNING (do internally before writing):
-1) Skim the material → list 4–8 top themes actually present.
-2) For each theme, list 2–4 concepts that the source truly covers.
-3) For each concept, choose ONE concrete example:
-   - NUMERIC domains → a short worked example with at least one digit (0–9) and steps.
-   - NON-NUMERIC domains → an anchored example (date, named event/person/work, ≤12-word quote, stanza/chapter reference).
-4) Collect formulas/algorithms/methods explicitly present or strongly implied. Note variables/roles and one worked example.
+1) Identify **all** themes/topics in the material and rank by centrality.
+2) Allocate depth to top themes (FULL sections) and compress minor themes (SHORT sections).
+3) Do **not** drop any theme; if budget is tight, include a SHORT section (1 concise concept) instead of omitting.
+4) Scale number of sections with content size. MIN ≥ 4 full sections; aim 6–12 total if material is broad.
+
+OUTPUT REQUIREMENTS:
+- Include **every discovered theme** as its own section.
+- FULL sections: 2–5 concepts with dense explanations and an anchored or numeric example.
+- SHORT sections: 1 compact concept (definition + brief explanation + 1–2 key_points). Example optional if genuinely inapplicable.
+- Keep wording specific to the uploaded material (no generic filler).
 
 OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
 {{
@@ -278,15 +279,11 @@ OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
   ]
 }}
 
-QUALITY GATES (self-check before returning JSON)
-- At least 4 sections (themes); each section has ≥2 concepts pulled from the source.
-- Each concept has ONE concrete example:
-  • numeric domains → include at least one digit (0–9) and steps;
-  • non-numeric domains → include anchored specifics (date/name/event/quote/stanza/case).
-- Formula_sheet: include every formula/algorithm/method present; each has variables/roles + a worked_example.
-- Remove empty/placeholder fields or arrays.
-- Keep wording specific to the uploaded material; avoid generic filler like "review this concept".
-- Validate JSON: balanced braces, quoted keys/strings, no trailing commas.
+BUDGETING & COVERAGE RULES
+- Guarantee coverage of **all themes** (FULL or SHORT).
+- Prefer depth for core themes; compress minor ones rather than dropping.
+- Formula_sheet: include every formula/algorithm/method present with variables + concise worked_example.
+- Remove empty/placeholder fields; validate JSON (no trailing commas, balanced braces).
 
 OUTPUT PURE JSON NOW (no other text):"""
 
