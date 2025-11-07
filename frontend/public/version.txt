@@ -1,0 +1,2 @@
+2025-01-11-v2
+Frontend updated with new summary renderer
