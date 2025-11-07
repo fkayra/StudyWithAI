@@ -67,7 +67,7 @@ CHUNK_OUTPUT_BASE = 400  # Base budget for simple text
 CHUNK_OUTPUT_FORMULA_BOOST = 150  # Extra tokens if chunk has formulas
 CHUNK_OUTPUT_THEOREM_BOOST = 200  # Extra tokens if chunk has theorems/proofs
 
-MERGE_OUTPUT_BUDGET = (3000, 8000)  # min, max output tokens for final merge
+MERGE_OUTPUT_BUDGET = (3000, 12000)  # min, max output tokens for final merge
 
 # OpenAI configuration
 OPENAI_MODEL = "gpt-4o"  # Best quality model (was gpt-4o-mini)
