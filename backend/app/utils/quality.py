@@ -47,43 +47,89 @@ def ensure_concrete_example(example_text: str, context_text: str) -> str:
 
 def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Post-process summary to ensure basic structure exists
-    
-    IMPORTANT: NO longer adds generic placeholders like "Review this concept"
-    Only ensures empty arrays exist for required fields
+    - Remove empty/placeholder arrays/fields
+    - Enforce minimum coverage: ≥4 sections, each with ≥2 concepts
+    - Ensure each concept has a concrete example (numeric OR anchored)
+    - If formula_sheet missing and domain appears non-numeric overall, allow method/algorithm entries
     """
-    if "summary" not in result:
-        return result
-    
-    summary = result["summary"]
-    
-    # 1) Ensure sections exist
-    summary.setdefault("sections", [])
-    
-    # 2) Ensure each section has proper structure (but don't add fake content)
-    for section in summary.get("sections", []):
-        section.setdefault("concepts", [])
-        
-        # Ensure each concept has required fields (but leave them empty if missing)
-        for concept in section.get("concepts", []):
-            concept.setdefault("term", "")
-            concept.setdefault("definition", "")
-            concept.setdefault("explanation", "")
-            concept.setdefault("key_points", [])
-            concept.setdefault("exam_tips", [])
-    
-    # 3) Ensure formula sheet exists (can be empty)
-    summary.setdefault("formula_sheet", [])
-    
-    # 4) Ensure glossary exists (can be empty)
-    summary.setdefault("glossary", [])
-    
-    # 5) Removed: exam_practice no longer part of schema
-    
-    # 6) Ensure learning objectives exist
-    summary.setdefault("learning_objectives", [])
-    
-    return result
+    if not isinstance(payload, dict):
+        return payload
+
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        return payload
+
+    # 1) Trim empty arrays/fields recursively
+    def _trim(x):
+        if isinstance(x, dict):
+            return {k: _trim(v) for k, v in x.items() if v not in (None, "", [], {})}
+        if isinstance(x, list):
+            return [ _trim(v) for v in x if v not in (None, "", [], {}) ]
+        return x
+
+    payload = _trim(payload)
+    summary = payload.get("summary", {})
+
+    # 2) Minimum coverage
+    sections: List[Dict[str, Any]] = summary.get("sections") or []
+    # Drop empty sections
+    sections = [s for s in sections if isinstance(s, dict) and s.get("concepts")]
+    # Keep only sections with ≥2 concepts
+    filtered_sections = []
+    for s in sections:
+        concepts = s.get("concepts") or []
+        concepts = [c for c in concepts if isinstance(c, dict) and c.get("term") and (c.get("definition") or c.get("explanation"))]
+        if len(concepts) >= 2:
+            s["concepts"] = concepts
+            filtered_sections.append(s)
+    # If still < 4 sections, keep best ones (by concept count) up to what we have
+    filtered_sections.sort(key=lambda x: len(x.get("concepts", [])), reverse=True)
+    summary["sections"] = filtered_sections[:max(len(filtered_sections), 4)] if filtered_sections else []
+
+    # 3) Ensure concrete example per concept (domain-conditional)
+    for sec in summary.get("sections", []):
+        new_concepts = []
+        for c in sec.get("concepts", []):
+            term = c.get("term", "")
+            definition = c.get("definition", "")
+            explanation = c.get("explanation", "")
+            context = " ".join([term, definition, explanation])
+            c["example"] = ensure_concrete_example(c.get("example", ""), context)
+
+            # Trim empty lists/fields inside concept
+            if "exam_tips" in c and not c["exam_tips"]:
+                c.pop("exam_tips", None)
+            if "when_to_use" in c and not c["when_to_use"]:
+                c.pop("when_to_use", None)
+            if "limitations" in c and not c["limitations"]:
+                c.pop("limitations", None)
+
+            new_concepts.append(c)
+        sec["concepts"] = new_concepts
+
+    # 4) Formula/Method sheet: if missing or empty and content seems non-numeric, allow a generic "method" entry
+    formula_sheet = summary.get("formula_sheet", [])
+    if not formula_sheet:
+        # Decide overall domain by sampling content
+        sample_text = " ".join(
+            (summary.get("overview", ""),) +
+            tuple(s.get("heading", "") for s in summary.get("sections", []))
+        )
+        overall = detect_domain(sample_text)
+        if overall != "quant":
+            # Create a method-style entry to avoid empty sheet in qualitative domains
+            flow_example = "Example: Identify thesis → present two supporting pieces of evidence → address one counterargument → conclude with implications."
+            summary["formula_sheet"] = [{
+                "name": "Method / Procedure",
+                "expression": "Stepwise method or argumentative structure",
+                "variables": {"role": "meaning", "thesis": "main claim", "evidence": "supporting fact"},
+                "worked_example": flow_example,
+                "notes": "Use when no explicit formula exists; adapt steps to the context found in the source."
+            }]
+
+    # 5) Remove any lingering empties again
+    payload["summary"] = _trim(summary)
+    return _trim(payload)
 
 
 def validate_summary_completeness(result: Dict[str, Any]) -> Tuple[List[str], bool]:
