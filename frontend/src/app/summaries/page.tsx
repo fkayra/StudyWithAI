@@ -1,5 +1,6 @@
 'use client'
 
+// Version: 2025-01-11-v3 - Exam-ready summary renderer
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient, historyAPI } from '@/lib/api'
 
