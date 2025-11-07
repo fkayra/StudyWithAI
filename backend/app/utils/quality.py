@@ -127,7 +127,18 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "notes": "Use when no explicit formula exists; adapt steps to the context found in the source."
             }]
 
-    # 5) Remove any lingering empties again
+    # 5) Remove filler phrases from text content
+    from app.utils.json_helpers import defill
+    
+    if summary.get("overview"):
+        summary["overview"] = defill(summary["overview"])
+    
+    for sec in summary.get("sections", []):
+        for c in sec.get("concepts", []):
+            if c.get("explanation"):
+                c["explanation"] = defill(c["explanation"])
+    
+    # 6) Remove any lingering empties again
     payload["summary"] = _trim(summary)
     return _trim(payload)
 
