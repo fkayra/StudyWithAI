@@ -2,7 +2,7 @@
 AI-powered summary service with map-reduce for large documents
 Includes domain detection and quality guardrails for consistent output
 """
-from typing import List, Optional
+from typing import List, Optional, Dict
 import os
 import requests
 from app.config import (
