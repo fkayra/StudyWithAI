@@ -180,6 +180,8 @@ def call_openai(
         "max_tokens": max_output_tokens
     }
     
+    print(f"[OPENAI REQUEST] Model: {OPENAI_MODEL}, max_tokens: {max_output_tokens}")
+    
     response = requests.post(url, headers=headers, json=payload, timeout=120)
     
     if response.status_code != 200:
@@ -187,7 +189,10 @@ def call_openai(
         raise Exception(f"OpenAI API call failed ({response.status_code}): {error_detail}")
     
     result = response.json()
-    return result["choices"][0]["message"]["content"]
+    content = result["choices"][0]["message"]["content"]
+    finish_reason = result["choices"][0].get("finish_reason")
+    print(f"[OPENAI RESPONSE] Returned {len(content)} chars, finish_reason: {finish_reason}")
+    return content
 
 
 # ========== Map-Reduce Pipeline ==========
