@@ -171,14 +171,6 @@ Output ONLY valid JSON in this EXACT structure (no markdown code blocks):
   ]
 }}
 
-MUST INCLUDE IN CONTENT (do not omit these critical topics):
-- AND–OR solution conditions: (1) leaves are goal states, (2) one action per OR node, (3) all outcomes per AND node
-- Slippery Vacuum + cyclic plan: "while not clean do Suck" vs "eventually succeeds" vs "never succeeds with wrong key"
-- Partial observability: belief state definition, sensorless vs partial, example: [A,Dirty] ⇒ {{S1,S3}}, belief-tested conditional plan (if Bstate={{6}} then Suck)
-- ONLINE-DFS-AGENT: reversible actions requirement, each edge ≤2 traversals, competitive ratio risks
-- Competitive ratio: definition and when it becomes infinite
-- LRTA* algorithm: update rule H(s)=c(s,a,s')+H(s'), guarantees in finite+safely-explorable spaces (worst O(n²)), no completeness guarantee in infinite spaces
-
 FORMULA REQUIREMENTS:
 - Each formula MUST define all variables and include at least one worked example
 - Use 'expression' field (not 'formula'), 'notes' field (not 'when_to_use')
