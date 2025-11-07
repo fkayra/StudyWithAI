@@ -1,11 +1,10 @@
 """
-Telemetry service for tracking quality and user feedback
+Telemetry service for tracking quality metrics
 """
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
-from app.models.telemetry import SummaryQuality, UserFeedback
+from app.models.telemetry import SummaryQuality
 from datetime import datetime
-import time
 
 
 def record_summary_quality(
@@ -57,40 +56,6 @@ def record_summary_quality(
         
     except Exception as e:
         print(f"[TELEMETRY ERROR] Failed to record quality: {e}")
-        db.rollback()
-
-
-def record_user_feedback(
-    db: Session,
-    request_hash: str,
-    user_id: Optional[int],
-    feedback_type: str,
-    rating: Optional[int] = None,
-    issue_category: Optional[str] = None,
-    comment: Optional[str] = None,
-    viewed_sections: Optional[List[str]] = None,
-    time_on_page_seconds: Optional[int] = None
-):
-    """Record user feedback on a summary"""
-    try:
-        feedback = UserFeedback(
-            user_id=user_id,
-            request_hash=request_hash,
-            feedback_type=feedback_type,
-            rating=rating,
-            issue_category=issue_category,
-            comment=comment,
-            viewed_sections=viewed_sections,
-            time_on_page_seconds=time_on_page_seconds
-        )
-        
-        db.add(feedback)
-        db.commit()
-        
-        print(f"[TELEMETRY] Recorded feedback: type={feedback_type}, rating={rating}")
-        
-    except Exception as e:
-        print(f"[TELEMETRY ERROR] Failed to record feedback: {e}")
         db.rollback()
 
 

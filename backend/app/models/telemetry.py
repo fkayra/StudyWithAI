@@ -1,7 +1,7 @@
 """
-Telemetry models for quality tracking and user feedback
+Telemetry models for quality tracking
 """
-from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -38,53 +38,5 @@ class SummaryQuality(Base):
     
     # Warnings/issues
     warnings = Column(JSON)  # List of warning strings
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class UserFeedback(Base):
-    """Track user feedback on summaries"""
-    __tablename__ = "user_feedback"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=True)
-    request_hash = Column(String, index=True)
-    
-    # Feedback type
-    feedback_type = Column(String)  # 'rating', 'report_issue', 'suggestion'
-    
-    # Rating (1-5 stars)
-    rating = Column(Integer, nullable=True)
-    
-    # Specific feedback
-    issue_category = Column(String, nullable=True)  # 'shallow', 'incorrect', 'incomplete', 'formatting'
-    comment = Column(Text, nullable=True)
-    
-    # Context
-    viewed_sections = Column(JSON)  # Which sections user viewed before feedback
-    time_on_page_seconds = Column(Integer, nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class ModelPerformance(Base):
-    """Aggregate model performance metrics over time"""
-    __tablename__ = "model_performance"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    date = Column(DateTime, index=True)
-    
-    # Aggregates for the day
-    total_summaries = Column(Integer)
-    avg_quality_score = Column(Float)
-    avg_user_rating = Column(Float, nullable=True)
-    self_repair_rate = Column(Float)  # % of summaries that triggered repair
-    
-    # By domain
-    domain_breakdown = Column(JSON)  # {"technical": {"count": X, "avg_score": Y}, ...}
-    
-    # Common issues
-    top_warnings = Column(JSON)  # [{"warning": "...", "count": X}, ...]
-    top_user_issues = Column(JSON)  # [{"issue": "...", "count": X}, ...]
     
     created_at = Column(DateTime, default=datetime.utcnow)

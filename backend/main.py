@@ -2102,68 +2102,23 @@ async def get_low_quality_patterns_endpoint(
         return {"error": str(e)}
 
 
-class FeedbackRequest(BaseModel):
-    request_hash: str
-    feedback_type: str  # 'rating', 'report_issue', 'suggestion'
-    rating: Optional[int] = None
-    issue_category: Optional[str] = None  # 'shallow', 'incorrect', 'incomplete', 'formatting'
-    comment: Optional[str] = None
-    viewed_sections: Optional[List[str]] = None
-    time_on_page_seconds: Optional[int] = None
-
-
-@app.post("/feedback")
-async def submit_feedback(
-    req: FeedbackRequest,
-    current_user: Optional[User] = Depends(get_optional_user),
-    db: Session = Depends(get_db)
-):
-    """Submit user feedback on a summary"""
-    try:
-        from app.services.telemetry import record_user_feedback
-        
-        record_user_feedback(
-            db=db,
-            request_hash=req.request_hash,
-            user_id=current_user.id if current_user else None,
-            feedback_type=req.feedback_type,
-            rating=req.rating,
-            issue_category=req.issue_category,
-            comment=req.comment,
-            viewed_sections=req.viewed_sections,
-            time_on_page_seconds=req.time_on_page_seconds
-        )
-        
-        return {"status": "success", "message": "Feedback recorded"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
 @app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")
 async def migrate_database(db: Session = Depends(get_db)):
-    """One-time migration to add name, surname, folder columns, and telemetry tables"""
+    """One-time migration to add name, surname, folder columns, and telemetry table"""
     try:
-        # Import telemetry models to register them
-        from app.models.telemetry import SummaryQuality, UserFeedback, ModelPerformance
+        # Import telemetry model to register it
+        from app.models.telemetry import SummaryQuality
         
-        # Create all tables if they don't exist
+        # Create table if it doesn't exist
         from sqlalchemy import inspect
         inspector = inspect(engine)
         existing_tables = inspector.get_table_names()
         
-        # Create telemetry tables if missing
+        # Create telemetry table if missing
         if "summary_quality" not in existing_tables:
             SummaryQuality.__table__.create(engine)
             print("[MIGRATION] Created summary_quality table")
-        
-        if "user_feedback" not in existing_tables:
-            UserFeedback.__table__.create(engine)
-            print("[MIGRATION] Created user_feedback table")
-        
-        if "model_performance" not in existing_tables:
-            ModelPerformance.__table__.create(engine)
-            print("[MIGRATION] Created model_performance table")
         
         # Try to add columns using raw SQL with text()
         if DATABASE_URL.startswith("sqlite"):
