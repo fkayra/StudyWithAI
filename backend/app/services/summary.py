@@ -7,7 +7,7 @@ import os
 import requests
 from app.config import (
     OPENAI_MODEL, TEMPERATURE, TOP_P,
-    CHUNK_INPUT_TARGET, CHUNK_OUTPUT_BUDGET, MERGE_OUTPUT_BUDGET
+    CHUNK_INPUT_TARGET, MERGE_OUTPUT_BUDGET
 )
 from app.utils.files import approx_tokens_from_text_len
 from app.utils.chunking import split_text_approx_tokens, merge_texts
