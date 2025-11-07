@@ -560,7 +560,7 @@ def map_reduce_summary(
     full_text: str,
     language: str = "en",
     additional_instructions: str = "",
-    out_cap: int = 8000,
+    out_cap: int = 12000,
     force_chunking: bool = False
 ) -> str:
     """
@@ -679,7 +679,7 @@ def map_reduce_summary(
 def summarize_no_files(
     topic: str,
     language: str = "en",
-    out_cap: int = 8000
+    out_cap: int = 12000
 ) -> str:
     """
     Generate summary without uploaded files (from prompt only)
