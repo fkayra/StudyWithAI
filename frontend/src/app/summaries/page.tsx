@@ -21,9 +21,11 @@ interface Section {
 
 interface Formula {
   name: string
-  formula: string
-  variables: string
-  when_to_use: string
+  formula?: string  // Old schema
+  expression?: string  // New schema
+  variables: string | { [key: string]: string }  // Can be string or object
+  when_to_use?: string  // Old schema
+  notes?: string  // New schema
 }
 
 interface GlossaryTerm {
@@ -40,7 +42,8 @@ interface ExamPractice {
   }>
   short_answer?: Array<{
     question: string
-    key_points: string[]
+    answer?: string
+    key_points?: string[]
   }>
   problem_solving?: Array<{
     problem: string
