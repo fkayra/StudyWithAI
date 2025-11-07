@@ -630,9 +630,11 @@ async def login(credentials: UserLogin, response: Response, db: Session = Depend
     refresh_token = create_token(user.id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
     
     # Set HTTP-only cookies for security
+    # Important: path="/" ensures cookie is sent with all requests
     response.set_cookie(
         key="access_token",
         value=access_token,
+        path="/",
         httponly=True,
         secure=COOKIE_SECURE,  # Only send over HTTPS in production
         samesite=COOKIE_SAMESITE,  # "none" for cross-site (production), "lax" for dev
@@ -641,11 +643,15 @@ async def login(credentials: UserLogin, response: Response, db: Session = Depend
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
+        path="/",
         httponly=True,
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60  # Convert days to seconds
     )
+    
+    # Debug log
+    print(f"[AUTH] Login successful for user {user.id}, cookies set: secure={COOKIE_SECURE}, samesite={COOKIE_SAMESITE}")
     
     # Also return tokens in response for backward compatibility
     return {
@@ -684,6 +690,7 @@ async def refresh(request: Request, response: Response, refresh_data: dict = Non
         response.set_cookie(
             key="access_token",
             value=access_token,
+            path="/",
             httponly=True,
             secure=COOKIE_SECURE,
             samesite=COOKIE_SAMESITE,
@@ -692,6 +699,7 @@ async def refresh(request: Request, response: Response, refresh_data: dict = Non
         response.set_cookie(
             key="refresh_token",
             value=new_refresh,
+            path="/",
             httponly=True,
             secure=COOKIE_SECURE,
             samesite=COOKIE_SAMESITE,
@@ -709,8 +717,8 @@ async def refresh(request: Request, response: Response, refresh_data: dict = Non
 @app.post("/auth/logout")
 async def logout(response: Response):
     # Clear cookies
-    response.delete_cookie(key="access_token", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-    response.delete_cookie(key="refresh_token", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    response.delete_cookie(key="access_token", path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    response.delete_cookie(key="refresh_token", path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return {"message": "Logged out successfully"}
 
 @app.get("/me")
