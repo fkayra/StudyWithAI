@@ -33,24 +33,7 @@ interface GlossaryTerm {
   definition: string
 }
 
-interface ExamPractice {
-  multiple_choice?: Array<{
-    question: string
-    options: { [key: string]: string }
-    correct: string
-    explanation: string
-  }>
-  short_answer?: Array<{
-    question: string
-    answer?: string
-    key_points?: string[]
-  }>
-  problem_solving?: Array<{
-    problem: string
-    approach: string
-    solution: string
-  }>
-}
+// ExamPractice interface removed - no longer part of schema
 
 interface Summary {
   title: string
@@ -453,99 +436,9 @@ export default function SummariesPage() {
             </div>
           )}
 
-          {/* Exam Practice */}
-          {summary.exam_practice && (
-            <div className="glass-card mt-8 animate-scale-in">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="text-3xl">✍️</div>
-                <h2 className="text-2xl font-semibold text-slate-100">Exam Practice</h2>
-              </div>
-              
-              {/* Multiple Choice */}
-              {summary.exam_practice?.multiple_choice && summary.exam_practice.multiple_choice.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="text-xl font-semibold text-slate-200 mb-4">Multiple Choice Questions</h3>
-                  <div className="space-y-4">
-                    {summary.exam_practice.multiple_choice.map((q, idx) => (
-                      <div key={idx} className="p-5 bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl">
-                        <div className="font-semibold text-slate-100 mb-3">{idx + 1}. {q.question}</div>
-                        <div className="space-y-2 mb-3">
-                          {q.options && Object.entries(q.options).map(([key, value]) => (
-                            <div key={key} className={`p-3 rounded-lg ${key === q.correct ? 'bg-green-500/20 border border-green-500/50' : 'bg-slate-800/30'}`}>
-                              <span className="font-semibold text-slate-200">{key}) </span>
-                              <span className="text-slate-300">{value}</span>
-                              {key === q.correct && <span className="text-green-400 ml-2">✓ Correct</span>}
-                            </div>
-                          ))}
-                        </div>
-                        {q.explanation && (
-                          <div className="text-sm text-slate-400 italic">
-                            <span className="text-orange-400 font-semibold">Explanation: </span>
-                            {q.explanation}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Short Answer */}
-              {summary.exam_practice?.short_answer && summary.exam_practice.short_answer.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="text-xl font-semibold text-slate-200 mb-4">Short Answer Questions</h3>
-                  <div className="space-y-4">
-                    {summary.exam_practice.short_answer.map((q, idx) => (
-                      <div key={idx} className="p-5 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/30 rounded-xl">
-                        <div className="font-semibold text-slate-100 mb-3">{idx + 1}. {q.question}</div>
-                        {q.answer && (
-                          <div className="text-sm text-slate-300 mt-2">
-                            <span className="text-blue-400 font-semibold">Answer: </span>
-                            {q.answer}
-                          </div>
-                        )}
-                        {q.key_points && q.key_points.length > 0 && (
-                          <>
-                            <div className="text-sm text-blue-400 font-semibold mb-2 mt-3">Key Points to Include:</div>
-                            <ul className="space-y-1">
-                              {q.key_points.map((point, i) => (
-                                <li key={i} className="text-slate-300 text-sm flex items-start">
-                                  <span className="text-blue-400 mr-2">•</span>
-                                  {point}
-                                </li>
-                              ))}
-                            </ul>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Problem Solving */}
-              {summary.exam_practice?.problem_solving && summary.exam_practice.problem_solving.length > 0 && (
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-200 mb-4">Problem Solving</h3>
-                  <div className="space-y-4">
-                    {summary.exam_practice.problem_solving.map((p, idx) => (
-                      <div key={idx} className="p-5 bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/30 rounded-xl">
-                        <div className="font-semibold text-slate-100 mb-3">{idx + 1}. {p.problem}</div>
-                        <div className="mb-3">
-                          <div className="text-sm text-violet-400 font-semibold mb-1">Approach:</div>
-                          <div className="text-slate-300 text-sm">{p.approach}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-violet-400 font-semibold mb-1">Solution:</div>
-                          <div className="text-slate-300 text-sm whitespace-pre-wrap">{p.solution}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Exam Practice Section - REMOVED
+              Token budget now redirected to deeper explanations and worked examples
+          */}
 
           {/* Citations */}
           {data.citations && data.citations.length > 0 && (
