@@ -6,6 +6,20 @@ import json
 from typing import Optional
 
 
+# Filler patterns to remove from AI outputs
+FILLER_PATTERNS = [
+    r"\b(review this concept|study carefully|it is important to note that)\b"
+]
+
+
+def defill(text: str) -> str:
+    """Remove generic filler phrases from text"""
+    out = text
+    for pat in FILLER_PATTERNS:
+        out = re.sub(pat, "", out, flags=re.I)
+    return re.sub(r"\s{2,}", " ", out).strip()
+
+
 def extract_json_block(text: str) -> str:
     """
     Extract JSON from text, removing code fences and extra content
