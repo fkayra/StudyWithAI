@@ -38,11 +38,7 @@ def enforce_exam_ready(result: Dict[str, Any]) -> Dict[str, Any]:
     # 4) Ensure glossary exists (can be empty)
     summary.setdefault("glossary", [])
     
-    # 5) Ensure exam practice exists with all sections
-    exam_practice = summary.setdefault("exam_practice", {})
-    exam_practice.setdefault("multiple_choice", [])
-    exam_practice.setdefault("short_answer", [])
-    exam_practice.setdefault("problem_solving", [])
+    # 5) Removed: exam_practice no longer part of schema
     
     # 6) Ensure learning objectives exist
     summary.setdefault("learning_objectives", [])
@@ -53,6 +49,7 @@ def enforce_exam_ready(result: Dict[str, Any]) -> Dict[str, Any]:
 def validate_summary_completeness(result: Dict[str, Any]) -> Tuple[List[str], bool]:
     """
     Validate summary completeness and return (warnings, needs_repair)
+    Focus on depth of explanations, NOT practice questions
     
     Returns:
         (warnings: List[str], needs_repair: bool)
@@ -81,9 +78,10 @@ def validate_summary_completeness(result: Dict[str, Any]) -> Tuple[List[str], bo
     if len(sections) < 2:
         critical_issues.append(f"Only {len(sections)} section(s) - expected at least 2")
     
-    # Check section quality
+    # Check section quality (DEPTH focus)
     total_concepts = 0
-    sections_without_concepts = 0
+    shallow_explanations = 0
+    concepts_without_examples = 0
     
     for i, section in enumerate(sections):
         if not section.get("heading"):
@@ -93,49 +91,59 @@ def validate_summary_completeness(result: Dict[str, Any]) -> Tuple[List[str], bo
         total_concepts += len(concepts)
         
         if not concepts:
-            sections_without_concepts += 1
             warnings.append(f"Section '{section.get('heading', i+1)}' has no concepts")
         
         for j, concept in enumerate(concepts):
             if not concept.get("term"):
                 warnings.append(f"Section {i+1}, Concept {j+1} missing term")
-            if not concept.get("explanation") or len(concept.get("explanation", "")) < 50:
-                warnings.append(f"Concept '{concept.get('term', j+1)}' has shallow/missing explanation")
-            if not concept.get("example"):
-                warnings.append(f"Concept '{concept.get('term', j+1)}' missing example")
-            if concept.get("exam_tips") == ["Review this concept thoroughly for exams"]:
-                # Detect generic placeholder (old system artifact)
-                warnings.append(f"Concept '{concept.get('term', j+1)}' has generic exam tip (should be specific)")
+            
+            # Check DEPTH: explanation should be substantial
+            explanation = concept.get("explanation", "")
+            if len(explanation) < 200:  # ~50 words minimum
+                shallow_explanations += 1
+                warnings.append(f"Concept '{concept.get('term', j+1)}' has shallow explanation ({len(explanation)} chars)")
+            
+            # Check for multiple examples
+            examples = concept.get("examples", [])
+            if isinstance(examples, list):
+                if len(examples) < 2:
+                    concepts_without_examples += 1
+                    warnings.append(f"Concept '{concept.get('term', j+1)}' has <2 examples (need 2-3)")
+            elif not concept.get("example"):
+                concepts_without_examples += 1
+                warnings.append(f"Concept '{concept.get('term', j+1)}' missing examples")
     
     if total_concepts < 5:
         critical_issues.append(f"Only {total_concepts} total concepts - expected at least 5")
     
-    # Check formulas
+    if shallow_explanations > total_concepts * 0.3:
+        critical_issues.append(f"{shallow_explanations} concepts have shallow explanations (need more depth)")
+    
+    # Check formulas (DEPTH focus)
     formulas = summary.get("formula_sheet", [])
     formulas_without_examples = 0
+    formulas_without_derivation = 0
     
     for formula in formulas:
-        if not formula.get("worked_example") and not formula.get("notes", "").count("example"):
+        # Check for worked examples (multiple)
+        worked_examples = formula.get("worked_examples", [])
+        if isinstance(worked_examples, list):
+            if len(worked_examples) < 2:
+                formulas_without_examples += 1
+                warnings.append(f"Formula '{formula.get('name', '?')}' has <2 worked examples")
+        elif not formula.get("notes", "").lower().count("example"):
             formulas_without_examples += 1
-            warnings.append(f"Formula '{formula.get('name', '?')}' missing worked example")
-    
-    # Check exam practice
-    exam = summary.get("exam_practice", {})
-    mcq_count = len(exam.get("multiple_choice", []))
-    sa_count = len(exam.get("short_answer", []))
-    prob_count = len(exam.get("problem_solving", []))
-    
-    if mcq_count < 4:
-        critical_issues.append(f"Only {mcq_count} MCQ - need ≥4")
-    if sa_count < 3:
-        critical_issues.append(f"Only {sa_count} short-answer - need ≥3")
-    if prob_count < 2:
-        critical_issues.append(f"Only {prob_count} problem-solving - need ≥2")
+            warnings.append(f"Formula '{formula.get('name', '?')}' missing worked examples")
+        
+        # Check for derivation
+        if not formula.get("derivation_steps") and not formula.get("notes", "").lower().count("deriv"):
+            formulas_without_derivation += 1
+            warnings.append(f"Formula '{formula.get('name', '?')}' missing derivation")
     
     # Check glossary
     glossary_count = len(summary.get("glossary", []))
-    if glossary_count < 8:
-        critical_issues.append(f"Only {glossary_count} glossary terms - need ≥8")
+    if glossary_count < 10:
+        critical_issues.append(f"Only {glossary_count} glossary terms - need ≥10")
     
     # Decide if self-repair needed
     needs_repair = len(critical_issues) > 0

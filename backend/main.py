@@ -1113,12 +1113,7 @@ async def summarize_from_files(
         summary = result.get("summary", {})
         num_concepts = sum(len(sec.get("concepts", [])) for sec in summary.get("sections", []))
         num_formulas = len(summary.get("formula_sheet", []))
-        exam_practice = summary.get("exam_practice", {})
-        num_exam_questions = (
-            len(exam_practice.get("multiple_choice", [])) +
-            len(exam_practice.get("short_answer", [])) +
-            len(exam_practice.get("problem_solving", []))
-        )
+        num_exam_questions = 0  # No longer generating practice questions
         num_glossary = len(summary.get("glossary", []))
         
         # Record telemetry (non-blocking)
