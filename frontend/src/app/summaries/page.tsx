@@ -12,6 +12,8 @@ interface Concept {
   example?: string
   key_points?: string[]
   pitfalls?: string[]  // New field from plan-then-write prompt
+  when_to_use?: string[]  // New: application conditions
+  limitations?: string[]  // New: edge cases, common mistakes
 }
 
 interface Section {
@@ -27,6 +29,8 @@ interface Formula {
   variables: string | { [key: string]: string }  // Can be string or object
   when_to_use?: string  // Old schema
   notes?: string  // New schema
+  worked_example?: string  // New: step-by-step calculation
+  complexity?: string  // New: Big-O notation
 }
 
 interface GlossaryTerm {
@@ -49,6 +53,7 @@ interface Summary {
 interface Citation {
   file_id: string
   evidence: string
+  section?: string  // New: heading or slide title
 }
 
 interface SummaryData {
@@ -375,6 +380,34 @@ export default function SummariesPage() {
                                 </ul>
                               </div>
                             )}
+                            
+                            {concept.when_to_use && concept.when_to_use.length > 0 && (
+                              <div className="mt-3">
+                                <div className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide">✓ When to Use</div>
+                                <ul className="space-y-2">
+                                  {concept.when_to_use.map((condition, i) => (
+                                    <li key={i} className="flex items-start text-sm">
+                                      <span className="text-green-400 mr-2">✓</span>
+                                      <span className="text-slate-300">{condition}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {concept.limitations && concept.limitations.length > 0 && (
+                              <div className="mt-3">
+                                <div className="text-xs font-semibold text-red-400 mb-2 uppercase tracking-wide">⊗ Limitations</div>
+                                <ul className="space-y-2">
+                                  {concept.limitations.map((limitation, i) => (
+                                    <li key={i} className="flex items-start text-sm">
+                                      <span className="text-red-400 mr-2">⊗</span>
+                                      <span className="text-slate-300">{limitation}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -471,6 +504,9 @@ export default function SummariesPage() {
                       </div>
                       <div className="flex-1">
                         <div className="text-xs text-teal-400 font-medium mb-1">{citation.file_id}</div>
+                        {citation.section && (
+                          <div className="text-xs text-teal-300 font-semibold mb-1">📍 {citation.section}</div>
+                        )}
                         <div className="text-sm text-slate-300 leading-relaxed">{citation.evidence}</div>
                       </div>
                     </div>
