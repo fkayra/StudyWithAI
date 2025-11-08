@@ -1077,20 +1077,22 @@ async def summarize_from_files(
             formula_patterns = re.finditer(r'\\\[(.+?)\\\]|\\\((.+?)\\\)', text, re.DOTALL)
             seen_formulas = set()
             for match in formula_patterns:
-                formula = (match.group(1) or match.group(2)).strip()
-                if formula and formula not in seen_formulas and len(formula) > 5:
-                    seen_formulas.add(formula)
-                    # Try to find context (what's this formula about?)
-                    start = max(0, match.start() - 100)
-                    context = text[start:match.start()].strip()
-                    context_lines = [l.strip() for l in context.split('\n') if l.strip()]
-                    name = context_lines[-1] if context_lines else "Formula"
-                    
-                    formulas.append({
-                        "name": name[:80],
-                        "expression": f"\\[{formula}\\]",
-                        "variables": []
-                    })
+                formula = (match.group(1) if match.group(1) else match.group(2))
+                if formula:
+                    formula = formula.strip()
+                    if formula and formula not in seen_formulas and len(formula) > 5:
+                        seen_formulas.add(formula)
+                        # Try to find context (what's this formula about?)
+                        start = max(0, match.start() - 100)
+                        context = text[start:match.start()].strip()
+                        context_lines = [l.strip() for l in context.split('\n') if l.strip()]
+                        name = context_lines[-1] if context_lines else "Formula"
+                        
+                        formulas.append({
+                            "name": name[:80],
+                            "expression": f"\\[{formula}\\]",
+                            "variables": []
+                        })
             
             # Parse sections
             current_section = None
