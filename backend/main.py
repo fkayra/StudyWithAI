@@ -1110,9 +1110,10 @@ async def summarize_from_files(
                     "variables": []
                 })
             
-            # Parse sections - ONLY numbered sections (### 1. or ### Section 1:)
-            # NOT generic ### Key Ideas (those are subsections)
-            section_pattern = r'^###\s*(?:[Ss]ection\s+)?(\d+)[.:\s]\s*(.+?)$'
+            # Parse sections - numbered sections with ### OR "Section N:" (no ###)
+            # Safe pattern: Either has ### OR has "Section" keyword
+            # Prevents matching random "1. Something" lines
+            section_pattern = r'^(?:###\s*(?:[Ss]ection\s+)?(\d+)[.:\s]\s*(.+?)|([Ss]ection\s+)(\d+)[.:\s]\s*(.+?))$'
             lines = text.split('\n')
             
             current_section = None
@@ -1129,7 +1130,7 @@ async def summarize_from_files(
                     i += 1
                     continue
                 
-                # Major section (ONLY ### 1. Title OR ### Section 1: Title - MUST have number!)
+                # Major section (### 1. OR ### Section 1: OR Section 1: - MUST have number!)
                 section_match = re.match(section_pattern, line)
                 if section_match:
                     # Save previous section
@@ -1138,8 +1139,16 @@ async def summarize_from_files(
                             current_section['concepts'].append(current_concept)
                         sections.append(current_section)
                     
-                    # Start new section - extract title (group 2)
-                    heading = clean_md(section_match.group(2) if section_match.group(2) else "Section")
+                    # Extract title from correct group
+                    # Pattern has 2 alternatives: (###...) OR (Section...)
+                    groups = section_match.groups()
+                    if groups[1]:  # ### format matched (group 2 has title)
+                        heading = clean_md(groups[1])
+                    elif groups[4]:  # Section format matched (group 5 has title)
+                        heading = clean_md(groups[4])
+                    else:
+                        heading = "Section"
+                    
                     current_section = {"heading": heading, "concepts": []}
                     current_concept = None
                     i += 1
