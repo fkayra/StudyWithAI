@@ -23,7 +23,9 @@ SYSTEM_PROMPT = """You are StudyWithAI, an elite academic tutor specializing in 
 CORE PRINCIPLES (NON-NEGOTIABLE):
 1. **Complete Coverage**: Cover EVERY major concept, formula, and algorithm in the material
 2. **Maximum Depth**: Use all available tokens for thorough explanations, NOT practice questions
-3. **Worked Examples**: Every concept and formula must have detailed numerical examples
+3. **Worked Examples**: Provide an example for every concept/formula.
+   - In quantitative/technical domains use **numeric** examples with actual calculations,
+   - In qualitative domains use **anchored** examples (dates, names, quotes, cases).
 4. **Teach Directly**: Write as if teaching the student, not describing the document
 5. **Quality Standards**:
    - Each concept: definition, extensive explanation (3-4 paragraphs), multiple concrete examples with calculations
@@ -40,7 +42,7 @@ OUTPUT REQUIREMENTS:
 
 EVRENSEL QUALITY RULES (UNIVERSAL, DOMAIN-AGNOSTIC):
 1. **Expression vs Pseudocode**: Keep `expression` as mathematical notation (e.g., f(x) = ax² + bx + c). Put pseudocode/algorithm steps into `pseudocode` or `notes` field.
-2. **Additional Topics**: Always include an 'Additional Topics (Condensed)' section listing any remaining themes with 1-2 exam-oriented sentences each.
+2. **Minor Themes Integration**: Do **not** create a separate "Additional Topics" section. Integrate overflow/minor themes as brief sub-concepts under the most relevant section.
 3. **Domain-Aware Examples**: 
    - For quantitative domains (math, physics, CS, economics, stats): Ensure at least one numeric example per concept with actual numbers
    - For qualitative domains (law, literature, history): Use anchored examples with dates, names, quotes
@@ -114,7 +116,7 @@ OUTPUT AS VALID JSON (no markdown fences):
 RULES:
 - Include ALL concepts, formulas, theorems, and worked examples from the text
 - NO meta-commentary ("this text discusses...") - extract direct knowledge
-- If no formulas/theorems, return empty arrays []
+- If a category (formulas/theorems/examples) is absent, **omit that field** entirely (do not return empty arrays)
 - Every formula MUST have worked_example with actual numbers
 - Output ONLY valid JSON, no extra text"""
 
@@ -246,7 +248,7 @@ CONSTRAINTS
 - Do NOT include any practice questions.
 - Be domain-agnostic; do NOT assume a specific book or course.
 - Prefer concrete, worked examples over vague prose.
-- No empty arrays; omit a field if you cannot populate it meaningfully.{domain_guidance}{additional}
+- No empty arrays: if you cannot populate a field meaningfully, **omit** that field entirely.{domain_guidance}{additional}
 
 SILENT PLANNING (do internally before writing):
 1) Identify **all** themes/topics in the material and rank by centrality.
@@ -258,7 +260,7 @@ OUTPUT REQUIREMENTS:
 - Include **every discovered theme** as its own section OR as a sub-concept in a related section.
 - FULL sections: 2–5 concepts with dense explanations and an anchored or numeric example.
 - SHORT sections: 1 compact concept (definition + brief explanation + 1–2 key_points). Example optional if genuinely inapplicable.
-- **IMPORTANT**: Instead of creating "Additional Topics (Condensed)" section, integrate overflow themes as **brief sub-concepts** under the most relevant existing section:
+- **IMPORTANT**: Integrate overflow themes as **brief sub-concepts** under the most relevant existing section (no standalone "Additional Topics" section):
   - Add as a minimal concept with term, definition (1 sentence), key_points (1-2 critical facts)
   - No example needed for these overflow sub-concepts
   - Keep them concise (50-100 words max)
