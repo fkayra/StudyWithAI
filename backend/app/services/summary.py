@@ -1056,6 +1056,12 @@ def simple_exam_tutor_summary(
     SIMPLE MODE: Elite exam tutor prompt with NO complex processing
     Just: prompt + document → AI → output
     """
+    # Truncate full_text if too long (prevent token overflow)
+    MAX_INPUT_CHARS = 80000  # ~20k tokens
+    if len(full_text) > MAX_INPUT_CHARS:
+        print(f"[SIMPLE MODE] Truncating document: {len(full_text)} → {MAX_INPUT_CHARS} chars")
+        full_text = full_text[:MAX_INPUT_CHARS] + "\n\n[DOCUMENT TRUNCATED - remaining content omitted]"
+    
     # Elite exam tutor prompt
     tutor_prompt = """You are StudyWithAI, an elite exam tutor. Your task is to create a self-sufficient exam study guide from the DOCUMENT CONTENT below. The student will study ONLY this guide, so it must cover EVERY topic, definition, theorem, formula, algorithm, and subtlety present in the document—no omissions, no external knowledge.
 
@@ -1123,7 +1129,11 @@ Now read the DOCUMENT CONTENT and produce the study guide described above.
 DOCUMENT CONTENT:
 {full_text}"""
     
-    combined_prompt = tutor_prompt.format(full_text=full_text)
+    try:
+        combined_prompt = tutor_prompt.format(full_text=full_text)
+    except Exception as e:
+        print(f"[SIMPLE MODE ERROR] Prompt format failed: {e}")
+        combined_prompt = f"Summarize this document:\n\n{full_text}"
     
     return call_openai(
         system_prompt="You are a helpful AI assistant.",
