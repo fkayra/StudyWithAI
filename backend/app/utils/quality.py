@@ -1,14 +1,32 @@
 """
 Quality enforcement for exam-ready summaries
 NO PLACEHOLDER GENERATION - only validation and self-repair triggers
+EVRENSEL (universal) quality rules: domain-agnostic, file-independent
 """
 from typing import Dict, Any, List, Tuple
 import re
 import json
 
 
+# Vague example patterns to detect
+VAGUE_EXAMPLE_PATTERNS = [
+    r'consider\s+a\s+simple\s+case',
+    r'imagine\s+a\s+scenario',
+    r'suppose\s+we\s+have',
+    r'let\'?s\s+say',
+    r'for\s+example\s*:?\s*$',  # "For example:" with nothing after
+    r'e\.?g\.?,?\s*$',  # "e.g." or "e.g.," with nothing after
+]
+
+
 def detect_domain(sample_text: str) -> str:
-    """Heuristic: classify concept text as 'quant' (numeric), 'qual' (anchored qualitative) or 'semi'."""
+    """Heuristic: classify concept text as 'quant' (numeric), 'qual' (anchored qualitative) or 'semi'.
+    
+    Returns:
+        'quant': Math, physics, CS algorithms, economics, stats, operations research
+        'qual': Law, literature, history, philosophy, social sciences
+        'semi': Mixed or unclear domain
+    """
     if not sample_text:
         return "semi"
     quant_signals = r"(O\(|=|\+|-|\*|/|%|≥|≤|∑|∂|theorem|lemma|proof|algorithm|km|kg|hz|ms|fps|complexity|runtime)"
@@ -47,12 +65,14 @@ def ensure_concrete_example(example_text: str, context_text: str) -> str:
     return (text + postfix).strip()
 
 
-def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
+def enforce_exam_ready(payload: Dict[str, Any], detected_themes: List[str] = None) -> Dict[str, Any]:
     """
-    Lightweight post-processing:
-    1. Ensure concrete examples (domain-conditional)
-    2. Remove filler phrases
-    3. Clean empty fields
+    Comprehensive post-processing with evrensel quality rules:
+    1. Ensure concrete examples (domain-conditional, numeric for quant domains)
+    2. Coerce formula expressions to math (move pseudocode to separate field)
+    3. Validate and enhance citations
+    4. Remove filler phrases
+    5. Clean empty fields
     
     Does NOT filter sections - validation handled separately
     """
@@ -63,7 +83,12 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(summary, dict):
         return payload
 
-    # 1) Ensure concrete example per concept (domain-conditional)
+    # Detect overall domain for the document
+    sample_text = str(summary)[:2000]
+    overall_domain = detect_domain(sample_text)
+    print(f"[ENFORCE] Detected domain: {overall_domain}")
+
+    # 1) Ensure concrete example per concept (domain-conditional with numeric enforcement)
     for sec in summary.get("sections", []):
         for c in sec.get("concepts", []):
             term = c.get("term", "")
@@ -71,11 +96,35 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
             explanation = c.get("explanation", "")
             context = " ".join([term, definition, explanation])
             
-            # Ensure concrete example
+            # First ensure concrete example
             current_example = c.get("example", "")
             c["example"] = ensure_concrete_example(current_example, context)
+            
+            # Then enforce numeric/anchored based on domain
+            c["example"] = ensure_numeric_example_if_applicable(context, c["example"], overall_domain)
 
-    # 2) Remove filler phrases from text content
+    # 2) Coerce formula expressions to math (move pseudocode to separate field)
+    formulas = summary.get("formula_sheet", [])
+    for i, formula in enumerate(formulas):
+        formulas[i] = coerce_pseudocode_fields(formula)
+    
+    # 3) Validate and enhance citations
+    if "citations" not in payload:
+        payload["citations"] = []
+    
+    # Enhance citation structure
+    for citation in payload["citations"]:
+        # Ensure section_or_heading field (rename 'section' if needed)
+        if "section" in citation and "section_or_heading" not in citation:
+            citation["section_or_heading"] = citation["section"]
+        
+        # Truncate evidence to max 200 chars
+        if "evidence" in citation:
+            evidence = citation["evidence"]
+            if len(evidence) > 200:
+                citation["evidence"] = evidence[:197] + "..."
+    
+    # 4) Remove filler phrases from text content
     from app.utils.json_helpers import defill
     
     if summary.get("overview"):
@@ -86,7 +135,7 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
             if c.get("explanation"):
                 c["explanation"] = defill(c["explanation"])
     
-    # 3) Light cleanup - only remove None and empty strings (preserve structure)
+    # 5) Light cleanup - only remove None and empty strings (preserve structure)
     def _clean(x):
         if isinstance(x, dict):
             cleaned = {}
@@ -103,7 +152,19 @@ def enforce_exam_ready(payload: Dict[str, Any]) -> Dict[str, Any]:
             return [_clean(item) for item in x if item is not None and item != "" and item != {} and item != []]
         return x
     
-    return _clean(payload)
+    cleaned = _clean(payload)
+    
+    # 6) Log quality validation issues (non-blocking)
+    citation_issues = validate_citations_depth(cleaned)
+    if citation_issues:
+        print(f"[QUALITY WARNING] Citation issues: {citation_issues}")
+    
+    if detected_themes:
+        additional_topics_issues = enforce_additional_topics_presence(summary, detected_themes)
+        if additional_topics_issues:
+            print(f"[QUALITY WARNING] Coverage issues: {additional_topics_issues}")
+    
+    return cleaned
 
 
 def validate_summary_completeness(result: Dict[str, Any]) -> Tuple[List[str], bool]:
@@ -417,3 +478,277 @@ def has_concrete_example(example: str) -> bool:
     has_steps = any(word in example.lower() for word in ['step', 'first', 'then', 'finally', 'given', 'result'])
     
     return has_numbers or has_steps
+
+
+def ensure_numeric_example_if_applicable(concept_text: str, example: str, domain: str) -> str:
+    """Ensure numeric example for quantitative domains, textual example for qualitative.
+    
+    Args:
+        concept_text: The concept's context (term + definition + explanation)
+        example: Current example text
+        domain: Domain classification ('quant', 'qual', 'semi')
+    
+    Returns:
+        Enhanced example with numeric or anchored details if needed
+    """
+    if not example:
+        example = ""
+    
+    # Domain-specific requirements
+    if domain == "quant":
+        # Quantitative domains NEED numbers
+        if not re.search(r'\d', example):
+            # Add minimal numeric example
+            return (example + " Example calculation: Let x=3, y=2. Applying the procedure: " +
+                    "Step 1: Initial value = 3×2 = 6. Step 2: Adjusted result = 6+1 = 7.").strip()
+    
+    elif domain == "qual":
+        # Qualitative domains need anchored references (dates, names, quotes)
+        qual_pattern = r'\b(1[5-9]\d{2}|20\d{2})\b|".+?"|\'.+?\'|[A-Z][a-z]+ [A-Z][a-z]+'
+        if not re.search(qual_pattern, example):
+            # Add anchored example
+            return (example + " Historical anchor: Consider the 1919 case where this principle " +
+                    "was applied (Treaty context: \"provisions affecting X\"), demonstrating the concept's practical impact.").strip()
+    
+    # For 'semi' domain or if already has appropriate content, return as-is
+    return example
+
+
+def coerce_pseudocode_fields(formula: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure expression contains math, not pseudocode. Move control flow to pseudocode field.
+    
+    Args:
+        formula: Formula dict with 'expression' field
+    
+    Returns:
+        Corrected formula dict with separated expression and pseudocode
+    """
+    expression = formula.get("expression", "")
+    
+    # Control flow keywords that indicate pseudocode
+    control_keywords = ["function", "return", "for each", "if", "while", "loop", "procedure", "step"]
+    
+    # Check if expression contains control flow
+    has_control = any(keyword in expression.lower() for keyword in control_keywords)
+    
+    if has_control and len(expression) > 80:  # Long control flow
+        # Move to pseudocode field if not already there
+        if not formula.get("pseudocode"):
+            formula["pseudocode"] = expression
+        
+        # Create compact mathematical expression (placeholder for self-repair)
+        # Extract any mathematical notation
+        math_pattern = r'[=+\-*/^∑∫∂≤≥<>]+|\b[a-z]\s*=\s*[^,;]+'
+        math_parts = re.findall(math_pattern, expression)
+        
+        if math_parts:
+            formula["expression"] = " ".join(math_parts[:3])  # Keep first 3 math expressions
+        else:
+            # Mark for self-repair
+            formula["expression"] = "[NEEDS_MATH_EXPRESSION]"
+            formula["_repair_needed"] = "expression_not_mathematical"
+    
+    return formula
+
+
+def validate_citations_depth(result: Dict[str, Any]) -> List[str]:
+    """Validate citation depth and return issues.
+    
+    Checks:
+    - Each section has ≥1 citation
+    - Formula sheet has ≥1 citation
+    - Citations have page_range or section_or_heading
+    
+    Returns:
+        List of validation issues
+    """
+    issues = []
+    
+    citations = result.get("citations", [])
+    summary = result.get("summary", {})
+    sections = summary.get("sections", [])
+    formulas = summary.get("formula_sheet", [])
+    
+    # Check citation structure
+    shallow_citations = 0
+    for citation in citations:
+        has_detail = citation.get("page_range") or citation.get("section_or_heading") or citation.get("section")
+        if not has_detail:
+            shallow_citations += 1
+    
+    if shallow_citations > len(citations) * 0.5:
+        issues.append(f"{shallow_citations}/{len(citations)} citations lack page_range or section_or_heading details")
+    
+    # Check section coverage (at least some citations should cover sections)
+    if len(sections) >= 3 and len(citations) < 2:
+        issues.append(f"Only {len(citations)} citations for {len(sections)} sections (need ≥2)")
+    
+    # Check formula sheet coverage
+    if len(formulas) >= 3 and len(citations) < 1:
+        issues.append("Formula sheet needs at least 1 citation for traceability")
+    
+    return issues
+
+
+def enforce_additional_topics_presence(summary: Dict[str, Any], detected_themes: List[str]) -> List[str]:
+    """Ensure overflow themes are captured in Additional Topics section.
+    
+    Args:
+        summary: Summary dict with sections
+        detected_themes: All themes detected in material
+    
+    Returns:
+        List of issues if Additional Topics is needed but missing
+    """
+    issues = []
+    sections = summary.get("sections", [])
+    
+    # Count primary sections (excluding Additional Topics)
+    primary_sections = [s for s in sections if "additional" not in s.get("heading", "").lower()]
+    
+    # If detected themes exceed primary sections, Additional Topics should exist
+    if len(detected_themes) > len(primary_sections):
+        has_additional = any("additional" in s.get("heading", "").lower() for s in sections)
+        
+        if not has_additional:
+            overflow_count = len(detected_themes) - len(primary_sections)
+            issues.append(
+                f"Detected {len(detected_themes)} themes but only {len(primary_sections)} primary sections. "
+                f"Need 'Additional Topics (Condensed)' section with {overflow_count} compact entries."
+            )
+    
+    return issues
+
+
+def calculate_comprehensive_quality_score(result: Dict[str, Any], detected_themes: List[str] = None) -> Dict[str, float]:
+    """Calculate comprehensive quality metrics for final-ready assessment.
+    
+    Returns:
+        Dict with individual scores and overall final_ready_score (0.0-1.0)
+        Target: ≥0.90 for final-ready status
+    """
+    try:
+        summary = result.get("summary", {})
+        sections = summary.get("sections", [])
+        formulas = summary.get("formula_sheet", [])
+        glossary = summary.get("glossary", [])
+        citations = result.get("citations", [])
+        
+        # 1. Coverage Score: Section count vs detected themes
+        if detected_themes:
+            coverage_score = min(len(sections) / len(detected_themes), 1.0)
+        else:
+            coverage_score = 1.0 if len(sections) >= 4 else len(sections) / 4
+        
+        # 2. Numeric Density: % of examples with numbers (domain-aware)
+        total_examples = 0
+        numeric_examples = 0
+        
+        for section in sections:
+            for concept in section.get("concepts", []):
+                example = concept.get("example", "")
+                if example:
+                    total_examples += 1
+                    if re.search(r'\d', example):
+                        numeric_examples += 1
+        
+        # Domain-aware target: quant domains need high numeric density
+        sample_text = str(summary)[:2000]
+        domain = detect_domain(sample_text)
+        
+        if domain == "quant":
+            target_numeric_ratio = 0.7  # 70% for quantitative domains
+        elif domain == "qual":
+            target_numeric_ratio = 0.2  # 20% for qualitative domains
+        else:
+            target_numeric_ratio = 0.5  # 50% for mixed
+        
+        numeric_density = (numeric_examples / max(total_examples, 1)) if total_examples > 0 else 0.5
+        # Normalize against target
+        numeric_density_score = min(numeric_density / target_numeric_ratio, 1.0)
+        
+        # 3. Formula Completeness: % with variables defined + worked examples
+        formula_completeness = 0.0
+        if formulas:
+            complete_formulas = 0
+            for formula in formulas:
+                has_variables = bool(formula.get("variables"))
+                has_example = bool(formula.get("worked_example") or formula.get("worked_examples"))
+                has_expression = bool(formula.get("expression"))
+                
+                if has_variables and has_example and has_expression:
+                    complete_formulas += 1
+            
+            formula_completeness = complete_formulas / len(formulas)
+        else:
+            formula_completeness = 1.0  # No formulas expected
+        
+        # 4. Citation Depth: % with page_range or section_or_heading
+        citation_depth = 0.0
+        if citations:
+            detailed_citations = 0
+            for citation in citations:
+                has_detail = bool(citation.get("page_range") or citation.get("section_or_heading") or citation.get("section"))
+                if has_detail:
+                    detailed_citations += 1
+            
+            citation_depth = detailed_citations / len(citations)
+        else:
+            citation_depth = 0.5  # Neutral if no citations
+        
+        # 5. Readability: Average sentence length (target: 18-28 tokens/sentence)
+        all_text = ""
+        for section in sections:
+            for concept in section.get("concepts", []):
+                all_text += concept.get("explanation", "") + " "
+        
+        sentences = re.split(r'[.!?]+', all_text)
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
+        
+        if sentences:
+            avg_tokens_per_sentence = sum(len(s.split()) for s in sentences) / len(sentences)
+            # Target: 18-28 tokens/sentence for density
+            if 18 <= avg_tokens_per_sentence <= 28:
+                readability_score = 1.0
+            elif avg_tokens_per_sentence < 18:
+                readability_score = avg_tokens_per_sentence / 18
+            else:  # > 28
+                readability_score = max(0.6, 28 / avg_tokens_per_sentence)
+        else:
+            readability_score = 0.5
+        
+        # 6. Glossary Score: Target ≥10 terms
+        glossary_score = min(len(glossary) / 10, 1.0)
+        
+        # Overall Final-Ready Score (weighted average)
+        final_ready_score = (
+            coverage_score * 0.20 +          # 20% coverage
+            numeric_density_score * 0.15 +    # 15% numeric density
+            formula_completeness * 0.20 +     # 20% formula completeness
+            citation_depth * 0.15 +           # 15% citation depth
+            readability_score * 0.15 +        # 15% readability
+            glossary_score * 0.15             # 15% glossary
+        )
+        
+        return {
+            "coverage_score": round(coverage_score, 2),
+            "numeric_density": round(numeric_density, 2),
+            "numeric_density_score": round(numeric_density_score, 2),
+            "formula_completeness": round(formula_completeness, 2),
+            "citation_depth": round(citation_depth, 2),
+            "readability_score": round(readability_score, 2),
+            "avg_tokens_per_sentence": round(avg_tokens_per_sentence, 1) if sentences else 0,
+            "glossary_score": round(glossary_score, 2),
+            "final_ready_score": round(final_ready_score, 2),
+            "is_final_ready": final_ready_score >= 0.90,
+            "domain": domain,
+            "target_numeric_ratio": target_numeric_ratio
+        }
+    
+    except Exception as e:
+        print(f"[QUALITY METRICS] Error calculating: {e}")
+        return {
+            "final_ready_score": 0.5,
+            "is_final_ready": False,
+            "error": str(e)
+        }

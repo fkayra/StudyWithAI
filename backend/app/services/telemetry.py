@@ -25,9 +25,16 @@ def record_summary_quality(
     self_repair_improvement: Optional[float],
     total_tokens_used: int,
     generation_time_seconds: float,
-    warnings: List[str]
+    warnings: List[str],
+    # New comprehensive quality metrics (optional for backward compatibility)
+    coverage_score: Optional[float] = None,
+    numeric_density: Optional[float] = None,
+    formula_completeness: Optional[float] = None,
+    citation_depth: Optional[float] = None,
+    readability_score: Optional[float] = None,
+    is_final_ready: Optional[bool] = None
 ):
-    """Record quality metrics for a generated summary"""
+    """Record quality metrics for a generated summary with comprehensive evrensel metrics"""
     try:
         quality_record = SummaryQuality(
             user_id=user_id,
@@ -46,13 +53,21 @@ def record_summary_quality(
             self_repair_improvement=self_repair_improvement,
             total_tokens_used=total_tokens_used,
             generation_time_seconds=generation_time_seconds,
-            warnings=warnings
+            warnings=warnings,
+            # Comprehensive quality metrics (evrensel)
+            coverage_score=coverage_score,
+            numeric_density=numeric_density,
+            formula_completeness=formula_completeness,
+            citation_depth=citation_depth,
+            readability_score=readability_score,
+            is_final_ready=1 if is_final_ready else 0
         )
         
         db.add(quality_record)
         db.commit()
         
-        print(f"[TELEMETRY] Recorded quality: score={quality_score:.2f}, concepts={num_concepts}, formulas={num_formulas}")
+        print(f"[TELEMETRY] Recorded quality: final_ready_score={quality_score:.2f}, " +
+              f"is_final_ready={is_final_ready}, concepts={num_concepts}, formulas={num_formulas}")
         
     except Exception as e:
         print(f"[TELEMETRY ERROR] Failed to record quality: {e}")
