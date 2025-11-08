@@ -1054,120 +1054,146 @@ async def summarize_from_files(
             formulas = []
             glossary = []
             
-            # Split by major sections (looking for "Section X:" or "**Section X")
-            section_pattern = r'(?:^|\n)(?:\*\*)?[Ss]ection \d+:?\s*[:\-]?\s*(.+?)(?:\*\*)?'
-            section_splits = re.split(section_pattern, text, flags=re.MULTILINE)
+            # Clean markdown symbols for display
+            def clean_md(s):
+                s = re.sub(r'^#+\s*', '', s)  # Remove leading #
+                s = re.sub(r'\*\*([^*]+)\*\*', r'\1', s)  # Remove ** bold **
+                return s.strip()
             
-            # Also look for other major sections like "Exam Toolkit", "Glossary"
-            blocks = re.split(r'\n(?:\*\*)?(?:Exam Toolkit|Glossary of Terms|Coverage Checklist)(?:\*\*)?\n', text, flags=re.IGNORECASE)
-            
-            # Extract glossary if present
-            glossary_match = re.search(r'(?:^|\n)\*?\*?Glossary[^:]*:?\*?\*?\s*\n((?:- \*\*[^*]+\*\*[^\n]+\n?)+)', text, re.IGNORECASE | re.MULTILINE)
+            # Extract glossary first (Glossary of Terms section)
+            glossary_match = re.search(
+                r'#+\s*Glossary[^#\n]*\n((?:[-•]\s*\*\*[^*]+\*\*[^\n]+\n?)+)',
+                text,
+                re.IGNORECASE | re.MULTILINE
+            )
             if glossary_match:
-                glossary_text = glossary_match.group(1)
-                for line in glossary_text.split('\n'):
-                    term_match = re.match(r'-\s*\*\*([^*]+)\*\*\s*:?\s*(.+)', line.strip())
-                    if term_match:
-                        glossary.append({
-                            "term": term_match.group(1).strip(),
-                            "definition": term_match.group(2).strip()
-                        })
+                for line in glossary_match.group(1).split('\n'):
+                    line = line.strip()
+                    if line.startswith(('- ', '• ')):
+                        # Format: - **Term**: Definition
+                        match = re.match(r'[-•]\s*\*\*([^*:]+)\*\*\s*:?\s*(.+)', line)
+                        if match:
+                            glossary.append({
+                                "term": match.group(1).strip(),
+                                "definition": match.group(2).strip()
+                            })
             
-            # Extract formulas (LaTeX patterns)
-            formula_patterns = re.finditer(r'\\\[(.+?)\\\]|\\\((.+?)\\\)', text, re.DOTALL)
-            seen_formulas = set()
-            for match in formula_patterns:
-                formula = (match.group(1) if match.group(1) else match.group(2))
-                if formula:
-                    formula = formula.strip()
-                    if formula and formula not in seen_formulas and len(formula) > 5:
-                        seen_formulas.add(formula)
-                        # Try to find context (what's this formula about?)
-                        start = max(0, match.start() - 100)
-                        context = text[start:match.start()].strip()
-                        context_lines = [l.strip() for l in context.split('\n') if l.strip()]
-                        name = context_lines[-1] if context_lines else "Formula"
-                        
-                        formulas.append({
-                            "name": name[:80],
-                            "expression": f"\\[{formula}\\]",
-                            "variables": []
-                        })
+            # Extract formulas with better context detection
+            for match in re.finditer(r'\\\[((?:[^\\\]]|\\\w)+?)\\\]', text, re.DOTALL):
+                formula = match.group(1).strip()
+                if len(formula) < 10 or formula in [f['expression'] for f in formulas]:
+                    continue
+                
+                # Get preceding lines for context
+                start_pos = max(0, match.start() - 200)
+                context = text[start_pos:match.start()]
+                context_lines = [l.strip() for l in context.split('\n') if l.strip()]
+                
+                # Look for formula name (usually on line before formula)
+                name = "Formula"
+                for line in reversed(context_lines[-3:]):  # Check last 3 lines
+                    cleaned = clean_md(line)
+                    # Skip bullets and very short lines
+                    if cleaned and not cleaned.startswith('-') and len(cleaned) > 5 and len(cleaned) < 100:
+                        # Check if it looks like a formula name
+                        if any(word in cleaned.lower() for word in ['algorithm', 'formula', 'equation', 'value', 'function']):
+                            name = cleaned
+                            break
+                        # Or if it ends with colon
+                        if cleaned.endswith(':'):
+                            name = cleaned.rstrip(':')
+                            break
+                
+                formulas.append({
+                    "name": name,
+                    "expression": f"\\[{formula}\\]",
+                    "variables": []
+                })
             
-            # Parse sections
-            current_section = None
+            # Parse sections - look for ### N. Title patterns
+            section_pattern = r'^###\s*(\d+\.?\s*.+?)$'
             lines = text.split('\n')
+            
+            current_section = None
+            current_concept = None
             i = 0
             
             while i < len(lines):
                 line = lines[i].strip()
                 
-                # Skip empty lines and dividers
-                if not line or line == '---':
+                # Skip empty, dividers, and main title
+                if not line or line == '---' or line.startswith('# '):
                     i += 1
                     continue
                 
-                # Section heading (Section X: Title)
-                section_match = re.match(r'\*?\*?[Ss]ection\s+\d+\s*:?\s*(.+?)(?:\*\*)?$', line)
+                # Major section (### 1. Title)
+                section_match = re.match(section_pattern, line)
                 if section_match:
+                    # Save previous section
                     if current_section:
+                        if current_concept:
+                            current_section['concepts'].append(current_concept)
                         sections.append(current_section)
-                    current_section = {
-                        "heading": section_match.group(1).strip(),
-                        "concepts": []
-                    }
+                    
+                    # Start new section
+                    heading = clean_md(section_match.group(1))
+                    heading = re.sub(r'^\d+\.?\s*', '', heading)  # Remove leading number
+                    current_section = {"heading": heading, "concepts": []}
+                    current_concept = None
                     i += 1
                     continue
                 
-                # Subsection with ** bold **
-                if line.startswith('**') and line.endswith('**') and line.count('**') == 2:
-                    if current_section:
-                        term = line.replace('**', '').strip()
-                        # Look ahead to collect content
-                        content_lines = []
-                        j = i + 1
-                        while j < len(lines) and lines[j].strip() and not lines[j].strip().startswith('**'):
-                            content_lines.append(lines[j].strip())
-                            j += 1
-                        
-                        current_section['concepts'].append({
+                # Subsection heading (**Key Ideas**, **Definitions**, etc.)
+                if current_section and line.startswith('- **') and '**' in line[4:]:
+                    # Save previous concept
+                    if current_concept:
+                        current_section['concepts'].append(current_concept)
+                    
+                    # Extract subsection name
+                    match = re.match(r'-\s*\*\*([^*]+)\*\*', line)
+                    if match:
+                        term = match.group(1).strip()
+                        current_concept = {
                             "term": term,
-                            "definition": "",
-                            "explanation": '\n'.join(content_lines),
-                            "example": "",
-                            "key_points": []
-                        })
-                        i = j
-                        continue
-                
-                # Bullet points
-                if line.startswith('- ') and current_section:
-                    if not current_section['concepts']:
-                        current_section['concepts'].append({
-                            "term": "Key Points",
                             "definition": "",
                             "explanation": "",
                             "example": "",
                             "key_points": []
-                        })
-                    
-                    if current_section['concepts']:
-                        current_section['concepts'][-1]['key_points'].append(line[2:].strip())
+                        }
+                    i += 1
+                    continue
+                
+                # Bullet point content
+                if current_concept and line.startswith(('- ', '• ')):
+                    bullet_text = re.sub(r'^[-•]\s*', '', line)
+                    bullet_text = clean_md(bullet_text)
+                    if bullet_text and len(bullet_text) > 3:
+                        current_concept['key_points'].append(bullet_text)
+                    i += 1
+                    continue
+                
+                # Regular text → explanation
+                if current_concept and line and not line.startswith('#'):
+                    if current_concept['explanation']:
+                        current_concept['explanation'] += ' '
+                    current_concept['explanation'] += clean_md(line)
                 
                 i += 1
             
-            # Save last section
+            # Save last section/concept
             if current_section:
+                if current_concept:
+                    current_section['concepts'].append(current_concept)
                 sections.append(current_section)
             
-            # If no structured sections, create one big section
+            # Fallback: if no sections found, create simple structure
             if not sections:
                 sections = [{
-                    "heading": "Content",
+                    "heading": "Overview",
                     "concepts": [{
-                        "term": "Study Material",
+                        "term": "Content",
                         "definition": "",
-                        "explanation": text[:5000],  # Limit to prevent huge blobs
+                        "explanation": clean_md(text[:2000]),
                         "example": "",
                         "key_points": []
                     }]
@@ -1178,13 +1204,22 @@ async def summarize_from_files(
         import re
         parsed_sections, formula_sheet, glossary_items = parse_markdown_enhanced(result_json)
         
-        # Extract title from first line
-        title_match = re.search(r'(?:^|\n)\*?\*?([^*\n]{10,100}?)\*?\*?(?:\n|$)', result_json)
-        title = title_match.group(1).strip() if title_match else "Study Guide"
+        # Extract title (look for # Title or ## Title at start)
+        title_match = re.search(r'^#+\s*(.+?)$', result_json, re.MULTILINE)
+        if title_match:
+            title = re.sub(r'^#+\s*', '', title_match.group(1)).strip()
+            title = re.sub(r'\*\*', '', title)  # Remove bold
+        else:
+            title = "Study Guide"
         
-        # Extract overview
-        overview_match = re.search(r'(?:Title & Overview|Overview)[^\n]*\n+(.+?)(?:\n\n|\n---)', result_json, re.DOTALL | re.IGNORECASE)
-        overview = overview_match.group(1).strip()[:500] if overview_match else "Comprehensive study guide for exam preparation"
+        # Extract overview (look for ## Overview section)
+        overview_match = re.search(r'##\s*Overview\s*\n+(.+?)(?:\n#{2,}|\n\n---)', result_json, re.DOTALL | re.IGNORECASE)
+        if overview_match:
+            overview = overview_match.group(1).strip()
+            overview = re.sub(r'\*\*', '', overview)  # Remove bold
+            overview = overview[:500]
+        else:
+            overview = "Comprehensive study guide for exam preparation"
         
         result = {
             "summary": {
