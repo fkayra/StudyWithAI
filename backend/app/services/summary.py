@@ -335,6 +335,50 @@ VALIDATION CHECKLIST (before output):
 OUTPUT PURE JSON NOW (no other text):"""
 
 
+def get_reduce_outline_prompt(language: str, domain: str) -> str:
+    """
+    First stage of two-stage REDUCE: generate topology/outline only
+    """
+    L = "Use TURKISH." if language == "tr" else "Use ENGLISH."
+    return f"""You are planning a study-guide topology only. {L}
+Output pure JSON with fields: title, sections[heading, concepts[{{
+  "term": "...", "expected_example": "numeric|anchored"
+}}]], formula_plan[name, expected_example], glossary_target (int).
+
+Rules:
+- Create a sufficient number of sections to cover ALL themes (outline size should scale with content depth).
+- Do NOT force or assume a fixed number like 6–12. Let theme-count + output-budget decide.
+- Prioritize major themes; compress minor themes as concise sub-concepts under the closest section.
+- Prefer 'numeric' examples for quantitative/technical material and 'anchored' examples for qualitative material.
+- Do NOT write explanations or examples, only the topology."""
+
+
+def get_reduce_fill_prompt(language: str, domain: str, additional: str = "") -> str:
+    """
+    Second stage of two-stage REDUCE: fill outline with content
+    """
+    L = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
+    domain_note = ""
+    if domain == "technical":
+        domain_note = "\n- NUMERIC EXAMPLES REQUIRED for every quantitative concept."
+    elif domain == "social":
+        domain_note = "\n- ANCHORED EXAMPLES REQUIRED (dates, names, cases) for qualitative concepts."
+    return f"""Fill the given OUTLINE into a complete, exam-ready study guide.
+{L}{domain_note}
+Constraints:
+- KEEP the outline section + concept order (do NOT rename or remove).
+- Each concept → definition + 2–3 dense paragraphs + ONE example matching expected_example:
+  • numeric → real numbers + step-by-step calculation
+  • anchored → specific dates/names/cases
+- Each formula → expression (MATH ONLY), variables dict, ≥1 numeric worked_example, optional pseudocode, notes.
+- Glossary ≥ 15 terms.
+- Provide citations for each main section and formula sheet.
+- If the outline missed some themes, you MAY add concise sub-concepts, but avoid unnecessary padding.
+- Output single valid JSON, no markdown.
+
+{additional}"""
+
+
 def get_no_files_prompt(topic: str, language: str = "en") -> str:
     """Prompt for generating summary without uploaded files"""
     lang_instr = "Generate in TURKISH." if language == "tr" else "Generate in ENGLISH."
@@ -351,6 +395,238 @@ Use the same JSON structure as file-based summaries. Focus on depth, NOT practic
 - DO NOT include practice questions - use all tokens for explanations and examples
 
 Output valid JSON only (no markdown code blocks)."""
+
+
+# ========== Helper Functions for Two-Stage REDUCE ==========
+
+def estimate_full_section_tokens(domain: str) -> int:
+    """
+    Estimate tokens needed for one complete section with concepts + examples
+    """
+    return 900 if domain == "technical" else 750
+
+
+def infer_theme_heads(aggregated_knowledge: dict) -> list:
+    """
+    Extract top-level theme headings from aggregated chunk data
+    """
+    heads = []
+    for c in aggregated_knowledge.get("concepts", []):
+        src = c.get("_source") or {}
+        hp = src.get("heading_path") or src.get("heading")
+        if hp:
+            heads.append(hp.split(" > ")[0])
+    return list({h.strip() for h in heads if h})
+
+
+def compute_outline_targets(aggregated_knowledge: dict, out_cap: int, domain: str) -> tuple:
+    """
+    Compute dynamic outline target ranges based on content and budget
+    Returns: (target_min, target_soft_max, approx_theme_count)
+    """
+    theme_heads = infer_theme_heads(aggregated_knowledge)
+    approx_theme_count = max(1, len(theme_heads))
+    full_cost = estimate_full_section_tokens(domain)
+    body_budget = int(out_cap * 0.7)
+    soft_max_by_budget = max(8, body_budget // full_cost)
+    target_min = max(6, min(approx_theme_count, 10))
+    target_soft_max = max(target_min + 2, min(soft_max_by_budget, approx_theme_count + 4))
+    return target_min, target_soft_max, approx_theme_count
+
+
+def coverage_gaps(outline: dict, aggregated_knowledge: dict) -> list:
+    """
+    Detect missing themes: present in source but not in outline
+    """
+    planned = {(sec.get("heading") or "").strip() for sec in outline.get("sections", [])}
+    source_tops = set(infer_theme_heads(aggregated_knowledge))
+    return [h for h in source_tops if h and all(h.lower() not in p.lower() for p in planned)]
+
+
+def validate_reduce_output(result: dict) -> list:
+    """
+    Validate final reduce output for common quality issues
+    Returns list of issue strings (empty if all good)
+    """
+    issues = []
+    summary = result.get("summary", {})
+    
+    # Check sections
+    sections = summary.get("sections", [])
+    if len(sections) < 4:
+        issues.append(f"Too few sections ({len(sections)}), expected ≥4")
+    
+    # Check concepts have examples
+    for i, sec in enumerate(sections):
+        concepts = sec.get("concepts", [])
+        if not concepts:
+            issues.append(f"Section {i+1} '{sec.get('heading', 'Unknown')}' has no concepts")
+        for c in concepts:
+            if not c.get("example") and not c.get("key_points"):
+                issues.append(f"Concept '{c.get('term', 'Unknown')}' missing both example and key_points")
+    
+    # Check formulas
+    formulas = summary.get("formula_sheet", [])
+    for f in formulas:
+        if not f.get("expression"):
+            issues.append(f"Formula '{f.get('name', 'Unknown')}' missing expression")
+        if not f.get("worked_example"):
+            issues.append(f"Formula '{f.get('name', 'Unknown')}' missing worked_example")
+    
+    # Check glossary
+    glossary = summary.get("glossary", [])
+    if len(glossary) < 10:
+        issues.append(f"Glossary too short ({len(glossary)} terms), expected ≥10")
+    
+    return issues
+
+
+def build_self_repair_prompt(result: dict, issues: list, language: str) -> str:
+    """
+    Build repair prompt to fix validation issues
+    """
+    import json
+    lang = "TURKISH" if language == "tr" else "ENGLISH"
+    issues_text = "\n".join(f"- {issue}" for issue in issues)
+    
+    return f"""REPAIR TASK ({lang})
+
+You generated a study guide with the following quality issues:
+{issues_text}
+
+Here is your output:
+{json.dumps(result, ensure_ascii=False, indent=2)}
+
+Please fix ALL issues and return the complete, corrected JSON.
+- Add missing examples (numeric for technical, anchored for qualitative)
+- Expand glossary to ≥15 terms
+- Ensure formulas have expression + worked_example
+- Keep same structure, just fix problems
+
+Output pure JSON only."""
+
+
+# ========== Two-Stage REDUCE Orchestrator ==========
+
+def reduce_two_stage(
+    aggregated_knowledge: dict,
+    language: str,
+    domain: str,
+    out_cap: int,
+    additional_instructions: str = ""
+) -> dict:
+    """
+    Two-stage REDUCE process:
+    1. Generate outline/topology
+    2. Fill outline with content
+    3. Validate and self-repair if needed
+    
+    Returns: Final summary dict (parsed JSON)
+    """
+    import json
+    from app.utils.json_helpers import parse_json_robust
+    
+    # === STAGE 1: Generate Outline ===
+    print("[REDUCE] Stage 1: Generating outline/topology...")
+    outline_prompt = get_reduce_outline_prompt(language, domain)
+    
+    # Truncate aggregated knowledge if too large (keep structure, limit content)
+    agg_str = json.dumps(aggregated_knowledge, ensure_ascii=False)
+    if len(agg_str) > 150000:
+        print(f"[REDUCE] Truncating aggregated knowledge ({len(agg_str)} → 150k chars)")
+        agg_str = agg_str[:150000] + "..."
+    
+    outline_user = (
+        outline_prompt
+        + "\n\nSTRUCTURED SOURCE KNOWLEDGE:\n"
+        + agg_str
+    )
+    
+    outline_json = call_openai(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=outline_user,
+        max_output_tokens=min(1200, int(out_cap * 0.15)),
+        temperature=0
+    )
+    outline = parse_json_robust(outline_json)
+    
+    # Compute dynamic targets
+    target_min, target_soft_max, approx_themes = compute_outline_targets(
+        aggregated_knowledge=aggregated_knowledge,
+        out_cap=out_cap,
+        domain=domain
+    )
+    print(f"[REDUCE] Outline targets: min={target_min}, soft_max={target_soft_max}, themes={approx_themes}")
+    
+    # === SELF-REPAIR: Expand if outline too shallow ===
+    if len(outline.get("sections", [])) < target_min:
+        print(f"[REDUCE] Outline too shallow ({len(outline.get('sections', []))} < {target_min}), expanding...")
+        outline_user += (
+            f"\n\n[REPAIR] Expand sections to ensure full theme coverage "
+            f"(expected ~{target_min}–{target_soft_max}, but exceeding is allowed if needed)."
+        )
+        outline_json = call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=outline_user,
+            max_output_tokens=1200,
+            temperature=0
+        )
+        outline = parse_json_robust(outline_json)
+    
+    # === SELF-REPAIR: Check coverage gaps ===
+    missing = coverage_gaps(outline, aggregated_knowledge)
+    if missing:
+        print(f"[REDUCE] Coverage gaps detected: {missing}")
+        outline_user += (
+            "\n\n[REPAIR] Missing key themes: "
+            + ", ".join(missing)
+            + ". Add them as sections or concise sub-concepts."
+        )
+        outline_json = call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=outline_user,
+            max_output_tokens=1200,
+            temperature=0
+        )
+        outline = parse_json_robust(outline_json)
+    
+    # === STAGE 2: Fill Outline ===
+    print("[REDUCE] Stage 2: Filling outline with content...")
+    fill_prompt = get_reduce_fill_prompt(language, domain, additional_instructions)
+    fill_user = (
+        fill_prompt
+        + "\n\nOUTLINE (DO NOT CHANGE ORDER):\n"
+        + json.dumps(outline, ensure_ascii=False, indent=2)
+        + "\n\nSTRUCTURED SOURCE KNOWLEDGE:\n"
+        + agg_str
+    )
+    
+    filled_json = call_openai(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=fill_user,
+        max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        temperature=0
+    )
+    result = parse_json_robust(filled_json)
+    
+    # === STAGE 3: Validate & Self-Repair ===
+    print("[REDUCE] Stage 3: Validating output...")
+    issues = validate_reduce_output(result)
+    if issues:
+        print(f"[REDUCE] Quality issues detected: {issues}")
+        repair_user = build_self_repair_prompt(result, issues, language)
+        repaired = call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=repair_user,
+            max_output_tokens=min(out_cap, 8000),
+            temperature=0
+        )
+        result = parse_json_robust(repaired) or result
+        print("[REDUCE] Self-repair complete")
+    else:
+        print("[REDUCE] Output validated ✓")
+    
+    return result
 
 
 # ========== OpenAI Integration ==========
@@ -526,14 +802,17 @@ def merge_summaries(
         "source_structure": chunk_citations if chunk_citations else []
     }
     
-    user_prompt = get_final_merge_prompt(language, additional_instructions, domain)
-    user_prompt += f"\n\nSTRUCTURED SOURCE KNOWLEDGE (from {len(chunk_summaries)} chunks):\n{json.dumps(aggregated_knowledge, indent=2, ensure_ascii=False)}"
-    
-    return call_openai(
-        system_prompt=SYSTEM_PROMPT,
-        user_prompt=user_prompt,
-        max_output_tokens=out_budget
+    # Use two-stage REDUCE: outline → fill → validate
+    result = reduce_two_stage(
+        aggregated_knowledge=aggregated_knowledge,
+        language=language,
+        domain=domain,
+        out_cap=out_budget,
+        additional_instructions=additional_instructions or ""
     )
+    
+    # Return as JSON string (for compatibility with existing pipeline)
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 def map_reduce_summary(
