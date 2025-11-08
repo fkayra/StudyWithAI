@@ -1024,8 +1024,8 @@ async def summarize_from_files(
     
     try:
         from app.utils.json_helpers import parse_json_robust, create_error_response
-        from app.utils.quality import enforce_exam_ready, validate_summary_completeness
-        from app.services.summary import quality_score
+        from app.utils.quality import enforce_exam_ready, validate_summary_completeness, calculate_comprehensive_quality_score
+        from app.services.summary import quality_score_legacy
         
         language = req.language or "en"
         additional_instructions = req.prompt or ""
@@ -1053,12 +1053,23 @@ async def summarize_from_files(
                 len(result_json)
             )
         
-        # Calculate quality score
-        score = quality_score(result)
-        print(f"[QUALITY GUARDRAIL] Score: {score}/1.0 (threshold: 0.7)")
+        # Calculate comprehensive quality score (new evrensel metrics)
+        quality_metrics = calculate_comprehensive_quality_score(result)
+        score = quality_metrics.get("final_ready_score", 0.5)
+        is_final_ready = quality_metrics.get("is_final_ready", False)
+        
+        print(f"[QUALITY METRICS] Final-ready score: {score}/1.0 (target: 0.90+)")
+        print(f"[QUALITY METRICS] Coverage: {quality_metrics.get('coverage_score', 0)}, " +
+              f"Numeric density: {quality_metrics.get('numeric_density', 0)}, " +
+              f"Formula completeness: {quality_metrics.get('formula_completeness', 0)}, " +
+              f"Citation depth: {quality_metrics.get('citation_depth', 0)}, " +
+              f"Readability: {quality_metrics.get('readability_score', 0)}")
+        print(f"[QUALITY METRICS] Domain: {quality_metrics.get('domain', 'unknown')}, " +
+              f"Is final-ready: {is_final_ready}")
         
         # Enforce exam-ready quality standards (NO placeholders)
-        result = enforce_exam_ready(result)
+        # Note: detected_themes would come from structure parser, for now pass None
+        result = enforce_exam_ready(result, detected_themes=None)
         
         # POST-PROCESSING VALIDATION (new domain-agnostic quality rules)
         from app.utils.quality import create_self_repair_prompt, validate_summary_completeness, validate_and_enhance_quality
@@ -1104,9 +1115,10 @@ async def summarize_from_files(
                 try:
                     repaired_result = parse_json_robust(repaired_json)
                     
-                    # Check if repair improved quality
-                    repaired_score = quality_score(repaired_result)
-                    print(f"[SELF-REPAIR] Score after repair: {repaired_score}/1.0")
+                    # Check if repair improved quality (use new comprehensive score)
+                    repaired_metrics = calculate_comprehensive_quality_score(repaired_result)
+                    repaired_score = repaired_metrics.get("final_ready_score", 0.5)
+                    print(f"[SELF-REPAIR] Score after repair: {repaired_score}/1.0 (final-ready: {repaired_metrics.get('is_final_ready', False)})")
                     
                     if repaired_score > score:
                         self_repair_improvement = repaired_score - score
@@ -1159,7 +1171,14 @@ async def summarize_from_files(
                 self_repair_improvement=self_repair_improvement,
                 total_tokens_used=total_tokens_used,
                 generation_time_seconds=generation_time,
-                warnings=warnings
+                warnings=warnings,
+                # New comprehensive quality metrics
+                coverage_score=quality_metrics.get('coverage_score'),
+                numeric_density=quality_metrics.get('numeric_density'),
+                formula_completeness=quality_metrics.get('formula_completeness'),
+                citation_depth=quality_metrics.get('citation_depth'),
+                readability_score=quality_metrics.get('readability_score'),
+                is_final_ready=is_final_ready
             )
         except Exception as telemetry_error:
             print(f"[TELEMETRY WARNING] Failed to record: {telemetry_error}")

@@ -81,5 +81,6 @@ MAX_OUTPUT_TOKENS_ABSOLUTE = 16000
 # Cache TTL (in seconds)
 CACHE_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
 
-# Density Boost mode threshold
-DENSITY_BOOST_THRESHOLD = 15000  # Auto-enable for very large documents
+# Density Boost mode thresholds (flexible scaling)
+DENSITY_BOOST_THRESHOLD = 15000  # Soft threshold: enable density boost compression
+AGGRESSIVE_DENSITY_THRESHOLD = 40000  # Aggressive threshold: max compression + de-duplication

@@ -38,15 +38,28 @@ OUTPUT REQUIREMENTS:
 - NO PRACTICE QUESTIONS: Use that token budget for deeper explanations instead
 - JSON ONLY: Output pure JSON (no markdown, no extra text)
 
+EVRENSEL QUALITY RULES (UNIVERSAL, DOMAIN-AGNOSTIC):
+1. **Expression vs Pseudocode**: Keep `expression` as mathematical notation (e.g., f(x) = ax² + bx + c). Put pseudocode/algorithm steps into `pseudocode` or `notes` field.
+2. **Additional Topics**: Always include an 'Additional Topics (Condensed)' section listing any remaining themes with 1-2 exam-oriented sentences each.
+3. **Domain-Aware Examples**: 
+   - For quantitative domains (math, physics, CS, economics, stats): Ensure at least one numeric example per concept with actual numbers
+   - For qualitative domains (law, literature, history): Use anchored examples with dates, names, quotes
+   - Auto-detect domain and adapt accordingly
+4. **Citation Depth**: Include specific page_range or section_or_heading in citations for traceability
+5. **Tone**: Keep tone instructional, concise subheadings, avoid domain-specific verbosity unless detected
+
 ⚠️ PRE-FINALIZATION SELF-CHECK:
 Before outputting, verify your work against your internal plan:
 ✓ Did you cover all topics from your outline?
-✓ Does every formula have: expression + variables + multiple worked examples?
-✓ Does every concept have at least 2-3 concrete examples with calculations?
+✓ Does every formula have: expression (MATH ONLY) + variables + multiple worked examples?
+✓ Did you move any pseudocode from 'expression' to 'pseudocode' field?
+✓ Does every concept have at least 2-3 concrete examples (numeric for quant, anchored for qual)?
 ✓ Did you include algorithm complexity analysis where applicable?
-✓ Does glossary have ≥8 substantive terms?
+✓ Does glossary have ≥10 substantive terms?
 ✓ Is JSON structure complete and valid (all brackets closed)?
 ✓ Did you use full token budget for depth (no practice questions)?
+✓ Did you include 'Additional Topics (Condensed)' section if needed?
+✓ Do citations have section_or_heading or page_range details?
 
 If any check fails, revise before output."""
 
@@ -140,7 +153,7 @@ def detect_domain(text: str) -> str:
     return "general"
 
 
-def quality_score(result: dict) -> float:
+def quality_score_legacy(result: dict) -> float:
     """
     Calculate quality score (0.0-1.0) based on content depth and richness.
     Focus: concept depth, formula completeness, examples, glossary (NO practice questions)
@@ -208,9 +221,19 @@ def quality_score(result: dict) -> float:
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
     Soft Merge mode: covers all themes, scales sections dynamically (FULL or SHORT)
+    Enhanced with evrensel quality rules
     """
     lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
+
+    # Domain-specific guidance
+    domain_guidance = ""
+    if domain == "technical":
+        domain_guidance = "\n- NUMERIC EXAMPLES REQUIRED: Include actual numbers, calculations, and step-by-step solutions in every example."
+    elif domain == "social":
+        domain_guidance = "\n- ANCHORED EXAMPLES REQUIRED: Include dates, names, quotes, and specific historical/case references in examples."
+    else:
+        domain_guidance = "\n- CONCRETE EXAMPLES: Use numeric or anchored examples as appropriate to the domain."
 
     return f"""GOAL
 Create a comprehensive, exam-ready study guide from the provided material. It must stand alone as the only thing a student needs before a final.
@@ -223,7 +246,7 @@ CONSTRAINTS
 - Do NOT include any practice questions.
 - Be domain-agnostic; do NOT assume a specific book or course.
 - Prefer concrete, worked examples over vague prose.
-- No empty arrays; omit a field if you cannot populate it meaningfully.{additional}
+- No empty arrays; omit a field if you cannot populate it meaningfully.{domain_guidance}{additional}
 
 SILENT PLANNING (do internally before writing):
 1) Identify **all** themes/topics in the material and rank by centrality.
@@ -259,15 +282,27 @@ OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
             "pitfalls": ["<common error>", "<boundary condition>"]
           }}
         ]
+      }},
+      {{
+        "heading": "Additional Topics (Condensed)",
+        "concepts": [
+          {{
+            "term": "<minor theme>",
+            "definition": "<brief definition>",
+            "explanation": "1-2 exam-oriented sentences covering the essentials",
+            "key_points": ["<critical fact for exam>"]
+          }}
+        ]
       }}
     ],
     "formula_sheet": [
       {{
         "name": "<formula / algorithm / method>",
-        "expression": "<math notation or pseudocode or stepwise method>",
-        "variables": {{"symbol_or_role": "meaning"}},
-        "worked_example": "<short numeric OR anchored example with steps>",
-        "notes": "<when it applies, constraints, quick checks>"
+        "expression": "<MATHEMATICAL notation ONLY - e.g., f(x) = ax² + bx + c>",
+        "variables": {{"symbol": "meaning"}},
+        "worked_example": "<short numeric example with actual calculations>",
+        "pseudocode": "<OPTIONAL: if algorithm, put step-by-step procedure here>",
+        "notes": "<when it applies, constraints, complexity>"
       }}
     ],
     "glossary": [
@@ -275,15 +310,27 @@ OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
     ]
   }},
   "citations": [
-    {{"file_id": "source", "section": "<where in the material>", "evidence": "<short quoted/paraphrased anchor>"}}
+    {{"file_id": "source", "section_or_heading": "<specific section/chapter>", "page_range": "<page numbers if available>", "evidence": "<max 200 chars snippet>"}}
   ]
 }}
 
 BUDGETING & COVERAGE RULES
 - Guarantee coverage of **all themes** (FULL or SHORT).
-- Prefer depth for core themes; compress minor ones rather than dropping.
-- Formula_sheet: include every formula/algorithm/method present with variables + concise worked_example.
+- Prefer depth for core themes; compress minor ones in 'Additional Topics (Condensed)' section.
+- Formula_sheet: include every formula/algorithm/method with:
+  ✓ expression = MATH NOTATION (not pseudocode)
+  ✓ variables = complete symbol dictionary
+  ✓ worked_example = numeric calculation with actual numbers
+  ✓ pseudocode = (optional) algorithm steps if needed
 - Remove empty/placeholder fields; validate JSON (no trailing commas, balanced braces).
+
+VALIDATION CHECKLIST (before output):
+✓ Every primary section has ≥1 citation
+✓ Formula_sheet has ≥1 citation for traceability
+✓ Expression field uses MATH, not pseudocode
+✓ If detected themes exceed section cap, overflow listed in 'Additional Topics (Condensed)'
+✓ Examples are concrete (numeric for quant domains, anchored for qual domains)
+✓ Glossary has ≥10 terms
 
 OUTPUT PURE JSON NOW (no other text):"""
 
@@ -517,12 +564,27 @@ def map_reduce_summary(
     # Estimate input tokens
     estimated_tokens = approx_tokens_from_text_len(len(full_text))
     
-    # Auto "Density Boost" for very large inputs
+    # Auto "Density Boost" with flexible thresholds
     from app.config import DENSITY_BOOST_THRESHOLD
-    if estimated_tokens > DENSITY_BOOST_THRESHOLD:
+    
+    # Flexible thresholds:
+    # 10k-15k: Soft-Merge (default, no special instructions)
+    # >15k: Density-Boost + Additional Topics
+    # >40k: Aggressive compression + de-duplication
+    
+    if estimated_tokens > 40000:
         additional_instructions = (additional_instructions or "") + \
-            "\nUse 'Density Boost' compression mode: merge minor topics into compact short sections (1 concept each), keep all themes visible, prefer dense phrasing. Avoid dropping any topic."
+            "\n[AGGRESSIVE DENSITY BOOST]: Very large document. Use extreme compression: " +\
+            "(1) Merge similar concepts, (2) 1 concept per minor section, (3) De-duplicate overlapping content, " +\
+            "(4) Move all minor themes to 'Additional Topics (Condensed)', (5) Target 18-28 tokens/sentence for density."
+        print(f"[AGGRESSIVE DENSITY BOOST] Enabled (estimated_tokens={estimated_tokens} > 40000)")
+    elif estimated_tokens > DENSITY_BOOST_THRESHOLD:  # Default 15000
+        additional_instructions = (additional_instructions or "") + \
+            "\n[DENSITY BOOST]: Large document. Use compression: merge minor topics into compact sections (1 concept each), " +\
+            "move overflow to 'Additional Topics (Condensed)', keep all themes visible, prefer dense phrasing (18-28 tokens/sentence)."
         print(f"[DENSITY BOOST] Enabled (estimated_tokens={estimated_tokens} > {DENSITY_BOOST_THRESHOLD})")
+    else:
+        print(f"[SOFT MERGE] Standard mode (estimated_tokens={estimated_tokens} <= {DENSITY_BOOST_THRESHOLD})")
     
     # Append domain hint to instructions
     domain_hint = f"Content domain: {domain}. Adjust depth and style accordingly."

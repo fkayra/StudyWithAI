@@ -23,12 +23,20 @@ class SummaryQuality(Base):
     input_tokens = Column(Integer)
     num_chunks = Column(Integer)
     
-    # Quality metrics
-    quality_score = Column(Float)  # 0.0-1.0
+    # Quality metrics (legacy + comprehensive)
+    quality_score = Column(Float)  # 0.0-1.0 (overall final-ready score)
     num_concepts = Column(Integer)
     num_formulas = Column(Integer)
     num_exam_questions = Column(Integer)
     num_glossary_terms = Column(Integer)
+    
+    # Comprehensive quality metrics (evrensel, domain-agnostic)
+    coverage_score = Column(Float, nullable=True)  # Theme coverage ratio
+    numeric_density = Column(Float, nullable=True)  # % examples with numbers (domain-aware)
+    formula_completeness = Column(Float, nullable=True)  # % formulas with variables + examples
+    citation_depth = Column(Float, nullable=True)  # % citations with page/section details
+    readability_score = Column(Float, nullable=True)  # Sentence density score (18-28 tokens/sentence)
+    is_final_ready = Column(Integer, nullable=True)  # 1=yes (≥0.90), 0=no
     
     # Generation details
     self_repair_triggered = Column(Integer, default=0)  # 0=no, 1=yes

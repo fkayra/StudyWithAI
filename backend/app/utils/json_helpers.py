@@ -58,6 +58,53 @@ def balance_braces(json_str: str) -> str:
     return json_str
 
 
+def detect_empty_fields(parsed_json: dict) -> list:
+    """
+    Detect critical empty fields that should trigger self-repair.
+    
+    Args:
+        parsed_json: Parsed JSON dict
+    
+    Returns:
+        List of field paths that are empty/missing (e.g., ["summary.learning_objectives", "summary.glossary"])
+    """
+    empty_fields = []
+    
+    if "summary" not in parsed_json:
+        return ["summary"]
+    
+    summary = parsed_json["summary"]
+    
+    # Check critical arrays that should have content
+    critical_arrays = {
+        "learning_objectives": 2,  # Min 2 objectives
+        "sections": 2,             # Min 2 sections
+        "glossary": 8              # Min 8 terms
+    }
+    
+    for field, min_count in critical_arrays.items():
+        if field not in summary:
+            empty_fields.append(f"summary.{field}")
+        elif not summary[field] or len(summary[field]) < min_count:
+            empty_fields.append(f"summary.{field} (has {len(summary.get(field, []))}, need {min_count})")
+    
+    # Check sections for empty concepts
+    sections = summary.get("sections", [])
+    for i, section in enumerate(sections):
+        if "concepts" not in section or not section["concepts"]:
+            empty_fields.append(f"summary.sections[{i}].concepts")
+    
+    # Check formulas for incomplete structure
+    formulas = summary.get("formula_sheet", [])
+    for i, formula in enumerate(formulas):
+        if not formula.get("expression"):
+            empty_fields.append(f"summary.formula_sheet[{i}].expression")
+        if not formula.get("variables"):
+            empty_fields.append(f"summary.formula_sheet[{i}].variables")
+    
+    return empty_fields
+
+
 def parse_json_robust(text: str, max_attempts: int = 3) -> dict:
     """
     Robustly parse JSON with multiple fallback strategies
@@ -67,21 +114,31 @@ def parse_json_robust(text: str, max_attempts: int = 3) -> dict:
         max_attempts: Number of repair attempts
     
     Returns:
-        Parsed JSON dict
+        Parsed JSON dict with empty_fields_detected flag if issues found
     
     Raises:
         ValueError if all parsing attempts fail
     """
     # Attempt 1: Direct parse
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
+        # Check for empty fields
+        empty_fields = detect_empty_fields(parsed)
+        if empty_fields:
+            parsed["_empty_fields_detected"] = empty_fields
+            print(f"[JSON VALIDATION] Empty fields detected: {empty_fields}")
+        return parsed
     except json.JSONDecodeError as e1:
         print(f"[JSON PARSE] Attempt 1 failed: {e1}")
     
     # Attempt 2: Extract and parse
     try:
         extracted = extract_json_block(text)
-        return json.loads(extracted)
+        parsed = json.loads(extracted)
+        empty_fields = detect_empty_fields(parsed)
+        if empty_fields:
+            parsed["_empty_fields_detected"] = empty_fields
+        return parsed
     except json.JSONDecodeError as e2:
         print(f"[JSON PARSE] Attempt 2 failed: {e2}")
     
@@ -89,7 +146,11 @@ def parse_json_robust(text: str, max_attempts: int = 3) -> dict:
     try:
         extracted = extract_json_block(text)
         balanced = balance_braces(extracted)
-        return json.loads(balanced)
+        parsed = json.loads(balanced)
+        empty_fields = detect_empty_fields(parsed)
+        if empty_fields:
+            parsed["_empty_fields_detected"] = empty_fields
+        return parsed
     except json.JSONDecodeError as e3:
         print(f"[JSON PARSE] Attempt 3 failed: {e3}")
     
@@ -100,7 +161,11 @@ def parse_json_robust(text: str, max_attempts: int = 3) -> dict:
         for i in range(len(extracted), len(extracted) // 2, -100):
             candidate = balance_braces(extracted[:i])
             try:
-                return json.loads(candidate)
+                parsed = json.loads(candidate)
+                empty_fields = detect_empty_fields(parsed)
+                if empty_fields:
+                    parsed["_empty_fields_detected"] = empty_fields
+                return parsed
             except:
                 continue
     except Exception as e4:
