@@ -1110,8 +1110,8 @@ async def summarize_from_files(
                     "variables": []
                 })
             
-            # Parse sections - look for ### N. Title patterns
-            section_pattern = r'^###\s*(\d+\.?\s*.+?)$'
+            # Parse sections - look for ### N. Title or ### Section N: Title patterns
+            section_pattern = r'^###\s*(?:[Ss]ection\s+)?(\d+[.:])?\s*(.+?)$'
             lines = text.split('\n')
             
             current_section = None
@@ -1128,7 +1128,7 @@ async def summarize_from_files(
                     i += 1
                     continue
                 
-                # Major section (### 1. Title)
+                # Major section (### 1. Title OR ### Section 1: Title)
                 section_match = re.match(section_pattern, line)
                 if section_match:
                     # Save previous section
@@ -1137,9 +1137,9 @@ async def summarize_from_files(
                             current_section['concepts'].append(current_concept)
                         sections.append(current_section)
                     
-                    # Start new section
-                    heading = clean_md(section_match.group(1))
-                    heading = re.sub(r'^\d+\.?\s*', '', heading)  # Remove leading number
+                    # Start new section - extract title (group 2)
+                    heading = clean_md(section_match.group(2) if section_match.group(2) else section_match.group(1) or "Section")
+                    heading = re.sub(r'^\d+[.:]?\s*', '', heading)  # Remove leading number
                     current_section = {"heading": heading, "concepts": []}
                     current_concept = None
                     i += 1
