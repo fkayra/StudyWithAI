@@ -1033,272 +1033,103 @@ async def summarize_from_files(
         # Track generation start time
         generation_start = time.time()
         
-        # ===== SIMPLE MODE: Elite Exam Tutor =====
-        from app.services.summary import simple_exam_tutor_summary
-        print("[SIMPLE MODE] Using elite exam tutor prompt ONLY")
-        
-        result_json = simple_exam_tutor_summary(
+        # Use map-reduce pipeline
+        result_json = map_reduce_summary(
             full_text=merged_text,
             language=language,
-            out_cap=out_cap
+            additional_instructions=additional_instructions,
+            out_cap=out_cap,
+            force_chunking=force_map_reduce
         )
-        # ===== END SIMPLE MODE =====
         
-        # ===== SIMPLE MODE: Skip ALL validation/self-repair =====
-        print("[SIMPLE MODE] Skipping validation, self-repair, quality metrics")
-        
-        # Parse markdown into structured JSON for frontend
-        def parse_markdown_enhanced(text):
-            import re
-            sections = []
-            formulas = []
-            glossary = []
-            
-            # Clean markdown symbols for display
-            def clean_md(s):
-                s = re.sub(r'^#+\s*', '', s)  # Remove leading #
-                s = re.sub(r'\*\*([^*]+)\*\*', r'\1', s)  # Remove ** bold **
-                return s.strip()
-            
-            # Extract glossary first (Glossary of Terms section)
-            glossary_match = re.search(
-                r'#+\s*Glossary[^#\n]*\n((?:[-•]\s*\*\*[^*]+\*\*[^\n]+\n?)+)',
-                text,
-                re.IGNORECASE | re.MULTILINE
+        # Parse JSON with robust error handling
+        try:
+            result = parse_json_robust(result_json)
+            print("[SUMMARY] JSON parsed successfully")
+        except ValueError as e:
+            print(f"[SUMMARY] All JSON parse attempts failed: {e}")
+            result = create_error_response(
+                "Failed to parse AI response. This may be due to response format issues.",
+                len(result_json)
             )
-            if glossary_match:
-                for line in glossary_match.group(1).split('\n'):
-                    line = line.strip()
-                    if line.startswith(('- ', '• ')):
-                        # Format: - **Term**: Definition
-                        match = re.match(r'[-•]\s*\*\*([^*:]+)\*\*\s*:?\s*(.+)', line)
-                        if match:
-                            glossary.append({
-                                "term": match.group(1).strip(),
-                                "definition": match.group(2).strip()
-                            })
-            
-            # Extract formulas with better context detection
-            for match in re.finditer(r'\\\[((?:[^\\\]]|\\\w)+?)\\\]', text, re.DOTALL):
-                formula = match.group(1).strip()
-                if len(formula) < 10 or formula in [f['expression'] for f in formulas]:
-                    continue
-                
-                # Get preceding lines for context
-                start_pos = max(0, match.start() - 200)
-                context = text[start_pos:match.start()]
-                context_lines = [l.strip() for l in context.split('\n') if l.strip()]
-                
-                # Look for formula name (usually on line before formula)
-                name = "Formula"
-                for line in reversed(context_lines[-3:]):  # Check last 3 lines
-                    cleaned = clean_md(line)
-                    # Skip bullets and very short lines
-                    if cleaned and not cleaned.startswith('-') and len(cleaned) > 5 and len(cleaned) < 100:
-                        # Check if it looks like a formula name
-                        if any(word in cleaned.lower() for word in ['algorithm', 'formula', 'equation', 'value', 'function']):
-                            name = cleaned
-                            break
-                        # Or if it ends with colon
-                        if cleaned.endswith(':'):
-                            name = cleaned.rstrip(':')
-                            break
-                
-                formulas.append({
-                    "name": name,
-                    "expression": f"\\[{formula}\\]",
-                    "variables": []
-                })
-            
-            # Parse sections - numbered sections with ### OR "Section N:" (no ###)
-            # Safe pattern: Either has ### OR has "Section" keyword
-            # Prevents matching random "1. Something" lines
-            section_pattern = r'^(?:###\s*(?:[Ss]ection\s+)?(\d+)[.:\s]\s*(.+?)|([Ss]ection\s+)(\d+)[.:\s]\s*(.+?))$'
-            lines = text.split('\n')
-            
-            current_section = None
-            current_concept = None
-            i = 0
-            
-            while i < len(lines):
-                raw_line = lines[i]
-                line = raw_line.strip()
-                indent = len(raw_line) - len(raw_line.lstrip())
-                
-                # Skip empty, dividers, and main title
-                if not line or line == '---' or line.startswith('# '):
-                    i += 1
-                    continue
-                
-                # Major section (### 1. OR ### Section 1: OR Section 1: - MUST have number!)
-                section_match = re.match(section_pattern, line)
-                if section_match:
-                    # Save previous section
-                    if current_section:
-                        if current_concept:
-                            current_section['concepts'].append(current_concept)
-                        sections.append(current_section)
-                    
-                    # Extract title from correct group
-                    # Pattern has 2 alternatives: (###...) OR (Section...)
-                    groups = section_match.groups()
-                    if groups[1]:  # ### format matched (group 2 has title)
-                        heading = clean_md(groups[1])
-                    elif groups[4]:  # Section format matched (group 5 has title)
-                        heading = clean_md(groups[4])
-                    else:
-                        heading = "Section"
-                    
-                    current_section = {"heading": heading, "concepts": []}
-                    current_concept = None
-                    i += 1
-                    continue
-                
-                # Non-numbered ### headings (### Key Ideas) → treat as concepts
-                if line.startswith('###') and not re.match(section_pattern, line):
-                    # This is a concept-level heading, not a section
-                    if not current_section:
-                        # Create default section if none exists
-                        current_section = {"heading": "Content", "concepts": []}
-                    
-                    if current_concept:
-                        current_section['concepts'].append(current_concept)
-                    
-                    term = clean_md(line.replace('###', ''))
-                    current_concept = {
-                        "term": term,
-                        "definition": "",
-                        "explanation": "",
-                        "example": "",
-                        "key_points": []
-                    }
-                    i += 1
-                    continue
-                
-                # Subsection heading (- **Key Ideas**, - **Definitions**, etc.) - ONLY at indent 0-1
-                if current_section and indent < 2 and line.startswith('- **') and '**' in line[4:]:
-                    # Check if this is a term definition (has : after **)
-                    term_def_match = re.match(r'-\s*\*\*([^*:]+)\*\*\s*:\s*(.+)', line)
-                    if term_def_match and current_concept:
-                        # This is a nested definition under parent concept
-                        term = term_def_match.group(1).strip()
-                        definition = term_def_match.group(2).strip()
-                        if current_concept['explanation']:
-                            current_concept['explanation'] += f"\n\n**{term}**: {definition}"
-                        else:
-                            current_concept['explanation'] = f"**{term}**: {definition}"
-                        i += 1
-                        continue
-                    
-                    # Otherwise it's a new subsection
-                    if current_concept:
-                        current_section['concepts'].append(current_concept)
-                    
-                    match = re.match(r'-\s*\*\*([^*]+)\*\*', line)
-                    if match:
-                        term = match.group(1).strip()
-                        current_concept = {
-                            "term": term,
-                            "definition": "",
-                            "explanation": "",
-                            "example": "",
-                            "key_points": []
-                        }
-                    i += 1
-                    continue
-                
-                # Nested bullet (indented) - term definition format: - **Term**: Definition
-                if current_concept and indent >= 2 and line.startswith('- **'):
-                    term_def_match = re.match(r'-\s*\*\*([^*:]+)\*\*\s*:\s*(.+)', line)
-                    if term_def_match:
-                        term = term_def_match.group(1).strip()
-                        definition = term_def_match.group(2).strip()
-                        if current_concept['explanation']:
-                            current_concept['explanation'] += f"\n\n**{term}**: {definition}"
-                        else:
-                            current_concept['explanation'] = f"**{term}**: {definition}"
-                    i += 1
-                    continue
-                
-                # Regular bullet point content
-                if current_concept and line.startswith(('- ', '• ')):
-                    bullet_text = re.sub(r'^[-•]\s*', '', line)
-                    bullet_text = clean_md(bullet_text)
-                    if bullet_text and len(bullet_text) > 3 and not bullet_text.startswith('[MISSING]'):
-                        current_concept['key_points'].append(bullet_text)
-                    i += 1
-                    continue
-                
-                # Regular text → explanation
-                if current_concept and line and not line.startswith('#'):
-                    cleaned = clean_md(line)
-                    if cleaned and not cleaned.startswith('[MISSING]'):
-                        if current_concept['explanation']:
-                            current_concept['explanation'] += ' '
-                        current_concept['explanation'] += cleaned
-                
-                i += 1
-            
-            # Save last section/concept
-            if current_section:
-                if current_concept:
-                    current_section['concepts'].append(current_concept)
-                sections.append(current_section)
-            
-            # Fallback: if no sections found, create simple structure
-            if not sections:
-                sections = [{
-                    "heading": "Overview",
-                    "concepts": [{
-                        "term": "Content",
-                        "definition": "",
-                        "explanation": clean_md(text[:2000]),
-                        "example": "",
-                        "key_points": []
-                    }]
-                }]
-            
-            return sections, formulas, glossary
         
-        import re
-        parsed_sections, formula_sheet, glossary_items = parse_markdown_enhanced(result_json)
+        # Calculate comprehensive quality score
+        quality_metrics = calculate_comprehensive_quality_score(result)
+        score = quality_metrics.get("final_ready_score", 0.5)
+        is_final_ready = quality_metrics.get("is_final_ready", False)
         
-        # Extract title (look for # Title or ## Title at start)
-        title_match = re.search(r'^#+\s*(.+?)$', result_json, re.MULTILINE)
-        if title_match:
-            title = re.sub(r'^#+\s*', '', title_match.group(1)).strip()
-            title = re.sub(r'\*\*', '', title)  # Remove bold
-        else:
-            title = "Study Guide"
+        print(f"[QUALITY METRICS] Final-ready score: {score}/1.0 (target: 0.90+)")
+        print(f"[QUALITY METRICS] Coverage: {quality_metrics.get('coverage_score', 0)}, " +
+              f"Numeric density: {quality_metrics.get('numeric_density', 0)}, " +
+              f"Formula completeness: {quality_metrics.get('formula_completeness', 0)}, " +
+              f"Citation depth: {quality_metrics.get('citation_depth', 0)}, " +
+              f"Readability: {quality_metrics.get('readability_score', 0)}")
+        print(f"[QUALITY METRICS] Domain: {quality_metrics.get('domain', 'unknown')}, " +
+              f"Is final-ready: {is_final_ready}")
         
-        # Extract overview (look for ## Overview section)
-        overview_match = re.search(r'##\s*Overview\s*\n+(.+?)(?:\n#{2,}|\n\n---)', result_json, re.DOTALL | re.IGNORECASE)
-        if overview_match:
-            overview = overview_match.group(1).strip()
-            overview = re.sub(r'\*\*', '', overview)  # Remove bold
-            overview = overview[:500]
-        else:
-            overview = "Comprehensive study guide for exam preparation"
+        # Enforce exam-ready quality standards
+        result = enforce_exam_ready(result, detected_themes=None)
         
-        result = {
-            "summary": {
-                "title": title,
-                "overview": overview,
-                "learning_objectives": ["Master all concepts and formulas", "Understand key theorems and algorithms", "Solve practice problems effectively"],
-                "sections": parsed_sections,
-                "formula_sheet": formula_sheet[:30],  # Limit to prevent bloat
-                "glossary": glossary_items[:50]  # Limit glossary
-            },
-            "citations": []
-        }
+        # POST-PROCESSING VALIDATION
+        from app.utils.quality import create_self_repair_prompt, validate_summary_completeness, validate_and_enhance_quality
+        from app.services.summary import call_openai, SYSTEM_PROMPT
         
-        score = 1.0
-        warnings = []
+        # Step 1: Enhance and validate
+        result, repair_prompts = validate_and_enhance_quality(result)
+        print(f"[POST-PROCESSING] Auto-enhancements applied, {len(repair_prompts)} repair prompts generated")
+        
+        # Step 2: Completeness check
+        warnings, needs_repair = validate_summary_completeness(result)
+        
+        if warnings:
+            print(f"[SUMMARY QUALITY] Warnings ({len(warnings)}): {warnings}")
+        
+        # Track self-repair metrics
         self_repair_triggered = False
         self_repair_improvement = None
-        is_final_ready = True
-        quality_metrics = {"final_ready_score": 1.0}
-        # ===== END SIMPLE MODE =====
+        
+        # Step 3: Trigger self-repair if needed
+        if (repair_prompts or needs_repair) and score < 0.7:
+            self_repair_triggered = True
+            
+            # Combine all repair prompts
+            combined_repairs = []
+            if repair_prompts:
+                combined_repairs.extend(repair_prompts)
+            if needs_repair and warnings:
+                combined_repairs.append(create_self_repair_prompt(result, warnings, language))
+            
+            repair_instruction = "\n\n---\n\n".join(combined_repairs)
+            print(f"[SELF-REPAIR] Triggering repair (score: {score}, {len(combined_repairs)} issues)")
+            
+            try:
+                repaired_json = call_openai(
+                    system_prompt=SYSTEM_PROMPT,
+                    user_prompt=f"Fix the following issues in this summary:\n\n{repair_instruction}",
+                    max_output_tokens=min(out_cap, 8000),
+                    retry_on_length=False
+                )
+                
+                # Try to parse repaired output
+                try:
+                    repaired_result = parse_json_robust(repaired_json)
+                    
+                    # Check if repair improved quality
+                    repaired_metrics = calculate_comprehensive_quality_score(repaired_result)
+                    repaired_score = repaired_metrics.get("final_ready_score", 0.5)
+                    print(f"[SELF-REPAIR] Score after repair: {repaired_score}/1.0")
+                    
+                    if repaired_score > score:
+                        self_repair_improvement = repaired_score - score
+                        print(f"[SELF-REPAIR] Accepted (improvement: +{self_repair_improvement:.2f})")
+                        result = repaired_result
+                        score = repaired_score
+                    else:
+                        print(f"[SELF-REPAIR] Rejected (no improvement)")
+                except Exception as e:
+                    print(f"[SELF-REPAIR] Parse failed: {e}, keeping original")
+            except Exception as e:
+                print(f"[SELF-REPAIR] Failed: {e}, keeping original")
         
         # Calculate generation time and metrics
         generation_time = time.time() - generation_start
@@ -1307,11 +1138,48 @@ async def summarize_from_files(
         summary = result.get("summary", {})
         num_concepts = sum(len(sec.get("concepts", [])) for sec in summary.get("sections", []))
         num_formulas = len(summary.get("formula_sheet", []))
-        num_exam_questions = 0  # No longer generating practice questions
+        num_exam_questions = 0
         num_glossary = len(summary.get("glossary", []))
         
-        # ===== SIMPLE MODE: Skip telemetry =====
-        print("[SIMPLE MODE] Skipping telemetry")
+        # Record telemetry (non-blocking)
+        try:
+            from app.services.telemetry import record_summary_quality
+            from app.services.summary import detect_domain
+            
+            # Detect domain from original text
+            domain = detect_domain(merged_text)
+            
+            # Estimate total tokens used
+            total_tokens_used = estimated_tokens + out_cap
+            
+            record_summary_quality(
+                db=db,
+                request_hash=cache_key,
+                user_id=current_user.id if current_user else None,
+                plan=plan,
+                domain=domain,
+                language=language,
+                input_tokens=estimated_tokens,
+                num_chunks=len(files_data),
+                quality_score=score,
+                num_concepts=num_concepts,
+                num_formulas=num_formulas,
+                num_exam_questions=num_exam_questions,
+                num_glossary_terms=num_glossary,
+                self_repair_triggered=self_repair_triggered,
+                self_repair_improvement=self_repair_improvement,
+                total_tokens_used=total_tokens_used,
+                generation_time_seconds=generation_time,
+                warnings=warnings,
+                coverage_score=quality_metrics.get('coverage_score'),
+                numeric_density=quality_metrics.get('numeric_density'),
+                formula_completeness=quality_metrics.get('formula_completeness'),
+                citation_depth=quality_metrics.get('citation_depth'),
+                readability_score=quality_metrics.get('readability_score'),
+                is_final_ready=is_final_ready
+            )
+        except Exception as telemetry_error:
+            print(f"[TELEMETRY WARNING] Failed to record: {telemetry_error}")
         
         # Cache the result (only if not error)
         if "error" not in result.get("summary", {}).get("title", "").lower():
