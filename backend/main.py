@@ -1048,79 +1048,149 @@ async def summarize_from_files(
         print("[SIMPLE MODE] Skipping validation, self-repair, quality metrics")
         
         # Parse markdown into structured JSON for frontend
-        def parse_markdown_simple(text):
+        def parse_markdown_enhanced(text):
             import re
             sections = []
-            lines = text.split('\n')
-            current_section = None
-            current_concept = None
+            formulas = []
+            glossary = []
             
-            for line in lines:
-                line = line.strip()
+            # Split by major sections (looking for "Section X:" or "**Section X")
+            section_pattern = r'(?:^|\n)(?:\*\*)?[Ss]ection \d+:?\s*[:\-]?\s*(.+?)(?:\*\*)?'
+            section_splits = re.split(section_pattern, text, flags=re.MULTILINE)
+            
+            # Also look for other major sections like "Exam Toolkit", "Glossary"
+            blocks = re.split(r'\n(?:\*\*)?(?:Exam Toolkit|Glossary of Terms|Coverage Checklist)(?:\*\*)?\n', text, flags=re.IGNORECASE)
+            
+            # Extract glossary if present
+            glossary_match = re.search(r'(?:^|\n)\*?\*?Glossary[^:]*:?\*?\*?\s*\n((?:- \*\*[^*]+\*\*[^\n]+\n?)+)', text, re.IGNORECASE | re.MULTILINE)
+            if glossary_match:
+                glossary_text = glossary_match.group(1)
+                for line in glossary_text.split('\n'):
+                    term_match = re.match(r'-\s*\*\*([^*]+)\*\*\s*:?\s*(.+)', line.strip())
+                    if term_match:
+                        glossary.append({
+                            "term": term_match.group(1).strip(),
+                            "definition": term_match.group(2).strip()
+                        })
+            
+            # Extract formulas (LaTeX patterns)
+            formula_patterns = re.finditer(r'\\\[(.+?)\\\]|\\\((.+?)\\\)', text, re.DOTALL)
+            seen_formulas = set()
+            for match in formula_patterns:
+                formula = (match.group(1) or match.group(2)).strip()
+                if formula and formula not in seen_formulas and len(formula) > 5:
+                    seen_formulas.add(formula)
+                    # Try to find context (what's this formula about?)
+                    start = max(0, match.start() - 100)
+                    context = text[start:match.start()].strip()
+                    context_lines = [l.strip() for l in context.split('\n') if l.strip()]
+                    name = context_lines[-1] if context_lines else "Formula"
+                    
+                    formulas.append({
+                        "name": name[:80],
+                        "expression": f"\\[{formula}\\]",
+                        "variables": []
+                    })
+            
+            # Parse sections
+            current_section = None
+            lines = text.split('\n')
+            i = 0
+            
+            while i < len(lines):
+                line = lines[i].strip()
+                
+                # Skip empty lines and dividers
                 if not line or line == '---':
+                    i += 1
                     continue
                 
-                # Heading → section
-                if line.startswith('###') or line.startswith('##'):
-                    if current_section and current_concept:
-                        current_section['concepts'].append(current_concept)
+                # Section heading (Section X: Title)
+                section_match = re.match(r'\*?\*?[Ss]ection\s+\d+\s*:?\s*(.+?)(?:\*\*)?$', line)
+                if section_match:
                     if current_section:
                         sections.append(current_section)
-                    
-                    heading = line.replace('###', '').replace('##', '').replace('**', '').strip()
-                    current_section = {"heading": heading, "concepts": []}
-                    current_concept = None
-                
-                # Bold → concept
-                elif line.startswith('**') and line.endswith('**'):
-                    if current_section and current_concept:
-                        current_section['concepts'].append(current_concept)
-                    term = line.replace('**', '').strip()
-                    current_concept = {
-                        "term": term,
-                        "definition": "",
-                        "explanation": "",
-                        "example": "",
-                        "key_points": []
+                    current_section = {
+                        "heading": section_match.group(1).strip(),
+                        "concepts": []
                     }
+                    i += 1
+                    continue
                 
-                # Bullet → key_points
-                elif line.startswith('- ') or line.startswith('* '):
-                    if current_concept:
-                        current_concept['key_points'].append(line[2:].strip())
-                    elif current_section:
-                        if not current_concept:
-                            current_concept = {"term": "Notes", "definition": "", "explanation": "", "example": "", "key_points": [line[2:].strip()]}
-                        else:
-                            current_concept['key_points'].append(line[2:].strip())
+                # Subsection with ** bold **
+                if line.startswith('**') and line.endswith('**') and line.count('**') == 2:
+                    if current_section:
+                        term = line.replace('**', '').strip()
+                        # Look ahead to collect content
+                        content_lines = []
+                        j = i + 1
+                        while j < len(lines) and lines[j].strip() and not lines[j].strip().startswith('**'):
+                            content_lines.append(lines[j].strip())
+                            j += 1
+                        
+                        current_section['concepts'].append({
+                            "term": term,
+                            "definition": "",
+                            "explanation": '\n'.join(content_lines),
+                            "example": "",
+                            "key_points": []
+                        })
+                        i = j
+                        continue
                 
-                # Regular text → explanation
-                else:
-                    if current_concept:
-                        current_concept['explanation'] += (' ' if current_concept['explanation'] else '') + line
+                # Bullet points
+                if line.startswith('- ') and current_section:
+                    if not current_section['concepts']:
+                        current_section['concepts'].append({
+                            "term": "Key Points",
+                            "definition": "",
+                            "explanation": "",
+                            "example": "",
+                            "key_points": []
+                        })
+                    
+                    if current_section['concepts']:
+                        current_section['concepts'][-1]['key_points'].append(line[2:].strip())
+                
+                i += 1
             
-            # Save last
-            if current_section and current_concept:
-                current_section['concepts'].append(current_concept)
+            # Save last section
             if current_section:
                 sections.append(current_section)
             
+            # If no structured sections, create one big section
             if not sections:
-                sections = [{"heading": "Summary", "concepts": [{"term": "Content", "definition": "", "explanation": text, "example": "", "key_points": []}]}]
+                sections = [{
+                    "heading": "Content",
+                    "concepts": [{
+                        "term": "Study Material",
+                        "definition": "",
+                        "explanation": text[:5000],  # Limit to prevent huge blobs
+                        "example": "",
+                        "key_points": []
+                    }]
+                }]
             
-            return sections
+            return sections, formulas, glossary
         
-        parsed_sections = parse_markdown_simple(result_json)
-        title = result_json.split('\n')[0].replace('**', '').replace('#', '').strip()[:100] if result_json else "Study Guide"
+        parsed_sections, formula_sheet, glossary_items = parse_markdown_enhanced(result_json)
+        
+        # Extract title from first line
+        title_match = re.search(r'(?:^|\n)\*?\*?([^*\n]{10,100}?)\*?\*?(?:\n|$)', result_json)
+        title = title_match.group(1).strip() if title_match else "Study Guide"
+        
+        # Extract overview
+        overview_match = re.search(r'(?:Title & Overview|Overview)[^\n]*\n+(.+?)(?:\n\n|\n---)', result_json, re.DOTALL | re.IGNORECASE)
+        overview = overview_match.group(1).strip()[:500] if overview_match else "Comprehensive study guide for exam preparation"
         
         result = {
             "summary": {
                 "title": title,
-                "overview": "Elite exam tutor study guide",
-                "learning_objectives": ["Master all content for finals"],
+                "overview": overview,
+                "learning_objectives": ["Master all concepts and formulas", "Understand key theorems and algorithms", "Solve practice problems effectively"],
                 "sections": parsed_sections,
-                "formula_sheet": [],
-                "glossary": []
+                "formula_sheet": formula_sheet[:30],  # Limit to prevent bloat
+                "glossary": glossary_items[:50]  # Limit glossary
             },
             "citations": []
         }
