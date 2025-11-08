@@ -1047,3 +1047,21 @@ def map_reduce_summary(
     return final_summary
 
 
+
+
+def summarize_no_files(
+    topic: str,
+    language: str = "en",
+    out_cap: int = 12000
+) -> str:
+    """
+    Generate summary without uploaded files (from prompt only)
+    """
+    user_prompt = get_no_files_prompt(topic, language)
+    
+    return call_openai(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1])
+    )
+
