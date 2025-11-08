@@ -1110,8 +1110,9 @@ async def summarize_from_files(
                     "variables": []
                 })
             
-            # Parse sections - look for ### N. Title or ### Section N: Title patterns
-            section_pattern = r'^###\s*(?:[Ss]ection\s+)?(\d+[.:])?\s*(.+?)$'
+            # Parse sections - ONLY numbered sections (### 1. or ### Section 1:)
+            # NOT generic ### Key Ideas (those are subsections)
+            section_pattern = r'^###\s*(?:[Ss]ection\s+)?(\d+)[.:\s]\s*(.+?)$'
             lines = text.split('\n')
             
             current_section = None
@@ -1128,7 +1129,7 @@ async def summarize_from_files(
                     i += 1
                     continue
                 
-                # Major section (### 1. Title OR ### Section 1: Title)
+                # Major section (ONLY ### 1. Title OR ### Section 1: Title - MUST have number!)
                 section_match = re.match(section_pattern, line)
                 if section_match:
                     # Save previous section
@@ -1138,10 +1139,30 @@ async def summarize_from_files(
                         sections.append(current_section)
                     
                     # Start new section - extract title (group 2)
-                    heading = clean_md(section_match.group(2) if section_match.group(2) else section_match.group(1) or "Section")
-                    heading = re.sub(r'^\d+[.:]?\s*', '', heading)  # Remove leading number
+                    heading = clean_md(section_match.group(2) if section_match.group(2) else "Section")
                     current_section = {"heading": heading, "concepts": []}
                     current_concept = None
+                    i += 1
+                    continue
+                
+                # Non-numbered ### headings (### Key Ideas) → treat as concepts
+                if line.startswith('###') and not re.match(section_pattern, line):
+                    # This is a concept-level heading, not a section
+                    if not current_section:
+                        # Create default section if none exists
+                        current_section = {"heading": "Content", "concepts": []}
+                    
+                    if current_concept:
+                        current_section['concepts'].append(current_concept)
+                    
+                    term = clean_md(line.replace('###', ''))
+                    current_concept = {
+                        "term": term,
+                        "definition": "",
+                        "explanation": "",
+                        "example": "",
+                        "key_points": []
+                    }
                     i += 1
                     continue
                 
