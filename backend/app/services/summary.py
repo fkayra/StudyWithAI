@@ -445,9 +445,11 @@ def coverage_gaps(outline: dict, aggregated_knowledge: dict) -> list:
 
 def validate_reduce_output(result: dict) -> list:
     """
-    Validate final reduce output for common quality issues
+    Universal validation for any domain/subject.
+    Checks examples, formulas, glossary, citations with domain-agnostic rules.
     Returns list of issue strings (empty if all good)
     """
+    import re
     issues = []
     summary = result.get("summary", {})
     
@@ -456,54 +458,120 @@ def validate_reduce_output(result: dict) -> list:
     if len(sections) < 4:
         issues.append(f"Too few sections ({len(sections)}), expected ≥4")
     
-    # Check concepts have examples
+    # Check concepts and their examples
     for i, sec in enumerate(sections):
         concepts = sec.get("concepts", [])
         if not concepts:
             issues.append(f"Section {i+1} '{sec.get('heading', 'Unknown')}' has no concepts")
+        
         for c in concepts:
-            if not c.get("example") and not c.get("key_points"):
-                issues.append(f"Concept '{c.get('term', 'Unknown')}' missing both example and key_points")
+            term = c.get("term", "Unknown")
+            expected_example = c.get("expected_example", "")
+            example_text = c.get("example", "")
+            
+            # If expected_example is set, validate it
+            if expected_example == "numeric" and example_text:
+                # Must have at least one digit AND one operator
+                has_digit = bool(re.search(r'\d', example_text))
+                has_operator = bool(re.search(r'[+\-*/=]', example_text))
+                if not (has_digit and has_operator):
+                    issues.append(f"Concept '{term}' expected numeric example but missing calculations (need digits + operators)")
+            elif expected_example == "numeric" and not example_text:
+                issues.append(f"Concept '{term}' missing numeric example")
+            
+            if expected_example == "anchored" and example_text:
+                # Must have a capitalized word (named entity) OR a year (4-digit number)
+                has_named_entity = bool(re.search(r'\b[A-Z][a-z]+', example_text))
+                has_year = bool(re.search(r'\b(1[0-9]{3}|20[0-9]{2})\b', example_text))
+                if not (has_named_entity or has_year):
+                    issues.append(f"Concept '{term}' expected anchored example but missing specific context (need names, places, or years)")
+            elif expected_example == "anchored" and not example_text:
+                issues.append(f"Concept '{term}' missing anchored example")
+            
+            # General check: if no example and no key_points, flag it
+            if not example_text and not c.get("key_points"):
+                issues.append(f"Concept '{term}' missing both example and key_points")
+        
+        # Check citations per section
+        citations = result.get("citations", [])
+        section_heading = sec.get("heading", "")
+        has_citation = any(
+            section_heading.lower() in cite.get("section_or_heading", "").lower()
+            for cite in citations
+        )
+        if not has_citation and i < 3:  # At least first 3 sections need citations
+            issues.append(f"Section '{section_heading}' missing citation with section_or_heading")
     
-    # Check formulas
+    # Check formulas (if they exist)
     formulas = summary.get("formula_sheet", [])
     for f in formulas:
-        if not f.get("expression"):
-            issues.append(f"Formula '{f.get('name', 'Unknown')}' missing expression")
-        if not f.get("worked_example"):
-            issues.append(f"Formula '{f.get('name', 'Unknown')}' missing worked_example")
+        fname = f.get("name", "Unknown")
+        expression = f.get("expression", "")
+        variables = f.get("variables", {})
+        worked_example = f.get("worked_example", "")
+        
+        if not expression:
+            issues.append(f"Formula '{fname}' missing expression")
+        
+        if not variables or (isinstance(variables, dict) and len(variables) == 0):
+            issues.append(f"Formula '{fname}' missing variables dictionary")
+        
+        if not worked_example:
+            issues.append(f"Formula '{fname}' missing worked_example")
+        elif not re.search(r'\d', worked_example):  # Must contain numeric calculation
+            issues.append(f"Formula '{fname}' worked_example must include numeric calculation")
     
     # Check glossary
     glossary = summary.get("glossary", [])
-    if len(glossary) < 10:
-        issues.append(f"Glossary too short ({len(glossary)} terms), expected ≥10")
+    if len(glossary) < 15:
+        issues.append(f"Glossary too short ({len(glossary)} terms), expected ≥15")
     
     return issues
 
 
 def build_self_repair_prompt(result: dict, issues: list, language: str) -> str:
     """
-    Build repair prompt to fix validation issues
+    Universal self-repair prompt that works for ANY domain/subject.
+    Domain-agnostic validation and repair instructions.
     """
     import json
-    lang = "TURKISH" if language == "tr" else "ENGLISH"
-    issues_text = "\n".join(f"- {issue}" for issue in issues)
+    lang = "Use TURKISH." if language == "tr" else "Use ENGLISH."
+    issues_text = "\n- ".join(issues)
     
-    return f"""REPAIR TASK ({lang})
+    return f"""{lang}
+You are repairing a study-guide JSON. 
+This must work for ANY subject (math, history, medicine, CS, economics, law, engineering, psychology, etc.).
 
-You generated a study guide with the following quality issues:
-{issues_text}
+RULES (MUST):
+- Do NOT remove or rename existing sections or concepts.
+- Preserve all correct content. Only repair or add what is missing.
+- Return FULL valid JSON only (no markdown, no comments).
 
-Here is your output:
-{json.dumps(result, ensure_ascii=False, indent=2)}
+REQUIREMENTS (APPLY GENERALLY):
+1) Example requirements:
+   If a concept has expected_example="numeric" → add one step-by-step numeric example using real numbers.
+   If a concept has expected_example="anchored" → add one real-world contextual example (specific place, year, case, dataset, experiment, historical event, etc.).
 
-Please fix ALL issues and return the complete, corrected JSON.
-- Add missing examples (numeric for technical, anchored for qualitative)
-- Expand glossary to ≥15 terms
-- Ensure formulas have expression + worked_example
-- Keep same structure, just fix problems
+2) Formula requirements (if formula_sheet exists):
+   - expression must be math notation (not prose).
+   - variables must explain every symbol.
+   - worked_example must include real numeric calculation steps.
 
-Output pure JSON only."""
+3) Glossary requirement:
+   - Glossary must contain at least 15 distinct terms total (expand if needed).
+
+4) Citations requirement:
+   - Each top-level section must include at least one citation with section_or_heading and page_range based on the source.
+   - Evidence snippets should be concise (no truncation).
+
+5) Consistency rule:
+   - Do NOT invent topics or facts not supported by the user's uploaded document.
+
+Issues to fix:
+- {issues_text}
+
+CURRENT JSON:
+{json.dumps(result, ensure_ascii=False)}"""
 
 
 # ========== Two-Stage REDUCE Orchestrator ==========
