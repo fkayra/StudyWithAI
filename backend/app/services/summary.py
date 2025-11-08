@@ -255,9 +255,13 @@ SILENT PLANNING (do internally before writing):
 4) Scale number of sections with content size. MIN ≥ 4 full sections; aim 6–12 total if material is broad.
 
 OUTPUT REQUIREMENTS:
-- Include **every discovered theme** as its own section.
+- Include **every discovered theme** as its own section OR as a sub-concept in a related section.
 - FULL sections: 2–5 concepts with dense explanations and an anchored or numeric example.
 - SHORT sections: 1 compact concept (definition + brief explanation + 1–2 key_points). Example optional if genuinely inapplicable.
+- **IMPORTANT**: Instead of creating "Additional Topics (Condensed)" section, integrate overflow themes as **brief sub-concepts** under the most relevant existing section:
+  - Add as a minimal concept with term, definition (1 sentence), key_points (1-2 critical facts)
+  - No example needed for these overflow sub-concepts
+  - Keep them concise (50-100 words max)
 - Keep wording specific to the uploaded material (no generic filler).
 
 OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
@@ -280,16 +284,10 @@ OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
             "example": "<worked example (numeric OR anchored, as appropriate)>",
             "key_points": ["<short fact>", "<short fact>"],
             "pitfalls": ["<common error>", "<boundary condition>"]
-          }}
-        ]
-      }},
-      {{
-        "heading": "Additional Topics (Condensed)",
-        "concepts": [
+          }},
           {{
-            "term": "<minor theme>",
-            "definition": "<brief definition>",
-            "explanation": "1-2 exam-oriented sentences covering the essentials",
+            "term": "<overflow minor concept>",
+            "definition": "<1 sentence definition>",
             "key_points": ["<critical fact for exam>"]
           }}
         ]
@@ -328,7 +326,7 @@ VALIDATION CHECKLIST (before output):
 ✓ Every primary section has ≥1 citation
 ✓ Formula_sheet has ≥1 citation for traceability
 ✓ Expression field uses MATH, not pseudocode
-✓ If detected themes exceed section cap, overflow listed in 'Additional Topics (Condensed)'
+✓ Overflow themes integrated as brief sub-concepts in related sections (NOT separate "Additional Topics")
 ✓ Examples are concrete (numeric for quant domains, anchored for qual domains)
 ✓ Glossary has ≥10 terms
 

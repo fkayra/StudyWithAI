@@ -67,12 +67,16 @@ def ensure_concrete_example(example_text: str, context_text: str) -> str:
 
 def enforce_exam_ready(payload: Dict[str, Any], detected_themes: List[str] = None) -> Dict[str, Any]:
     """
-    Comprehensive post-processing with evrensel quality rules:
-    1. Ensure concrete examples (domain-conditional, numeric for quant domains)
-    2. Coerce formula expressions to math (move pseudocode to separate field)
-    3. Validate and enhance citations
-    4. Remove filler phrases
-    5. Clean empty fields
+    Comprehensive post-processing with evrensel quality rules + sanitization pipeline
+    1. Sanitize examples (remove generic, trim to 2 sentences)
+    2. Ensure numeric example only if relevant to source
+    3. Fix formula vs pseudocode mixing
+    4. Enforce alpha-beta trace, stochastic formulas
+    5. Normalize coverage (remove duplicates)
+    6. Coerce formula expressions to math
+    7. Validate and enhance citations
+    8. Remove filler phrases
+    9. Clean empty fields
     
     Does NOT filter sections - validation handled separately
     """
@@ -88,27 +92,48 @@ def enforce_exam_ready(payload: Dict[str, Any], detected_themes: List[str] = Non
     overall_domain = detect_domain(sample_text)
     print(f"[ENFORCE] Detected domain: {overall_domain}")
 
-    # 1) Ensure concrete example per concept (domain-conditional with numeric enforcement)
+    # Store original source for signal detection (use first section's text as proxy)
+    original_source_text = ""
+    for sec in summary.get("sections", []):
+        for c in sec.get("concepts", [])[:1]:  # First concept
+            original_source_text += c.get("definition", "") + " " + c.get("explanation", "")
+            break
+        if original_source_text:
+            break
+
+    # PIPELINE: Process concepts with sanitization + enforcement
     for sec in summary.get("sections", []):
         for c in sec.get("concepts", []):
-            term = c.get("term", "")
-            definition = c.get("definition", "")
-            explanation = c.get("explanation", "")
-            context = " ".join([term, definition, explanation])
+            # Get current example
+            example = c.get("example", "")
             
-            # First ensure concrete example
-            current_example = c.get("example", "")
-            c["example"] = ensure_concrete_example(current_example, context)
+            # PIPELINE ORDER:
+            # 1. Sanitize examples (remove generic, trim to 2 sentences)
+            example = sanitize_examples(example)
             
-            # Then enforce numeric/anchored based on domain
-            c["example"] = ensure_numeric_example_if_applicable(context, c["example"], overall_domain)
+            # 2. Ensure numeric example only if relevant to source
+            example = ensure_numeric_example_if_relevant(example, original_source_text)
+            
+            # 3. Fix formula vs pseudocode mixing
+            example = fix_formula_vs_pseudocode(example)
+            
+            # 4. Enforce alpha-beta trace if applicable
+            example = enforce_alpha_beta_trace(example)
+            
+            # 5. Add stochastic expectation formula if needed
+            example = add_stochastic_expectation_formula_if_needed(example)
+            
+            # 6. Normalize coverage (remove duplicates)
+            example = normalize_coverage(example)
+            
+            c["example"] = example
 
-    # 2) Coerce formula expressions to math (move pseudocode to separate field)
+    # 7) Coerce formula expressions to math (move pseudocode to separate field)
     formulas = summary.get("formula_sheet", [])
     for i, formula in enumerate(formulas):
         formulas[i] = coerce_pseudocode_fields(formula)
     
-    # 3) Validate and enhance citations
+    # 8) Validate and enhance citations
     if "citations" not in payload:
         payload["citations"] = []
     
@@ -124,7 +149,7 @@ def enforce_exam_ready(payload: Dict[str, Any], detected_themes: List[str] = Non
             if len(evidence) > 200:
                 citation["evidence"] = evidence[:197] + "..."
     
-    # 4) Remove filler phrases from text content
+    # 9) Remove filler phrases from text content
     from app.utils.json_helpers import defill
     
     if summary.get("overview"):
@@ -135,7 +160,7 @@ def enforce_exam_ready(payload: Dict[str, Any], detected_themes: List[str] = Non
             if c.get("explanation"):
                 c["explanation"] = defill(c["explanation"])
     
-    # 5) Light cleanup - only remove None and empty strings (preserve structure)
+    # 10) Light cleanup - only remove None and empty strings (preserve structure)
     def _clean(x):
         if isinstance(x, dict):
             cleaned = {}
@@ -154,7 +179,7 @@ def enforce_exam_ready(payload: Dict[str, Any], detected_themes: List[str] = Non
     
     cleaned = _clean(payload)
     
-    # 6) Log quality validation issues (non-blocking)
+    # 11) Log quality validation issues (non-blocking)
     citation_issues = validate_citations_depth(cleaned)
     if citation_issues:
         print(f"[QUALITY WARNING] Citation issues: {citation_issues}")
@@ -478,6 +503,105 @@ def has_concrete_example(example: str) -> bool:
     has_steps = any(word in example.lower() for word in ['step', 'first', 'then', 'finally', 'given', 'result'])
     
     return has_numbers or has_steps
+
+
+def detect_numeric_signals(text: str) -> list:
+    """Detect numeric/quantitative signals in text (Big-O, Sigma, numbers, Greek letters)"""
+    pattern = r"(O\(|Θ\(|Σ|∑|\b\d+(?:\.\d+)?\b|\b(alpha|beta|α|β)\b|V\(|P\(|E\[)"
+    return re.findall(pattern, text, re.IGNORECASE)
+
+
+def remove_numeric_fillers(text: str) -> str:
+    """Remove generic numeric examples if source has no numeric signals"""
+    # Drop patterns like "Example: Let x=3, y=2..."
+    patterns = [
+        r"Example: Let x=\d+.*?[.!]",
+        r"Example calculation:.*?\d+.*?[.!]",
+        r"Let x=\d+, y=\d+.*?[.!]",
+        r"Step 1: Initial value = \d+.*?[.!]",
+        r"Applying the procedure:.*?\d+.*?[.!]"
+    ]
+    for pattern in patterns:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def sanitize_examples(text: str) -> str:
+    """Trim examples to ≤2 sentences, remove generic fillers"""
+    # Find example sections
+    example_pattern = r'(Example:|For example:|e\.g\.,)(.*?)(?=\n|$|Example:|For example:)'
+    
+    def trim_example(match):
+        prefix = match.group(1)
+        content = match.group(2)
+        sentences = re.split(r'[.!?]+', content)
+        # Keep only first 2 non-empty sentences
+        kept = [s.strip() for s in sentences if s.strip()][:2]
+        if kept:
+            return prefix + ' ' + '. '.join(kept) + '.'
+        return ''
+    
+    text = re.sub(example_pattern, trim_example, text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def ensure_numeric_example_if_relevant(text: str, source_text: str) -> str:
+    """Add numeric example only if source has numeric signals"""
+    signals = detect_numeric_signals(source_text)
+    
+    if not signals:
+        # No numeric signals in source → remove generic numeric fillers
+        text = remove_numeric_fillers(text)
+    elif not re.search(r'\d', text):
+        # Has signals but no numbers in text → keep existing (don't add generic)
+        pass
+    
+    return text
+
+
+def fix_formula_vs_pseudocode(text: str) -> str:
+    """Ensure formulas use math notation, not pseudocode keywords"""
+    # If text has control flow keywords, it's likely pseudocode mixed with math
+    control_keywords = r'\b(function|return|for each|if|while|loop)\b'
+    if re.search(control_keywords, text, re.IGNORECASE):
+        # Replace with math-friendly notation
+        text = text.replace('function', 'f')
+        text = text.replace('Function', 'f')
+        text = text.replace('return', '→')
+        text = text.replace('Return', '→')
+    return text
+
+
+def enforce_alpha_beta_trace(text: str) -> str:
+    """Ensure alpha-beta pruning examples show trace steps"""
+    if 'alpha' in text.lower() or 'beta' in text.lower() or 'α' in text or 'β' in text:
+        # Check if trace exists
+        if not re.search(r'(step|trace|α\s*=|β\s*=)', text, re.IGNORECASE):
+            # Add minimal trace hint
+            text += " (Trace: α=−∞, β=+∞ initially; update at each node.)"
+    return text
+
+
+def add_stochastic_expectation_formula_if_needed(text: str) -> str:
+    """Add expectation formula if stochastic games mentioned but formula missing"""
+    if 'stochastic' in text.lower() or 'expectation' in text.lower():
+        if not re.search(r'E\[|𝔼\[|expected value', text, re.IGNORECASE):
+            text += " Formula: E[V] = Σ P(s') × V(s')"
+    return text
+
+
+def normalize_coverage(text: str) -> str:
+    """Ensure text is concise and avoids repetition"""
+    # Remove duplicate sentences (simple check)
+    sentences = re.split(r'[.!?]+', text)
+    seen = set()
+    unique = []
+    for s in sentences:
+        normalized = s.strip().lower()
+        if normalized and normalized not in seen and len(normalized) > 5:  # Skip very short
+            seen.add(normalized)
+            unique.append(s.strip())
+    return '. '.join(unique) + '.' if unique else text
 
 
 def ensure_numeric_example_if_applicable(concept_text: str, example: str, domain: str) -> str:
