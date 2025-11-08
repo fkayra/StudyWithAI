@@ -512,6 +512,11 @@ def validate_reduce_output(result: dict) -> list:
         
         if not expression:
             issues.append(f"Formula '{fname}' missing expression")
+        else:
+            # Detect pseudocode in expression field (should be MATH ONLY)
+            if re.search(r'\b(function|return|if|for|while|def|class|var|let|const)\b', 
+                        expression, re.IGNORECASE):
+                issues.append(f"Formula '{fname}' expression contains pseudocode (must be MATH ONLY, use 'pseudocode' field instead)")
         
         if not variables or (isinstance(variables, dict) and len(variables) == 0):
             issues.append(f"Formula '{fname}' missing variables dictionary")
@@ -870,17 +875,33 @@ def merge_summaries(
         "source_structure": chunk_citations if chunk_citations else []
     }
     
-    # Use two-stage REDUCE: outline → fill → validate
-    result = reduce_two_stage(
-        aggregated_knowledge=aggregated_knowledge,
-        language=language,
-        domain=domain,
-        out_cap=out_budget,
-        additional_instructions=additional_instructions or ""
-    )
+    # Use two-stage REDUCE with fallback to single-stage if errors occur
+    try:
+        print("[REDUCE] Attempting two-stage REDUCE (outline → fill → validate)...")
+        result = reduce_two_stage(
+            aggregated_knowledge=aggregated_knowledge,
+            language=language,
+            domain=domain,
+            out_cap=out_budget,
+            additional_instructions=additional_instructions or ""
+        )
+        print("[REDUCE] Two-stage REDUCE completed successfully ✓")
+        # Return as JSON string (for compatibility with existing pipeline)
+        return json.dumps(result, ensure_ascii=False, indent=2)
     
-    # Return as JSON string (for compatibility with existing pipeline)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[REDUCE TWO-STAGE FALLBACK] Error in two-stage REDUCE: {e}")
+        print("[REDUCE TWO-STAGE FALLBACK] Falling back to single-stage REDUCE...")
+        
+        # Fallback: single-stage REDUCE (original implementation)
+        user_prompt = get_final_merge_prompt(language, additional_instructions, domain)
+        user_prompt += f"\n\nSTRUCTURED SOURCE KNOWLEDGE (from {len(chunk_summaries)} chunks):\n{json.dumps(aggregated_knowledge, indent=2, ensure_ascii=False)}"
+        
+        return call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            max_output_tokens=out_budget
+        )
 
 
 def map_reduce_summary(
