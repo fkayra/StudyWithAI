@@ -1110,9 +1110,10 @@ async def summarize_from_files(
                     "variables": []
                 })
             
-            # Parse sections - ONLY numbered sections (### 1. or ### Section 1:)
-            # NOT generic ### Key Ideas (those are subsections)
-            section_pattern = r'^###\s*(?:[Ss]ection\s+)?(\d+)[.:\s]\s*(.+?)$'
+            # Parse sections - numbered sections with or without ###
+            # Match: "Section 1: Title", "### Section 1: Title", "### 1. Title"
+            # NOT: "### Key Ideas" (no number)
+            section_pattern = r'^(?:###\s*)?(?:[Ss]ection\s+)?(\d+)[.:\s]\s*(.+?)$'
             lines = text.split('\n')
             
             current_section = None
