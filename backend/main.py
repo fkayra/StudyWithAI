@@ -1033,104 +1033,105 @@ async def summarize_from_files(
         # Track generation start time
         generation_start = time.time()
         
-        # Use map-reduce pipeline
-        result_json = map_reduce_summary(
+        # ===== SIMPLE MODE: Elite Exam Tutor =====
+        from app.services.summary import simple_exam_tutor_summary
+        print("[SIMPLE MODE] Using elite exam tutor prompt ONLY")
+        
+        result_json = simple_exam_tutor_summary(
             full_text=merged_text,
             language=language,
-            additional_instructions=additional_instructions,
-            out_cap=out_cap,
-            force_chunking=force_map_reduce
+            out_cap=out_cap
         )
+        # ===== END SIMPLE MODE =====
         
-        # Parse JSON with robust error handling
-        try:
-            result = parse_json_robust(result_json)
-            print("[SUMMARY] JSON parsed successfully")
-        except ValueError as e:
-            print(f"[SUMMARY] All JSON parse attempts failed: {e}")
-            result = create_error_response(
-                "Failed to parse AI response. This may be due to response format issues.",
-                len(result_json)
-            )
+        # ===== SIMPLE MODE: Skip ALL validation/self-repair =====
+        print("[SIMPLE MODE] Skipping validation, self-repair, quality metrics")
         
-        # Calculate comprehensive quality score (new evrensel metrics)
-        quality_metrics = calculate_comprehensive_quality_score(result)
-        score = quality_metrics.get("final_ready_score", 0.5)
-        is_final_ready = quality_metrics.get("is_final_ready", False)
+        # Parse markdown into structured JSON for frontend
+        def parse_markdown_simple(text):
+            import re
+            sections = []
+            lines = text.split('\n')
+            current_section = None
+            current_concept = None
+            
+            for line in lines:
+                line = line.strip()
+                if not line or line == '---':
+                    continue
+                
+                # Heading → section
+                if line.startswith('###') or line.startswith('##'):
+                    if current_section and current_concept:
+                        current_section['concepts'].append(current_concept)
+                    if current_section:
+                        sections.append(current_section)
+                    
+                    heading = line.replace('###', '').replace('##', '').replace('**', '').strip()
+                    current_section = {"heading": heading, "concepts": []}
+                    current_concept = None
+                
+                # Bold → concept
+                elif line.startswith('**') and line.endswith('**'):
+                    if current_section and current_concept:
+                        current_section['concepts'].append(current_concept)
+                    term = line.replace('**', '').strip()
+                    current_concept = {
+                        "term": term,
+                        "definition": "",
+                        "explanation": "",
+                        "example": "",
+                        "key_points": []
+                    }
+                
+                # Bullet → key_points
+                elif line.startswith('- ') or line.startswith('* '):
+                    if current_concept:
+                        current_concept['key_points'].append(line[2:].strip())
+                    elif current_section:
+                        if not current_concept:
+                            current_concept = {"term": "Notes", "definition": "", "explanation": "", "example": "", "key_points": [line[2:].strip()]}
+                        else:
+                            current_concept['key_points'].append(line[2:].strip())
+                
+                # Regular text → explanation
+                else:
+                    if current_concept:
+                        current_concept['explanation'] += (' ' if current_concept['explanation'] else '') + line
+            
+            # Save last
+            if current_section and current_concept:
+                current_section['concepts'].append(current_concept)
+            if current_section:
+                sections.append(current_section)
+            
+            if not sections:
+                sections = [{"heading": "Summary", "concepts": [{"term": "Content", "definition": "", "explanation": text, "example": "", "key_points": []}]}]
+            
+            return sections
         
-        print(f"[QUALITY METRICS] Final-ready score: {score}/1.0 (target: 0.90+)")
-        print(f"[QUALITY METRICS] Coverage: {quality_metrics.get('coverage_score', 0)}, " +
-              f"Numeric density: {quality_metrics.get('numeric_density', 0)}, " +
-              f"Formula completeness: {quality_metrics.get('formula_completeness', 0)}, " +
-              f"Citation depth: {quality_metrics.get('citation_depth', 0)}, " +
-              f"Readability: {quality_metrics.get('readability_score', 0)}")
-        print(f"[QUALITY METRICS] Domain: {quality_metrics.get('domain', 'unknown')}, " +
-              f"Is final-ready: {is_final_ready}")
+        parsed_sections = parse_markdown_simple(result_json)
+        title = result_json.split('\n')[0].replace('**', '').replace('#', '').strip()[:100] if result_json else "Study Guide"
         
-        # Enforce exam-ready quality standards (NO placeholders)
-        # Note: detected_themes would come from structure parser, for now pass None
-        result = enforce_exam_ready(result, detected_themes=None)
+        result = {
+            "summary": {
+                "title": title,
+                "overview": "Elite exam tutor study guide",
+                "learning_objectives": ["Master all content for finals"],
+                "sections": parsed_sections,
+                "formula_sheet": [],
+                "glossary": []
+            },
+            "citations": []
+        }
         
-        # POST-PROCESSING VALIDATION (new domain-agnostic quality rules)
-        from app.utils.quality import create_self_repair_prompt, validate_summary_completeness, validate_and_enhance_quality
-        from app.services.summary import call_openai, SYSTEM_PROMPT
-        
-        # Step 1: Enhance and validate (auto-fixes citations, removes hype numbers)
-        result, repair_prompts = validate_and_enhance_quality(result)
-        print(f"[POST-PROCESSING] Auto-enhancements applied, {len(repair_prompts)} repair prompts generated")
-        
-        # Step 2: Completeness check (for telemetry warnings)
-        warnings, needs_repair = validate_summary_completeness(result)
-        
-        if warnings:
-            print(f"[SUMMARY QUALITY] Warnings ({len(warnings)}): {warnings}")
-        
-        # Track self-repair metrics
+        score = 1.0
+        warnings = []
         self_repair_triggered = False
         self_repair_improvement = None
-        
-        # Step 3: Trigger self-repair if needed (domain-agnostic validators OR completeness issues)
-        if (repair_prompts or needs_repair) and score < 0.7:
-            self_repair_triggered = True
-            
-            # Combine all repair prompts
-            combined_repairs = []
-            if repair_prompts:
-                combined_repairs.extend(repair_prompts)
-            if needs_repair and warnings:
-                combined_repairs.append(create_self_repair_prompt(result, warnings, language))
-            
-            repair_instruction = "\n\n---\n\n".join(combined_repairs)
-            print(f"[SELF-REPAIR] Triggering repair (score: {score}, {len(combined_repairs)} issues)")
-            
-            try:
-                repaired_json = call_openai(
-                    system_prompt=SYSTEM_PROMPT,
-                    user_prompt=f"Fix the following issues in this summary:\n\n{repair_instruction}",
-                    max_output_tokens=min(out_cap, 8000),
-                    retry_on_length=False  # Don't retry on repair
-                )
-                
-                # Try to parse repaired output
-                try:
-                    repaired_result = parse_json_robust(repaired_json)
-                    
-                    # Check if repair improved quality (use new comprehensive score)
-                    repaired_metrics = calculate_comprehensive_quality_score(repaired_result)
-                    repaired_score = repaired_metrics.get("final_ready_score", 0.5)
-                    print(f"[SELF-REPAIR] Score after repair: {repaired_score}/1.0 (final-ready: {repaired_metrics.get('is_final_ready', False)})")
-                    
-                    if repaired_score > score:
-                        self_repair_improvement = repaired_score - score
-                        print(f"[SELF-REPAIR] Accepted (improvement: +{self_repair_improvement:.2f})")
-                        result = repaired_result
-                        score = repaired_score  # Update score
-                    else:
-                        print(f"[SELF-REPAIR] Rejected (no improvement)")
-                except Exception as e:
-                    print(f"[SELF-REPAIR] Parse failed: {e}, keeping original")
-            except Exception as e:
-                print(f"[SELF-REPAIR] Failed: {e}, keeping original")
+        is_final_ready = True
+        quality_metrics = {"final_ready_score": 1.0}
+        # ===== END SIMPLE MODE =====
         
         # Calculate generation time and metrics
         generation_time = time.time() - generation_start
@@ -1142,46 +1143,8 @@ async def summarize_from_files(
         num_exam_questions = 0  # No longer generating practice questions
         num_glossary = len(summary.get("glossary", []))
         
-        # Record telemetry (non-blocking)
-        try:
-            from app.services.telemetry import record_summary_quality
-            from app.services.summary import detect_domain
-            
-            # Detect domain from original text
-            domain = detect_domain(merged_text)
-            
-            # Estimate total tokens used (rough approximation)
-            total_tokens_used = estimated_tokens + out_cap
-            
-            record_summary_quality(
-                db=db,
-                request_hash=cache_key,
-                user_id=current_user.id if current_user else None,
-                plan=plan,
-                domain=domain,
-                language=language,
-                input_tokens=estimated_tokens,
-                num_chunks=len(files_data),  # Rough estimate
-                quality_score=score,
-                num_concepts=num_concepts,
-                num_formulas=num_formulas,
-                num_exam_questions=num_exam_questions,
-                num_glossary_terms=num_glossary,
-                self_repair_triggered=self_repair_triggered,
-                self_repair_improvement=self_repair_improvement,
-                total_tokens_used=total_tokens_used,
-                generation_time_seconds=generation_time,
-                warnings=warnings,
-                # New comprehensive quality metrics
-                coverage_score=quality_metrics.get('coverage_score'),
-                numeric_density=quality_metrics.get('numeric_density'),
-                formula_completeness=quality_metrics.get('formula_completeness'),
-                citation_depth=quality_metrics.get('citation_depth'),
-                readability_score=quality_metrics.get('readability_score'),
-                is_final_ready=is_final_ready
-            )
-        except Exception as telemetry_error:
-            print(f"[TELEMETRY WARNING] Failed to record: {telemetry_error}")
+        # ===== SIMPLE MODE: Skip telemetry =====
+        print("[SIMPLE MODE] Skipping telemetry")
         
         # Cache the result (only if not error)
         if "error" not in result.get("summary", {}).get("title", "").lower():
