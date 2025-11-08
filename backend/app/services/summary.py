@@ -1062,75 +1062,34 @@ def simple_exam_tutor_summary(
         print(f"[SIMPLE MODE] Truncating document: {len(full_text)} → {MAX_INPUT_CHARS} chars")
         full_text = full_text[:MAX_INPUT_CHARS] + "\n\n[DOCUMENT TRUNCATED - remaining content omitted]"
     
-    # Elite exam tutor prompt
-    tutor_prompt = """You are StudyWithAI, an elite exam tutor. Your task is to create a self-sufficient exam study guide from the DOCUMENT CONTENT below. The student will study ONLY this guide, so it must cover EVERY topic, definition, theorem, formula, algorithm, and subtlety present in the document—no omissions, no external knowledge.
-
-THINKING & OUTPUT RULES
-- Plan silently: derive a complete outline from the document internally; do not show your reasoning or planning steps. Output ONLY the final study guide.
-- Grounding is STRICT: use ONLY facts from the document. If the document lacks a detail, write "[MISSING IN DOC]" rather than guessing.
-- Math format: render all math in LaTeX (inline: \\( ... \\), display: \\[ ... \\]). Keep symbols consistent.
-- Use as much space as allowed. If space becomes tight, prioritize (1) complete coverage checklists, (2) exact formulas/algorithms, (3) worked examples.
-
-DELIVERABLE = ONE COMPREHENSIVE STUDY GUIDE
-1) Title & Metadata
-   - Title of the material
-   - What this chapter/unit covers in 3–5 sentences (big picture)
-   - Prereqs (if implied by the doc)
-
-2) Master Outline (auto-generated from the document)
-   - Exact section/subsection list reflecting the source structure
-   - One-line objective under each item
-
-3) Core Notes — section by section (repeat this template for every section in the outline)
-   For each section:
-   - Key Ideas (bullet list of the main points in the author's order)
-   - Definitions & Notation (precise; include symbol tables)
-   - Theorems/Lemmas/Propositions
-       • Formal statement(s) in LaTeX
-       • If proof is present in the doc: proof sketch in the doc's style;
-         else mark "[MISSING IN DOC]"
-   - Formulas & Identities
-       • Exact formula set in LaTeX, with variable meanings and units (if any)
-   - Algorithms (when applicable)
-       • Name + goal
-       • Assumptions
-       • Pseudocode (clean, minimal)
-       • Complexity (\\(O(\\cdot)\\) time/space), optimality conditions, failure modes
-   - Worked Example(s)
-       • At least one fully worked, step-by-step numeric or symbolic example tied to this section's content
-       • Show intermediate steps and the final result
-   - Edge Cases & Pitfalls
-       • Common mistakes and exam "gotchas" actually mentioned or implied in the doc
-   - Micro-Quiz (3–5 quick checks with brief answers, directly grounded in this section)
-
-4) Synthesis & Comparisons (only if the doc supports them)
-   - Compare/contrast closely related concepts/algorithms from the doc (tables are fine)
-   - When to use which method (decision rules stated in the source)
-
-5) Exam Toolkit
-   - Cheat Sheet (dense bullets): all definitions, key formulas, and algorithm steps in one place
-   - Problem-solving patterns (if present in the doc)
-   - 10 practice questions WITH fully worked solutions that reflect the document's scope and examples (do NOT invent outside content)
-
-6) Glossary of Terms & Symbols (from the doc only)
-   - Term → concise definition (1–2 lines), symbol → meaning
-
-7) Coverage Checklist (final sanity pass)
-   - List every section, theorem, formula, and algorithm you included, mirroring the document's structure.
-   - If anything in the document couldn't fit, list it under "Residual Items" with "[TRUNCATED]" (do not fabricate).
-
-STYLE
-- Clear, didactic tone; short paragraphs; informative headings.
-- Keep the source's ordering. Use consistent variable names and notation found in the document.
-- No external references. No speculation. Everything must be document-grounded.
-
-Now read the DOCUMENT CONTENT and produce the study guide described above.
-
-DOCUMENT CONTENT:
-{full_text}"""
-    
+    # Elite exam tutor prompt (shortened to fix Railway memory crash)
     try:
-        combined_prompt = tutor_prompt.format(full_text=full_text)
+        combined_prompt = f"""You are an elite exam tutor. Create a comprehensive study guide from the document below that covers EVERY topic, formula, theorem, and algorithm.
+
+DELIVERABLE:
+1. Title & Overview (3-5 sentences)
+2. Master Outline (all sections with objectives)
+3. For EACH section:
+   - Key Ideas
+   - Definitions & Notation
+   - Theorems/Formulas (in LaTeX: \\( ... \\) or \\[ ... \\])
+   - Algorithms (with complexity)
+   - Worked Examples (step-by-step with numbers)
+   - Edge Cases & Common Mistakes
+   - Quick Quiz (3-5 questions with answers)
+4. Exam Toolkit: Cheat sheet + 10 practice problems with full solutions
+5. Glossary of all terms
+6. Coverage Checklist
+
+RULES:
+- Use ONLY facts from the document below
+- Write "[MISSING]" if info not in doc
+- LaTeX for all math
+- Step-by-step examples with real numbers
+- Cover everything systematically
+
+DOCUMENT:
+{full_text}"""
     except Exception as e:
         print(f"[SIMPLE MODE ERROR] Prompt format failed: {e}")
         combined_prompt = f"Summarize this document:\n\n{full_text}"
