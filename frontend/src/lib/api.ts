@@ -202,6 +202,45 @@ export const historyAPI = {
   }
 }
 
+// Admin API
+export const adminAPI = {
+  // Get all users
+  async getUsers(skip: number = 0, limit: number = 100) {
+    const response = await apiClient.get('/admin/users', { params: { skip, limit } })
+    return response.data
+  },
+
+  // Get user by ID
+  async getUser(userId: number) {
+    const response = await apiClient.get(`/admin/users/${userId}`)
+    return response.data
+  },
+
+  // Update user
+  async updateUser(userId: number, updates: { name?: string; surname?: string; tier?: string; is_admin?: boolean }) {
+    const response = await apiClient.put(`/admin/users/${userId}`, updates)
+    return response.data
+  },
+
+  // Delete user
+  async deleteUser(userId: number) {
+    const response = await apiClient.delete(`/admin/users/${userId}`)
+    return response.data
+  },
+
+  // Get admin statistics
+  async getStats() {
+    const response = await apiClient.get('/admin/stats')
+    return response.data
+  },
+
+  // Clear cache
+  async clearCache() {
+    const response = await apiClient.delete('/admin/clear-cache')
+    return response.data
+  }
+}
+
 // Folder API
 export const folderAPI = {
   // Get all folders

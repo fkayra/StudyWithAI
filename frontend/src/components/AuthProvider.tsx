@@ -8,7 +8,8 @@ interface User {
   email: string
   name: string
   surname: string
-  tier: 'free' | 'premium'
+  tier: 'free' | 'premium' | 'standard' | 'pro'
+  is_admin?: boolean
   usage?: {
     exam: number
     explain: number

@@ -81,6 +81,7 @@ class User(Base):
     oauth_provider = Column(String, nullable=True)  # Legacy - not used
     oauth_id = Column(String, nullable=True)  # Legacy - not used
     tier = Column(String, default="free")  # "free" or "premium"
+    is_admin = Column(Integer, default=0)  # 0 = false, 1 = true (SQLite compatibility)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Upload(Base):
@@ -299,6 +300,24 @@ class HistoryItemResponse(BaseModel):
     folder_id: Optional[int] = None
     timestamp: int  # Unix timestamp in milliseconds
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    surname: Optional[str] = None
+    tier: Optional[str] = None
+    is_admin: Optional[bool] = None
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    name: Optional[str] = None
+    surname: Optional[str] = None
+    tier: str
+    is_admin: bool
+    created_at: str
+    usage: Optional[Dict[str, int]] = None
+    history_count: Optional[int] = None
+    uploads_count: Optional[int] = None
+
 # ============================================================================
 # DEPENDENCIES
 # ============================================================================
@@ -359,6 +378,13 @@ def get_optional_user(request: Request, authorization: Optional[str] = Header(No
         return user
     except:
         return None
+
+def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """Get current user and verify they are an admin"""
+    # Check if user is admin (is_admin can be 1 or True)
+    if not current_user.is_admin or current_user.is_admin == 0:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
 
 # ============================================================================
 # UTILITIES
@@ -746,6 +772,7 @@ async def get_me(current_user: User = Depends(get_current_user), db: Session = D
             "name": current_user.name,
             "surname": current_user.surname,
             "tier": current_user.tier,
+            "is_admin": bool(current_user.is_admin) if current_user.is_admin else False,
             "usage": usage_data
         }
     except Exception as e:
@@ -2102,8 +2129,191 @@ async def delete_folder(
     
     return {"status": "success"}
 
+# ============================================================================
+# ADMIN ENDPOINTS
+# ============================================================================
+@app.get("/admin/users", response_model=List[UserResponse])
+async def get_all_users(
+    skip: int = 0,
+    limit: int = 100,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get all users (admin only)"""
+    users = db.query(User).offset(skip).limit(limit).all()
+    return [
+        {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "surname": user.surname,
+            "tier": user.tier,
+            "is_admin": bool(user.is_admin) if user.is_admin else False,
+            "created_at": user.created_at.isoformat()
+        }
+        for user in users
+    ]
+
+@app.get("/admin/users/{user_id}")
+async def get_user(
+    user_id: int,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific user by ID (admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get usage statistics
+    today = date.today()
+    usage_data = {}
+    for kind in ["exam", "explain", "chat", "upload"]:
+        usage = db.query(Usage).filter(
+            Usage.user_id == user.id,
+            Usage.kind == kind,
+            Usage.date == today
+        ).first()
+        usage_data[kind] = usage.count if usage else 0
+    
+    # Get total history items
+    history_count = db.query(History).filter(History.user_id == user.id).count()
+    
+    # Get total uploads
+    uploads_count = db.query(Upload).filter(Upload.user_id == user.id).count()
+    
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "surname": user.surname,
+        "tier": user.tier,
+        "is_admin": bool(user.is_admin) if user.is_admin else False,
+        "created_at": user.created_at.isoformat(),
+        "usage": usage_data,
+        "history_count": history_count,
+        "uploads_count": uploads_count
+    }
+
+@app.put("/admin/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_update: UserUpdate,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Update a user (admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent admin from removing their own admin status
+    if user_id == admin_user.id and user_update.is_admin is False:
+        raise HTTPException(status_code=400, detail="Cannot remove your own admin status")
+    
+    if user_update.name is not None:
+        user.name = user_update.name
+    if user_update.surname is not None:
+        user.surname = user_update.surname
+    if user_update.tier is not None:
+        if user_update.tier not in ["free", "premium", "standard", "pro"]:
+            raise HTTPException(status_code=400, detail="Invalid tier. Must be 'free', 'standard', 'premium', or 'pro'")
+        user.tier = user_update.tier
+    if user_update.is_admin is not None:
+        user.is_admin = 1 if user_update.is_admin else 0
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "surname": user.surname,
+        "tier": user.tier,
+        "is_admin": bool(user.is_admin) if user.is_admin else False,
+        "created_at": user.created_at.isoformat()
+    }
+
+@app.delete("/admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a user (admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent admin from deleting themselves
+    if user_id == admin_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    # Delete related data
+    db.query(History).filter(History.user_id == user_id).delete()
+    db.query(Upload).filter(Upload.user_id == user_id).delete()
+    db.query(Usage).filter(Usage.user_id == user_id).delete()
+    db.query(Exam).filter(Exam.user_id == user_id).delete()
+    db.query(Folder).filter(Folder.user_id == user_id).delete()
+    
+    db.delete(user)
+    db.commit()
+    
+    return {"status": "success", "message": f"User {user_id} deleted successfully"}
+
+@app.get("/admin/stats")
+async def get_admin_stats(
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get admin statistics (admin only)"""
+    # Total users
+    total_users = db.query(User).count()
+    free_users = db.query(User).filter(User.tier == "free").count()
+    premium_users = db.query(User).filter(User.tier.in_(["premium", "pro"])).count()
+    admin_users = db.query(User).filter(User.is_admin == 1).count()
+    
+    # Usage statistics
+    today = date.today()
+    today_usage = db.query(Usage).filter(Usage.date == today).all()
+    usage_by_kind = {}
+    for usage in today_usage:
+        if usage.kind not in usage_by_kind:
+            usage_by_kind[usage.kind] = 0
+        usage_by_kind[usage.kind] += usage.count
+    
+    # Total history items
+    total_history = db.query(History).count()
+    
+    # Total uploads
+    total_uploads = db.query(Upload).count()
+    
+    # Recent registrations (last 7 days)
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    recent_registrations = db.query(User).filter(User.created_at >= seven_days_ago).count()
+    
+    return {
+        "users": {
+            "total": total_users,
+            "free": free_users,
+            "premium": premium_users,
+            "admin": admin_users
+        },
+        "usage_today": usage_by_kind,
+        "content": {
+            "total_history": total_history,
+            "total_uploads": total_uploads
+        },
+        "recent_registrations_7d": recent_registrations
+    }
+
 @app.get("/admin/quality-stats")
-async def get_quality_stats_endpoint(days: int = 7, db: Session = Depends(get_db)):
+async def get_quality_stats_endpoint(
+    days: int = 7,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
     """Get quality statistics for recent summaries (admin only)"""
     try:
         from app.services.telemetry import get_quality_stats
@@ -2117,6 +2327,7 @@ async def get_quality_stats_endpoint(days: int = 7, db: Session = Depends(get_db
 async def get_low_quality_patterns_endpoint(
     threshold: float = 0.6,
     limit: int = 10,
+    admin_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
     """Get patterns in low-quality summaries for improvement (admin only)"""
@@ -2149,9 +2360,22 @@ async def migrate_database(db: Session = Depends(get_db)):
         # Try to add columns using raw SQL with text()
         if DATABASE_URL.startswith("sqlite"):
             # SQLite
-            db.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
-            db.execute(text("ALTER TABLE users ADD COLUMN surname TEXT"))
-            db.execute(text("ALTER TABLE history ADD COLUMN folder_id INTEGER"))
+            try:
+                db.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
+            except:
+                pass
+            try:
+                db.execute(text("ALTER TABLE users ADD COLUMN surname TEXT"))
+            except:
+                pass
+            try:
+                db.execute(text("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"))
+            except:
+                pass
+            try:
+                db.execute(text("ALTER TABLE history ADD COLUMN folder_id INTEGER"))
+            except:
+                pass
             # Create folders table
             db.execute(text("""
                 CREATE TABLE IF NOT EXISTS folders (
@@ -2167,6 +2391,7 @@ async def migrate_database(db: Session = Depends(get_db)):
             # PostgreSQL
             db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR"))
             db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR"))
+            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin INTEGER DEFAULT 0"))
             db.execute(text("ALTER TABLE history ADD COLUMN IF NOT EXISTS folder_id INTEGER"))
             # Create folders table
             db.execute(text("""
@@ -2199,8 +2424,11 @@ if __name__ == "__main__":
 
 @app.get("/admin/clear-cache")
 @app.delete("/admin/clear-cache")
-async def clear_cache(db: Session = Depends(get_db)):
-    """Clear all summary cache (admin only - no auth for now)"""
+async def clear_cache(
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Clear all summary cache (admin only)"""
     try:
         from app.services.cache import SummaryCache
         deleted = db.query(SummaryCache).delete()
