@@ -1119,7 +1119,9 @@ async def summarize_from_files(
             i = 0
             
             while i < len(lines):
-                line = lines[i].strip()
+                raw_line = lines[i]
+                line = raw_line.strip()
+                indent = len(raw_line) - len(raw_line.lstrip())
                 
                 # Skip empty, dividers, and main title
                 if not line or line == '---' or line.startswith('# '):
@@ -1143,13 +1145,25 @@ async def summarize_from_files(
                     i += 1
                     continue
                 
-                # Subsection heading (**Key Ideas**, **Definitions**, etc.)
-                if current_section and line.startswith('- **') and '**' in line[4:]:
-                    # Save previous concept
+                # Subsection heading (- **Key Ideas**, - **Definitions**, etc.) - ONLY at indent 0-1
+                if current_section and indent < 2 and line.startswith('- **') and '**' in line[4:]:
+                    # Check if this is a term definition (has : after **)
+                    term_def_match = re.match(r'-\s*\*\*([^*:]+)\*\*\s*:\s*(.+)', line)
+                    if term_def_match and current_concept:
+                        # This is a nested definition under parent concept
+                        term = term_def_match.group(1).strip()
+                        definition = term_def_match.group(2).strip()
+                        if current_concept['explanation']:
+                            current_concept['explanation'] += f"\n\n**{term}**: {definition}"
+                        else:
+                            current_concept['explanation'] = f"**{term}**: {definition}"
+                        i += 1
+                        continue
+                    
+                    # Otherwise it's a new subsection
                     if current_concept:
                         current_section['concepts'].append(current_concept)
                     
-                    # Extract subsection name
                     match = re.match(r'-\s*\*\*([^*]+)\*\*', line)
                     if match:
                         term = match.group(1).strip()
@@ -1163,20 +1177,35 @@ async def summarize_from_files(
                     i += 1
                     continue
                 
-                # Bullet point content
+                # Nested bullet (indented) - term definition format: - **Term**: Definition
+                if current_concept and indent >= 2 and line.startswith('- **'):
+                    term_def_match = re.match(r'-\s*\*\*([^*:]+)\*\*\s*:\s*(.+)', line)
+                    if term_def_match:
+                        term = term_def_match.group(1).strip()
+                        definition = term_def_match.group(2).strip()
+                        if current_concept['explanation']:
+                            current_concept['explanation'] += f"\n\n**{term}**: {definition}"
+                        else:
+                            current_concept['explanation'] = f"**{term}**: {definition}"
+                    i += 1
+                    continue
+                
+                # Regular bullet point content
                 if current_concept and line.startswith(('- ', '• ')):
                     bullet_text = re.sub(r'^[-•]\s*', '', line)
                     bullet_text = clean_md(bullet_text)
-                    if bullet_text and len(bullet_text) > 3:
+                    if bullet_text and len(bullet_text) > 3 and not bullet_text.startswith('[MISSING]'):
                         current_concept['key_points'].append(bullet_text)
                     i += 1
                     continue
                 
                 # Regular text → explanation
                 if current_concept and line and not line.startswith('#'):
-                    if current_concept['explanation']:
-                        current_concept['explanation'] += ' '
-                    current_concept['explanation'] += clean_md(line)
+                    cleaned = clean_md(line)
+                    if cleaned and not cleaned.startswith('[MISSING]'):
+                        if current_concept['explanation']:
+                            current_concept['explanation'] += ' '
+                        current_concept['explanation'] += cleaned
                 
                 i += 1
             
