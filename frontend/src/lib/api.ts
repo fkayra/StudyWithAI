@@ -238,6 +238,35 @@ export const adminAPI = {
   async clearCache() {
     const response = await apiClient.delete('/admin/clear-cache')
     return response.data
+  },
+
+  // Get transactions
+  async getTransactions(skip: number = 0, limit: number = 100, userId?: number) {
+    const params: any = { skip, limit }
+    if (userId) params.user_id = userId
+    const response = await apiClient.get('/admin/transactions', { params })
+    return response.data
+  },
+
+  // Get token usage
+  async getTokenUsage(skip: number = 0, limit: number = 100, userId?: number, endpoint?: string) {
+    const params: any = { skip, limit }
+    if (userId) params.user_id = userId
+    if (endpoint) params.endpoint = endpoint
+    const response = await apiClient.get('/admin/token-usage', { params })
+    return response.data
+  },
+
+  // Get revenue statistics
+  async getRevenueStats(days: number = 30) {
+    const response = await apiClient.get('/admin/revenue', { params: { days } })
+    return response.data
+  },
+
+  // Get user detailed info
+  async getUserDetails(userId: number) {
+    const response = await apiClient.get(`/admin/users/${userId}/details`)
+    return response.data
   }
 }
 

@@ -5,7 +5,7 @@ Provides grounded document processing, exam generation, and AI tutoring
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Date, text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Date, text, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, timedelta, date
@@ -128,6 +128,35 @@ class History(Base):
     title = Column(String)
     data_json = Column(String)  # JSON stringified data
     score_json = Column(String, nullable=True)  # JSON stringified score (for truefalse, exam)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    stripe_session_id = Column(String, unique=True, index=True)
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    stripe_payment_intent_id = Column(String, nullable=True)
+    amount = Column(Float)  # Amount in cents (Stripe format)
+    currency = Column(String, default="usd")
+    status = Column(String)  # "completed", "pending", "failed", "refunded"
+    tier = Column(String)  # "premium", "pro", etc.
+    event_type = Column(String)  # "checkout.session.completed", "invoice.paid", etc.
+    event_metadata = Column(String, nullable=True)  # JSON string for additional data (renamed from 'metadata' because it's reserved in SQLAlchemy)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class TokenUsage(Base):
+    __tablename__ = "token_usage"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=True, index=True)  # Null for anonymous users
+    endpoint = Column(String)  # "summarize", "flashcards", "exam", "chat", "explain"
+    model = Column(String, default="gpt-4o-mini")
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    estimated_cost = Column(Float, nullable=True)  # Estimated cost in USD
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -350,11 +379,18 @@ def get_current_user(request: Request, authorization: Optional[str] = Header(Non
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    
-    return user
+    try:
+        # Query user - use explicit column selection to avoid issues
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        print(f"[AUTH ERROR] Failed to get user {user_id}: {str(e)}")
+        print(f"[AUTH ERROR] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve user information")
 
 def get_optional_user(request: Request, authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Optional[User]:
     """Get user if authenticated, None otherwise"""
@@ -505,8 +541,8 @@ def extract_text_from_file(file_content: bytes, filename: str, mime: str) -> str
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to extract text from {filename}: {str(e)}")
 
-def call_openai_with_context(file_contents: List[str], prompt: str, temperature: float = 0.0) -> str:
-    """Call OpenAI API with file contents included in the prompt"""
+def call_openai_with_context(file_contents: List[str], prompt: str, temperature: float = 0.0, model: str = "gpt-4o-mini", max_tokens: int = 4000, user_id: Optional[int] = None, endpoint: str = "unknown", db: Optional[Session] = None) -> str:
+    """Call OpenAI API with file contents included in the prompt. Returns response text."""
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
     
@@ -544,10 +580,10 @@ def call_openai_with_context(file_contents: List[str], prompt: str, temperature:
         })
     
     payload = {
-        "model": "gpt-4o-mini",
+        "model": model,
         "messages": messages,
         "temperature": temperature,
-        "max_tokens": 4000
+        "max_tokens": max_tokens
     }
     
     response = requests.post(url, headers=headers, json=payload, timeout=60)
@@ -555,7 +591,50 @@ def call_openai_with_context(file_contents: List[str], prompt: str, temperature:
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail=f"OpenAI API call failed: {response.text}")
     
-    return response.json()["choices"][0]["message"]["content"]
+    response_data = response.json()
+    content = response_data["choices"][0]["message"]["content"]
+    usage = response_data.get("usage", {})
+    
+    # Track token usage in database (non-blocking)
+    if db and endpoint != "unknown":
+        try:
+            input_tokens = usage.get("prompt_tokens", 0)
+            output_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+            
+            # Cost calculation (per 1M tokens)
+            if "gpt-4o" in model.lower():
+                input_cost_per_1m = 2.50  # $2.50 per 1M input tokens for gpt-4o
+                output_cost_per_1m = 10.00  # $10.00 per 1M output tokens for gpt-4o
+            elif "gpt-4" in model.lower():
+                input_cost_per_1m = 30.00  # $30 per 1M input tokens for gpt-4
+                output_cost_per_1m = 60.00  # $60 per 1M output tokens for gpt-4
+            else:
+                input_cost_per_1m = 0.150  # $0.15 per 1M input tokens for gpt-4o-mini
+                output_cost_per_1m = 0.600  # $0.60 per 1M output tokens for gpt-4o-mini
+            
+            estimated_cost = (input_tokens / 1_000_000 * input_cost_per_1m) + (output_tokens / 1_000_000 * output_cost_per_1m)
+            
+            token_usage = TokenUsage(
+                user_id=user_id,
+                endpoint=endpoint,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                estimated_cost=estimated_cost
+            )
+            db.add(token_usage)
+            db.commit()
+        except Exception as e:
+            # Don't fail the request if token tracking fails
+            print(f"[TOKEN TRACKING ERROR] Failed to record token usage: {e}")
+            try:
+                db.rollback()
+            except:
+                pass
+    
+    return content
 
 def parse_mcq_questions(text: str) -> tuple:
     """Parse MCQ format and return questions, answer key"""
@@ -616,6 +695,33 @@ async def health():
 async def ping():
     return {"message": "pong"}
 
+@app.get("/test-user-query")
+async def test_user_query(db: Session = Depends(get_db)):
+    """Test endpoint to check if user query works"""
+    try:
+        user = db.query(User).first()
+        if user:
+            return {
+                "status": "success",
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "name": getattr(user, 'name', None),
+                    "surname": getattr(user, 'surname', None),
+                    "tier": getattr(user, 'tier', 'free'),
+                    "is_admin": bool(getattr(user, 'is_admin', 0)) if getattr(user, 'is_admin', 0) else False
+                }
+            }
+        else:
+            return {"status": "no users found"}
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 @app.options("/{path:path}")
 async def options_handler(path: str):
     """Handle OPTIONS requests for CORS preflight"""
@@ -647,51 +753,159 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 @app.post("/auth/login")
 async def login(credentials: UserLogin, response: Response, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == credentials.email).first()
-    
-    if not user or not verify_password(credentials.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    access_token = create_token(user.id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    refresh_token = create_token(user.id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
-    
-    # Set HTTP-only cookies for security
-    # Important: path="/" ensures cookie is sent with all requests
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        path="/",
-        httponly=True,
-        secure=COOKIE_SECURE,  # Only send over HTTPS in production
-        samesite=COOKIE_SAMESITE,  # "none" for cross-site (production), "lax" for dev
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert minutes to seconds
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        path="/",
-        httponly=True,
-        secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60  # Convert days to seconds
-    )
-    
-    # Debug log
-    print(f"[AUTH] Login successful for user {user.id}, cookies set: secure={COOKIE_SECURE}, samesite={COOKIE_SAMESITE}")
-    
-    # Also return tokens in response for backward compatibility
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "surname": user.surname,
-            "tier": user.tier
+    try:
+        print(f"[AUTH] Login attempt for email: {credentials.email}")
+        
+        # Query user - use try/except to catch any database errors
+        try:
+            user = db.query(User).filter(User.email == credentials.email).first()
+        except Exception as db_error:
+            print(f"[AUTH ERROR] Database query failed: {db_error}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail="Database error during login")
+        
+        if not user:
+            print(f"[AUTH] User not found: {credentials.email}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        print(f"[AUTH] User found: {user.id}, email: {user.email}")
+        
+        # Verify password
+        try:
+            if not user.password_hash:
+                print(f"[AUTH] User {user.id} has no password hash")
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+            
+            if not verify_password(credentials.password, user.password_hash):
+                print(f"[AUTH] Password verification failed for user {user.id}")
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+        except HTTPException:
+            raise
+        except Exception as pwd_error:
+            print(f"[AUTH ERROR] Password verification error: {pwd_error}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        print(f"[AUTH] Password verified for user {user.id}")
+        
+        # Create tokens
+        try:
+            access_token = create_token(user.id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+            refresh_token = create_token(user.id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+            print(f"[AUTH] Tokens created for user {user.id}")
+        except Exception as token_error:
+            print(f"[AUTH ERROR] Token creation failed: {token_error}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail="Failed to create authentication tokens")
+        
+        # Set HTTP-only cookies for security
+        try:
+            response.set_cookie(
+                key="access_token",
+                value=access_token,
+                path="/",
+                httponly=True,
+                secure=COOKIE_SECURE,
+                samesite=COOKIE_SAMESITE,
+                max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            )
+            response.set_cookie(
+                key="refresh_token",
+                value=refresh_token,
+                path="/",
+                httponly=True,
+                secure=COOKIE_SECURE,
+                samesite=COOKIE_SAMESITE,
+                max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+            )
+            print(f"[AUTH] Cookies set: secure={COOKIE_SECURE}, samesite={COOKIE_SAMESITE}")
+        except Exception as cookie_error:
+            print(f"[AUTH WARNING] Cookie setting failed: {cookie_error}")
+            # Continue anyway - tokens are still returned in response body
+        
+        # Build user response data - use direct attribute access with fallbacks
+        try:
+            # Get basic user info
+            user_id = user.id
+            user_email = user.email
+            
+            # Get optional fields with safe defaults
+            user_tier = 'free'
+            try:
+                if hasattr(user, 'tier') and user.tier:
+                    user_tier = user.tier
+            except:
+                pass
+            
+            user_name = None
+            try:
+                if hasattr(user, 'name'):
+                    user_name = user.name
+            except:
+                pass
+            
+            user_surname = None
+            try:
+                if hasattr(user, 'surname'):
+                    user_surname = user.surname
+            except:
+                pass
+            
+            # Get is_admin safely
+            is_admin = False
+            try:
+                if hasattr(user, 'is_admin'):
+                    is_admin_val = user.is_admin
+                    if is_admin_val is not None:
+                        is_admin = bool(int(is_admin_val))
+            except:
+                pass
+            
+            user_data = {
+                "id": user_id,
+                "email": user_email,
+                "tier": user_tier,
+                "name": user_name,
+                "surname": user_surname,
+                "is_admin": is_admin
+            }
+            
+            print(f"[AUTH] User data built: {user_data}")
+            
+        except Exception as user_data_error:
+            print(f"[AUTH ERROR] Error building user data: {user_data_error}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to minimal user data
+            user_data = {
+                "id": user.id,
+                "email": user.email,
+                "tier": 'free',
+                "is_admin": False
+            }
+        
+        response_data = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": user_data
         }
-    }
+        
+        print(f"[AUTH] Login successful for user {user.id}")
+        return response_data
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 401)
+        raise
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        error_details = str(e)
+        traceback_str = traceback.format_exc()
+        print(f"[AUTH ERROR] Login failed with exception: {error_details}")
+        print(f"[AUTH ERROR] Full traceback:\n{traceback_str}")
+        raise HTTPException(status_code=500, detail="Login failed. Please try again.")
 
 @app.post("/auth/refresh")
 async def refresh(request: Request, response: Response, refresh_data: dict = None):
@@ -764,15 +978,21 @@ async def get_me(current_user: User = Depends(get_current_user), db: Session = D
                 usage_data[kind] = usage.count if usage else 0
             except Exception as e:
                 # If usage table has issues, set to 0 and continue
+                print(f"[WARNING] Failed to get usage for {kind}: {e}")
                 usage_data[kind] = 0
+        
+        # Safely get is_admin - handle case where column might not exist or be None
+        # is_admin is stored as integer (0 or 1)
+        is_admin_value = getattr(current_user, 'is_admin', 0) or 0
+        is_admin = bool(is_admin_value) if is_admin_value else False
         
         return {
             "id": current_user.id,
             "email": current_user.email,
-            "name": current_user.name,
-            "surname": current_user.surname,
-            "tier": current_user.tier,
-            "is_admin": bool(current_user.is_admin) if current_user.is_admin else False,
+            "name": getattr(current_user, 'name', None) if hasattr(current_user, 'name') else None,
+            "surname": getattr(current_user, 'surname', None) if hasattr(current_user, 'surname') else None,
+            "tier": getattr(current_user, 'tier', 'free') if hasattr(current_user, 'tier') else 'free',
+            "is_admin": is_admin,
             "usage": usage_data
         }
     except Exception as e:
@@ -780,7 +1000,7 @@ async def get_me(current_user: User = Depends(get_current_user), db: Session = D
         import traceback
         error_details = str(e)
         traceback_str = traceback.format_exc()
-        print(f"Error in /me endpoint: {error_details}\n{traceback_str}")
+        print(f"[ERROR] Error in /me endpoint: {error_details}\n{traceback_str}")
         raise HTTPException(status_code=500, detail=f"Failed to get user info: {error_details}")
 
 # ============================================================================
@@ -1286,7 +1506,15 @@ Output as JSON:
 }}"""
     
     try:
-        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        user_id = current_user.id if current_user else None
+        response_text = call_openai_with_context(
+            file_contents, 
+            f"{system_prompt}\n\n{user_prompt}", 
+            temperature=0.0,
+            user_id=user_id,
+            endpoint="flashcards",
+            db=db
+        )
         
         import json
         
@@ -1401,7 +1629,15 @@ Output as JSON:
 Return ONLY valid JSON, no markdown code blocks, no extra text."""
     
     try:
-        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        user_id = current_user.id if current_user else None
+        response_text = call_openai_with_context(
+            file_contents, 
+            f"{system_prompt}\n\n{user_prompt}", 
+            temperature=0.0,
+            user_id=user_id,
+            endpoint="truefalse",
+            db=db
+        )
         
         import json
         import re
@@ -1557,7 +1793,15 @@ Cevap Anahtarı:
 1-A, 2-B, ..."""
     
     try:
-        response_text = call_openai_with_context(file_contents, f"{system_prompt}\n\n{user_prompt}", temperature=0.0)
+        user_id = current_user.id if current_user else None
+        response_text = call_openai_with_context(
+            file_contents, 
+            f"{system_prompt}\n\n{user_prompt}", 
+            temperature=0.0,
+            user_id=user_id,
+            endpoint="exam",
+            db=db
+        )
         
         # Check for insufficient context
         if "INSUFFICIENT_CONTEXT" in response_text:
@@ -1644,7 +1888,15 @@ Cevap Anahtarı:
 1-A, 2-B, ..."""
     
     try:
-        response_text = call_openai_with_context([], prompt, temperature=0.0)
+        user_id = current_user.id if current_user else None
+        response_text = call_openai_with_context(
+            [], 
+            prompt, 
+            temperature=0.0,
+            user_id=user_id,
+            endpoint="exam",
+            db=db
+        )
         
         questions, answer_key = parse_mcq_questions(response_text)
         
@@ -1720,7 +1972,15 @@ If it's study material, reference specific information from it.
     prompt += "\nProvide a short, targeted explanation in the same language as the question. Justify the correct answer and explain why others are incorrect."
     
     try:
-        response_text = call_openai_with_context(file_contents, prompt, temperature=0.2)
+        user_id = current_user.id if current_user else None
+        response_text = call_openai_with_context(
+            file_contents, 
+            prompt, 
+            temperature=0.2,
+            user_id=user_id,
+            endpoint="explain",
+            db=db
+        )
         
         # Increment usage only if user is authenticated
         if current_user:
@@ -1772,7 +2032,15 @@ async def chat(
     conversation = "\n".join([f"{msg.role}: {msg.content}" for msg in req.messages])
     
     try:
-        response_text = call_openai_with_context(file_contents, conversation, temperature=0.7)
+        user_id = current_user.id if current_user else None
+        response_text = call_openai_with_context(
+            file_contents, 
+            conversation, 
+            temperature=0.7,
+            user_id=user_id,
+            endpoint="chat",
+            db=db
+        )
         
         # Increment usage only if user is authenticated
         if current_user:
@@ -1825,6 +2093,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
+    import json
+    
     # Handle checkout.session.completed
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
@@ -1834,7 +2104,88 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             user = db.query(User).filter(User.id == int(user_id)).first()
             if user:
                 user.tier = "premium"
+                
+                # Get amount from session
+                amount_total = session.get("amount_total", 0)  # Amount in cents
+                amount = amount_total / 100.0  # Convert to dollars
+                
+                # Get customer and subscription info
+                customer_id = session.get("customer")
+                subscription_id = session.get("subscription")
+                
+                # Store transaction
+                transaction = Transaction(
+                    user_id=user.id,
+                    stripe_session_id=session.get("id"),
+                    stripe_customer_id=customer_id,
+                    stripe_subscription_id=subscription_id,
+                    stripe_payment_intent_id=session.get("payment_intent"),
+                    amount=amount,
+                    currency=session.get("currency", "usd"),
+                    status="completed",
+                    tier="premium",
+                    event_type="checkout.session.completed",
+                    event_metadata=json.dumps(session)
+                )
+                db.add(transaction)
                 db.commit()
+    
+    # Handle invoice.paid (recurring payments)
+    elif event["type"] == "invoice.paid":
+        invoice = event["data"]["object"]
+        customer_id = invoice.get("customer")
+        subscription_id = invoice.get("subscription")
+        amount = invoice.get("amount_paid", 0) / 100.0  # Convert from cents to dollars
+        
+        # Find user by customer_id from previous transactions
+        transaction = db.query(Transaction).filter(
+            Transaction.stripe_customer_id == customer_id
+        ).first()
+        
+        if transaction:
+            user_id = transaction.user_id
+            # Store recurring payment transaction
+            recurring_transaction = Transaction(
+                user_id=user_id,
+                stripe_session_id=invoice.get("id"),  # Use invoice ID as session ID
+                stripe_customer_id=customer_id,
+                stripe_subscription_id=subscription_id,
+                stripe_payment_intent_id=invoice.get("payment_intent"),
+                amount=amount,
+                currency=invoice.get("currency", "usd"),
+                status="completed",
+                tier="premium",
+                event_type="invoice.paid",
+                event_metadata=json.dumps(invoice)
+            )
+            db.add(recurring_transaction)
+            db.commit()
+    
+    # Handle payment failures
+    elif event["type"] == "invoice.payment_failed":
+        invoice = event["data"]["object"]
+        customer_id = invoice.get("customer")
+        amount = invoice.get("amount_due", 0) / 100.0
+        
+        transaction = db.query(Transaction).filter(
+            Transaction.stripe_customer_id == customer_id
+        ).first()
+        
+        if transaction:
+            failed_transaction = Transaction(
+                user_id=transaction.user_id,
+                stripe_session_id=invoice.get("id"),
+                stripe_customer_id=customer_id,
+                stripe_subscription_id=invoice.get("subscription"),
+                amount=amount,
+                currency=invoice.get("currency", "usd"),
+                status="failed",
+                tier="premium",
+                event_type="invoice.payment_failed",
+                event_metadata=json.dumps(invoice)
+            )
+            db.add(failed_transaction)
+            db.commit()
     
     return {"status": "success"}
 
@@ -2387,6 +2738,39 @@ async def migrate_database(db: Session = Depends(get_db)):
                     created_at TIMESTAMP
                 )
             """))
+            # Create transactions table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    stripe_session_id TEXT UNIQUE,
+                    stripe_customer_id TEXT,
+                    stripe_subscription_id TEXT,
+                    stripe_payment_intent_id TEXT,
+                    amount REAL,
+                    currency TEXT DEFAULT 'usd',
+                    status TEXT,
+                    tier TEXT,
+                    event_type TEXT,
+                    metadata TEXT,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP
+                )
+            """))
+            # Create token_usage table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS token_usage (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    endpoint TEXT,
+                    model TEXT DEFAULT 'gpt-4o-mini',
+                    input_tokens INTEGER DEFAULT 0,
+                    output_tokens INTEGER DEFAULT 0,
+                    total_tokens INTEGER DEFAULT 0,
+                    estimated_cost REAL,
+                    created_at TIMESTAMP
+                )
+            """))
         else:
             # PostgreSQL
             db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR"))
@@ -2401,6 +2785,39 @@ async def migrate_database(db: Session = Depends(get_db)):
                     name VARCHAR,
                     color VARCHAR,
                     icon VARCHAR,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            # Create transactions table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER,
+                    stripe_session_id VARCHAR UNIQUE,
+                    stripe_customer_id VARCHAR,
+                    stripe_subscription_id VARCHAR,
+                    stripe_payment_intent_id VARCHAR,
+                    amount REAL,
+                    currency VARCHAR DEFAULT 'usd',
+                    status VARCHAR,
+                    tier VARCHAR,
+                    event_type VARCHAR,
+                    metadata TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            # Create token_usage table
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS token_usage (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER,
+                    endpoint VARCHAR,
+                    model VARCHAR DEFAULT 'gpt-4o-mini',
+                    input_tokens INTEGER DEFAULT 0,
+                    output_tokens INTEGER DEFAULT 0,
+                    total_tokens INTEGER DEFAULT 0,
+                    estimated_cost REAL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
@@ -2436,3 +2853,274 @@ async def clear_cache(
         return {"status": "success", "deleted": deleted, "message": "Cache cleared successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.get("/admin/transactions")
+async def get_transactions(
+    skip: int = 0,
+    limit: int = 100,
+    user_id: Optional[int] = None,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get all transactions (admin only)"""
+    query = db.query(Transaction)
+    if user_id:
+        query = query.filter(Transaction.user_id == user_id)
+    transactions = query.order_by(Transaction.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return [
+        {
+            "id": t.id,
+            "user_id": t.user_id,
+            "user_email": db.query(User).filter(User.id == t.user_id).first().email if db.query(User).filter(User.id == t.user_id).first() else None,
+            "stripe_session_id": t.stripe_session_id,
+            "stripe_customer_id": t.stripe_customer_id,
+            "stripe_subscription_id": t.stripe_subscription_id,
+            "amount": t.amount,
+            "currency": t.currency,
+            "status": t.status,
+            "tier": t.tier,
+            "event_type": t.event_type,
+            "created_at": t.created_at.isoformat()
+        }
+        for t in transactions
+    ]
+
+@app.get("/admin/token-usage")
+async def get_token_usage(
+    skip: int = 0,
+    limit: int = 100,
+    user_id: Optional[int] = None,
+    endpoint: Optional[str] = None,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get token usage statistics (admin only)"""
+    query = db.query(TokenUsage)
+    if user_id:
+        query = query.filter(TokenUsage.user_id == user_id)
+    if endpoint:
+        query = query.filter(TokenUsage.endpoint == endpoint)
+    usage_records = query.order_by(TokenUsage.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return [
+        {
+            "id": u.id,
+            "user_id": u.user_id,
+            "user_email": db.query(User).filter(User.id == u.user_id).first().email if u.user_id and db.query(User).filter(User.id == u.user_id).first() else None,
+            "endpoint": u.endpoint,
+            "model": u.model,
+            "input_tokens": u.input_tokens,
+            "output_tokens": u.output_tokens,
+            "total_tokens": u.total_tokens,
+            "estimated_cost": u.estimated_cost,
+            "created_at": u.created_at.isoformat()
+        }
+        for u in usage_records
+    ]
+
+@app.get("/admin/revenue")
+async def get_revenue_stats(
+    days: int = 30,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get revenue statistics (admin only)"""
+    from datetime import datetime, timedelta
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Total revenue
+    total_revenue = db.query(Transaction).filter(
+        Transaction.status == "completed",
+        Transaction.created_at >= cutoff_date
+    ).with_entities(func.sum(Transaction.amount)).scalar() or 0.0
+    
+    # Revenue by period (daily for last 30 days)
+    daily_revenue = []
+    for i in range(days):
+        date = datetime.utcnow() - timedelta(days=i)
+        day_start = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        
+        revenue = db.query(Transaction).filter(
+            Transaction.status == "completed",
+            Transaction.created_at >= day_start,
+            Transaction.created_at < day_end
+        ).with_entities(func.sum(Transaction.amount)).scalar() or 0.0
+        
+        daily_revenue.append({
+            "date": day_start.date().isoformat(),
+            "revenue": revenue
+        })
+    
+    daily_revenue.reverse()  # Oldest to newest
+    
+    # Revenue by tier
+    revenue_by_tier = {}
+    tiers = db.query(Transaction.tier).distinct().all()
+    for (tier,) in tiers:
+        revenue = db.query(Transaction).filter(
+            Transaction.status == "completed",
+            Transaction.tier == tier,
+            Transaction.created_at >= cutoff_date
+        ).with_entities(func.sum(Transaction.amount)).scalar() or 0.0
+        revenue_by_tier[tier] = revenue
+    
+    # Total transactions
+    total_transactions = db.query(Transaction).filter(
+        Transaction.status == "completed",
+        Transaction.created_at >= cutoff_date
+    ).count()
+    
+    # Failed transactions
+    failed_transactions = db.query(Transaction).filter(
+        Transaction.status == "failed",
+        Transaction.created_at >= cutoff_date
+    ).count()
+    
+    # Total token costs
+    total_token_cost = db.query(TokenUsage).filter(
+        TokenUsage.created_at >= cutoff_date
+    ).with_entities(func.sum(TokenUsage.estimated_cost)).scalar() or 0.0
+    
+    # Token usage by endpoint
+    token_usage_by_endpoint = {}
+    endpoints = db.query(TokenUsage.endpoint).distinct().all()
+    for (endpoint,) in endpoints:
+        usage = db.query(TokenUsage).filter(
+            TokenUsage.endpoint == endpoint,
+            TokenUsage.created_at >= cutoff_date
+        ).with_entities(
+            func.sum(TokenUsage.total_tokens).label("total_tokens"),
+            func.sum(TokenUsage.estimated_cost).label("total_cost")
+        ).first()
+        if usage:
+            token_usage_by_endpoint[endpoint] = {
+                "total_tokens": usage.total_tokens or 0,
+                "total_cost": usage.total_cost or 0.0
+            }
+    
+    # Token usage by user (top 10)
+    top_users = db.query(
+        TokenUsage.user_id,
+        func.sum(TokenUsage.total_tokens).label("total_tokens"),
+        func.sum(TokenUsage.estimated_cost).label("total_cost")
+    ).filter(
+        TokenUsage.created_at >= cutoff_date,
+        TokenUsage.user_id.isnot(None)
+    ).group_by(TokenUsage.user_id).order_by(func.sum(TokenUsage.estimated_cost).desc()).limit(10).all()
+    
+    top_users_list = []
+    for user_id, total_tokens, total_cost in top_users:
+        user = db.query(User).filter(User.id == user_id).first()
+        top_users_list.append({
+            "user_id": user_id,
+            "user_email": user.email if user else None,
+            "total_tokens": total_tokens or 0,
+            "total_cost": total_cost or 0.0
+        })
+    
+    return {
+        "period_days": days,
+        "total_revenue": total_revenue,
+        "total_transactions": total_transactions,
+        "failed_transactions": failed_transactions,
+        "daily_revenue": daily_revenue,
+        "revenue_by_tier": revenue_by_tier,
+        "total_token_cost": total_token_cost,
+        "token_usage_by_endpoint": token_usage_by_endpoint,
+        "top_users_by_token_cost": top_users_list,
+        "net_revenue": total_revenue - total_token_cost
+    }
+
+@app.get("/admin/users/{user_id}/details")
+async def get_user_detailed_info(
+    user_id: int,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed user information including transactions and token usage (admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get user transactions
+    transactions = db.query(Transaction).filter(Transaction.user_id == user_id).order_by(Transaction.created_at.desc()).all()
+    total_paid = db.query(Transaction).filter(
+        Transaction.user_id == user_id,
+        Transaction.status == "completed"
+    ).with_entities(func.sum(Transaction.amount)).scalar() or 0.0
+    
+    # Get token usage
+    token_usage = db.query(TokenUsage).filter(TokenUsage.user_id == user_id).all()
+    total_tokens = db.query(TokenUsage).filter(TokenUsage.user_id == user_id).with_entities(func.sum(TokenUsage.total_tokens)).scalar() or 0
+    total_token_cost = db.query(TokenUsage).filter(TokenUsage.user_id == user_id).with_entities(func.sum(TokenUsage.estimated_cost)).scalar() or 0.0
+    
+    # Token usage by endpoint
+    token_by_endpoint = {}
+    endpoints = db.query(TokenUsage.endpoint).filter(TokenUsage.user_id == user_id).distinct().all()
+    for (endpoint,) in endpoints:
+        usage = db.query(TokenUsage).filter(
+            TokenUsage.user_id == user_id,
+            TokenUsage.endpoint == endpoint
+        ).with_entities(
+            func.sum(TokenUsage.total_tokens).label("total_tokens"),
+            func.sum(TokenUsage.estimated_cost).label("total_cost"),
+            func.count().label("count")
+        ).first()
+        if usage:
+            token_by_endpoint[endpoint] = {
+                "total_tokens": usage.total_tokens or 0,
+                "total_cost": usage.total_cost or 0.0,
+                "request_count": usage.count or 0
+            }
+    
+    # Usage statistics
+    today = date.today()
+    usage_data = {}
+    for kind in ["exam", "explain", "chat", "upload"]:
+        usage = db.query(Usage).filter(
+            Usage.user_id == user.id,
+            Usage.kind == kind,
+            Usage.date == today
+        ).first()
+        usage_data[kind] = usage.count if usage else 0
+    
+    # Total history items
+    history_count = db.query(History).filter(History.user_id == user.id).count()
+    
+    # Total uploads
+    uploads_count = db.query(Upload).filter(Upload.user_id == user.id).count()
+    
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "surname": user.surname,
+            "tier": user.tier,
+            "is_admin": bool(user.is_admin) if user.is_admin else False,
+            "created_at": user.created_at.isoformat()
+        },
+        "transactions": [
+            {
+                "id": t.id,
+                "amount": t.amount,
+                "currency": t.currency,
+                "status": t.status,
+                "tier": t.tier,
+                "event_type": t.event_type,
+                "created_at": t.created_at.isoformat()
+            }
+            for t in transactions
+        ],
+        "total_paid": total_paid,
+        "token_usage": {
+            "total_tokens": total_tokens,
+            "total_cost": total_token_cost,
+            "by_endpoint": token_by_endpoint
+        },
+        "usage_today": usage_data,
+        "history_count": history_count,
+        "uploads_count": uploads_count
+    }

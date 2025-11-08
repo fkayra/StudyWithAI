@@ -95,8 +95,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('refresh_token', response.data.refresh_token)
       }
       
-      await refreshUser()
-    } catch (error) {
+      // Set user data from login response if available
+      if (response.data.user) {
+        setUser(response.data.user)
+      }
+      
+      // Try to refresh user data, but don't fail if it errors
+      try {
+        await refreshUser()
+      } catch (refreshError) {
+        console.warn('Failed to refresh user after login, but login was successful:', refreshError)
+        // Don't throw - login was successful, we just couldn't refresh user data
+      }
+    } catch (error: any) {
+      // Log the error for debugging
+      console.error('Login error:', error)
+      console.error('Error response:', error.response?.data)
       // Re-throw the error so it can be caught by the login page
       throw error
     }

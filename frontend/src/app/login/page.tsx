@@ -20,12 +20,14 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
+      setLoading(false)  // Clear loading before redirect
       router.push('/dashboard')
     } catch (err: any) {
       // Handle axios errors - extract error message from response
+      console.error('Login error:', err)
+      console.error('Error response:', err?.response)
       const errorMessage = err?.response?.data?.detail || err?.message || 'Invalid email or password. Please try again.'
       setError(errorMessage)
-    } finally {
       setLoading(false)
     }
   }
