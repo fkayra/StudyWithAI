@@ -1175,6 +1175,7 @@ async def summarize_from_files(
             
             return sections, formulas, glossary
         
+        import re
         parsed_sections, formula_sheet, glossary_items = parse_markdown_enhanced(result_json)
         
         # Extract title from first line
