@@ -35,6 +35,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = async (retryCount = 0) => {
     try {
       const response = await apiClient.get('/me')
+      console.log('[AUTH] User data from /me:', response.data)
+      console.log('[AUTH] is_admin value:', response.data.is_admin)
+      console.log('[AUTH] is_admin type:', typeof response.data.is_admin)
       setUser(response.data)
     } catch (error: any) {
       // Check if it's a network error (CORS, connection failed, etc.)

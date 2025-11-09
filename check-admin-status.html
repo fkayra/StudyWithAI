@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Admin Status & Bootstrap</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0B1220;
+            color: #e2e8f0;
+        }
+        .container {
+            background: #1F2937;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #374151;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #0F172A;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        .message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+        }
+        .message.success {
+            background: #065f46;
+            border: 1px solid #10b981;
+            color: #d1fae5;
+            display: block;
+        }
+        .message.error {
+            background: #7f1d1d;
+            border: 1px solid #ef4444;
+            color: #fee2e2;
+            display: block;
+        }
+        .message.info {
+            background: #1e3a8a;
+            border: 1px solid #3b82f6;
+            color: #dbeafe;
+            display: block;
+        }
+        .info {
+            background: #1e3a8a;
+            border: 1px solid #3b82f6;
+            color: #dbeafe;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        code {
+            background: #0F172A;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .user-info {
+            background: #0F172A;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        .user-info h3 {
+            margin-top: 0;
+            color: #60a5fa;
+        }
+        .user-info p {
+            margin: 5px 0;
+        }
+        .admin-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .admin-badge.yes {
+            background: #10b981;
+            color: white;
+        }
+        .admin-badge.no {
+            background: #6b7280;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Check Admin Status & Bootstrap</h1>
+        <p class="subtitle">Check if a user is admin and make them admin if needed</p>
+        
+        <div class="info">
+            <strong>Note:</strong> Use this tool to check and set admin status for users. 
+            The bootstrap endpoint works if no admins exist yet, or if you provide a valid secret key.
+        </div>
+
+        <form id="checkForm">
+            <div class="form-group">
+                <label for="backendUrl">Backend URL:</label>
+                <input 
+                    type="text" 
+                    id="backendUrl" 
+                    placeholder="https://studywithai-production.up.railway.app" 
+                    value="https://studywithai-production.up.railway.app"
+                    required
+                />
+            </div>
+            
+            <div class="form-group">
+                <label for="email">User Email:</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    placeholder="nurican@gmail.com" 
+                    value="nurican@gmail.com"
+                    required
+                />
+            </div>
+            
+            <button type="button" id="checkBtn" class="btn-success">Check Status</button>
+            <button type="button" id="bootstrapBtn">Make Admin</button>
+        </form>
+        
+        <div id="message" class="message"></div>
+        <div id="userInfo" class="user-info" style="display: none;"></div>
+    </div>
+
+    <script>
+        const backendUrlInput = document.getElementById('backendUrl');
+        const emailInput = document.getElementById('email');
+        const checkBtn = document.getElementById('checkBtn');
+        const bootstrapBtn = document.getElementById('bootstrapBtn');
+        const messageDiv = document.getElementById('message');
+        const userInfoDiv = document.getElementById('userInfo');
+
+        function showMessage(text, type = 'info') {
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = text;
+        }
+
+        function showUserInfo(user) {
+            userInfoDiv.style.display = 'block';
+            const adminBadge = user.is_admin 
+                ? '<span class="admin-badge yes">ADMIN</span>' 
+                : '<span class="admin-badge no">NOT ADMIN</span>';
+            
+            userInfoDiv.innerHTML = `
+                <h3>User Information</h3>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>ID:</strong> ${user.id}</p>
+                <p><strong>Name:</strong> ${user.name || 'N/A'} ${user.surname || ''}</p>
+                <p><strong>Tier:</strong> ${user.tier || 'free'}</p>
+                <p><strong>Admin Status:</strong> ${adminBadge} (raw value: ${user.is_admin_raw})</p>
+            `;
+        }
+
+        checkBtn.addEventListener('click', async () => {
+            const backendUrl = backendUrlInput.value.trim();
+            const email = emailInput.value.trim();
+            
+            showMessage('Checking user status...', 'info');
+            userInfoDiv.style.display = 'none';
+            checkBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${backendUrl}/admin/check-user/${encodeURIComponent(email)}`);
+                const data = await response.json();
+                
+                if (response.ok && data.exists) {
+                    showMessage('✅ User found!', 'success');
+                    showUserInfo(data.user);
+                    
+                    if (data.user.is_admin) {
+                        showMessage('✅ User is already an admin!', 'success');
+                    } else {
+                        showMessage('ℹ️ User is not an admin. Click "Make Admin" to make them admin.', 'info');
+                    }
+                } else {
+                    showMessage(`❌ ${data.message || data.error || 'User not found'}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`❌ Network Error: ${error.message}`, 'error');
+            } finally {
+                checkBtn.disabled = false;
+            }
+        });
+
+        bootstrapBtn.addEventListener('click', async () => {
+            const backendUrl = backendUrlInput.value.trim();
+            const email = emailInput.value.trim();
+            
+            showMessage('Making user admin...', 'info');
+            bootstrapBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${backendUrl}/admin/bootstrap-admin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        secret_key: null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage(`✅ ${data.message}`, 'success');
+                    showUserInfo(data.user);
+                    // Auto-refresh status
+                    setTimeout(() => checkBtn.click(), 1000);
+                } else {
+                    showMessage(`❌ Error: ${data.detail || data.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`❌ Network Error: ${error.message}`, 'error');
+            } finally {
+                bootstrapBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
+

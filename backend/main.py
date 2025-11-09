@@ -3202,6 +3202,41 @@ async def get_low_quality_patterns_endpoint(
         return {"error": str(e)}
 
 
+@app.get("/admin/check-user/{email}")
+async def check_user_admin_status(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """Check if a user exists and their admin status (public endpoint for debugging)"""
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return {
+                "exists": False,
+                "message": f"User with email '{email}' not found"
+            }
+        
+        is_admin_value = getattr(user, 'is_admin', 0) or 0
+        is_admin = bool(int(is_admin_value)) if is_admin_value else False
+        
+        return {
+            "exists": True,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": getattr(user, 'name', None),
+                "surname": getattr(user, 'surname', None),
+                "tier": getattr(user, 'tier', 'free'),
+                "is_admin": is_admin,
+                "is_admin_raw": is_admin_value
+            }
+        }
+    except Exception as e:
+        return {
+            "exists": False,
+            "error": str(e)
+        }
+
 @app.post("/admin/bootstrap-admin")
 async def bootstrap_admin(
     request: BootstrapAdminRequest,
@@ -3218,6 +3253,10 @@ async def bootstrap_admin(
         admin_count = db.query(User).filter(
             (User.is_admin == 1) | (User.is_admin == True)
         ).count()
+        
+        print(f"[BOOTSTRAP] Admin count: {admin_count}")
+        print(f"[BOOTSTRAP] Request email: {request.email}")
+        print(f"[BOOTSTRAP] Secret key provided: {bool(request.secret_key)}")
         
         # If admins exist, require secret key
         if admin_count > 0:
@@ -3239,10 +3278,16 @@ async def bootstrap_admin(
         if not user:
             raise HTTPException(status_code=404, detail=f"User with email '{request.email}' not found")
         
+        print(f"[BOOTSTRAP] User found: ID={user.id}, Current is_admin={getattr(user, 'is_admin', 'N/A')}")
+        
         # Make user admin
         user.is_admin = 1
         db.commit()
         db.refresh(user)
+        
+        # Verify the change
+        is_admin_after = getattr(user, 'is_admin', 0) or 0
+        print(f"[BOOTSTRAP] After update: is_admin={is_admin_after}")
         
         return {
             "status": "success",
@@ -3252,13 +3297,16 @@ async def bootstrap_admin(
                 "email": user.email,
                 "name": user.name,
                 "surname": user.surname,
-                "is_admin": True
+                "is_admin": bool(int(is_admin_after)) if is_admin_after else False,
+                "is_admin_raw": is_admin_after
             }
         }
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error bootstrapping admin: {str(e)}")
 
 @app.get("/admin/migrate-database")
