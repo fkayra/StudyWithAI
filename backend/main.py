@@ -3249,10 +3249,8 @@ async def bootstrap_admin(
     2. A valid secret key is provided (from BOOTSTRAP_SECRET_KEY env var)
     """
     try:
-        # Check if any admins exist
-        admin_count = db.query(User).filter(
-            (User.is_admin == 1) | (User.is_admin == True)
-        ).count()
+        # Check if any admins exist (is_admin is integer: 0 or 1)
+        admin_count = db.query(User).filter(User.is_admin == 1).count()
         
         print(f"[BOOTSTRAP] Admin count: {admin_count}")
         print(f"[BOOTSTRAP] Request email: {request.email}")
