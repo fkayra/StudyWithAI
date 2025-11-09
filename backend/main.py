@@ -162,6 +162,262 @@ class TokenUsage(Base):
 Base.metadata.create_all(bind=engine)
 
 # ============================================================================
+# DATABASE MIGRATION FUNCTION
+# ============================================================================
+def run_migration():
+    """Run database migrations to ensure all required columns and tables exist"""
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        existing_tables = []
+        users_columns = []
+        history_columns = []
+        
+        try:
+            existing_tables = inspector.get_table_names()
+            
+            # Check if users table exists and get its columns
+            if "users" in existing_tables:
+                try:
+                    users_columns = [col["name"].lower() for col in inspector.get_columns("users")]
+                except Exception as e:
+                    print(f"[MIGRATION] Could not get users table columns: {e}")
+                    users_columns = []
+            
+            # Check history table columns
+            if "history" in existing_tables:
+                try:
+                    history_columns = [col["name"].lower() for col in inspector.get_columns("history")]
+                except Exception as e:
+                    print(f"[MIGRATION] Could not get history table columns: {e}")
+                    history_columns = []
+        except Exception as e:
+            print(f"[MIGRATION] Could not inspect database: {e}")
+            # Continue with migration anyway - will handle errors gracefully
+        
+        # Create a database session for migration
+        db = SessionLocal()
+        try:
+            # Import telemetry model to register it
+            try:
+                from app.models.telemetry import SummaryQuality
+                # Create telemetry table if missing
+                if "summary_quality" not in existing_tables:
+                    SummaryQuality.__table__.create(engine)
+                    print("[MIGRATION] Created summary_quality table")
+            except Exception as e:
+                print(f"[MIGRATION] Could not import telemetry model: {e}")
+            
+            # Add missing columns to users table
+            if DATABASE_URL.startswith("sqlite"):
+                # SQLite
+                if "name" not in users_columns:
+                    try:
+                        db.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
+                        db.commit()
+                        print("[MIGRATION] Added 'name' column to users table")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[MIGRATION] Could not add 'name' column: {e}")
+                
+                if "surname" not in users_columns:
+                    try:
+                        db.execute(text("ALTER TABLE users ADD COLUMN surname TEXT"))
+                        db.commit()
+                        print("[MIGRATION] Added 'surname' column to users table")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[MIGRATION] Could not add 'surname' column: {e}")
+                
+                if "is_admin" not in users_columns:
+                    try:
+                        db.execute(text("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"))
+                        db.commit()
+                        print("[MIGRATION] Added 'is_admin' column to users table")
+                    except Exception as e:
+                        db.rollback()
+                        # Check if column already exists (might have been added between check and alter)
+                        error_str = str(e).lower()
+                        if "duplicate column" in error_str or "already exists" in error_str:
+                            print("[MIGRATION] 'is_admin' column already exists")
+                        else:
+                            print(f"[MIGRATION] Could not add 'is_admin' column: {e}")
+                
+                if "folder_id" not in history_columns:
+                    try:
+                        db.execute(text("ALTER TABLE history ADD COLUMN folder_id INTEGER"))
+                        db.commit()
+                        print("[MIGRATION] Added 'folder_id' column to history table")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[MIGRATION] Could not add 'folder_id' column: {e}")
+                
+                # Create folders table
+                if "folders" not in existing_tables:
+                    try:
+                        db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS folders (
+                                id INTEGER PRIMARY KEY,
+                                user_id INTEGER,
+                                name TEXT,
+                                color TEXT,
+                                icon TEXT,
+                                created_at TIMESTAMP
+                            )
+                        """))
+                        db.commit()
+                        print("[MIGRATION] Created 'folders' table")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[MIGRATION] Could not create 'folders' table: {e}")
+                
+                # Create transactions table
+                if "transactions" not in existing_tables:
+                    try:
+                        db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS transactions (
+                                id INTEGER PRIMARY KEY,
+                                user_id INTEGER,
+                                stripe_session_id TEXT UNIQUE,
+                                stripe_customer_id TEXT,
+                                stripe_subscription_id TEXT,
+                                stripe_payment_intent_id TEXT,
+                                amount REAL,
+                                currency TEXT DEFAULT 'usd',
+                                status TEXT,
+                                tier TEXT,
+                                event_type TEXT,
+                                event_metadata TEXT,
+                                created_at TIMESTAMP,
+                                updated_at TIMESTAMP
+                            )
+                        """))
+                        db.commit()
+                        print("[MIGRATION] Created 'transactions' table")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[MIGRATION] Could not create 'transactions' table: {e}")
+                
+                # Create token_usage table
+                if "token_usage" not in existing_tables:
+                    try:
+                        db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS token_usage (
+                                id INTEGER PRIMARY KEY,
+                                user_id INTEGER,
+                                endpoint TEXT,
+                                model TEXT DEFAULT 'gpt-4o-mini',
+                                input_tokens INTEGER DEFAULT 0,
+                                output_tokens INTEGER DEFAULT 0,
+                                total_tokens INTEGER DEFAULT 0,
+                                estimated_cost REAL,
+                                created_at TIMESTAMP
+                            )
+                        """))
+                        db.commit()
+                        print("[MIGRATION] Created 'token_usage' table")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[MIGRATION] Could not create 'token_usage' table: {e}")
+            else:
+                # PostgreSQL
+                try:
+                    if "name" not in users_columns:
+                        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR"))
+                        db.commit()
+                        print("[MIGRATION] Added 'name' column to users table")
+                    
+                    if "surname" not in users_columns:
+                        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR"))
+                        db.commit()
+                        print("[MIGRATION] Added 'surname' column to users table")
+                    
+                    if "is_admin" not in users_columns:
+                        try:
+                            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin INTEGER DEFAULT 0"))
+                            db.commit()
+                            print("[MIGRATION] Added 'is_admin' column to users table")
+                        except Exception as e:
+                            db.rollback()
+                            print(f"[MIGRATION] Could not add 'is_admin' column: {e}")
+                    
+                    if "folder_id" not in history_columns:
+                        db.execute(text("ALTER TABLE history ADD COLUMN IF NOT EXISTS folder_id INTEGER"))
+                        db.commit()
+                        print("[MIGRATION] Added 'folder_id' column to history table")
+                    
+                    # Create folders table
+                    if "folders" not in existing_tables:
+                        db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS folders (
+                                id SERIAL PRIMARY KEY,
+                                user_id INTEGER,
+                                name VARCHAR,
+                                color VARCHAR,
+                                icon VARCHAR,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """))
+                        db.commit()
+                        print("[MIGRATION] Created 'folders' table")
+                    
+                    # Create transactions table
+                    if "transactions" not in existing_tables:
+                        db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS transactions (
+                                id SERIAL PRIMARY KEY,
+                                user_id INTEGER,
+                                stripe_session_id VARCHAR UNIQUE,
+                                stripe_customer_id VARCHAR,
+                                stripe_subscription_id VARCHAR,
+                                stripe_payment_intent_id VARCHAR,
+                                amount REAL,
+                                currency VARCHAR DEFAULT 'usd',
+                                status VARCHAR,
+                                tier VARCHAR,
+                                event_type VARCHAR,
+                                event_metadata TEXT,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """))
+                        db.commit()
+                        print("[MIGRATION] Created 'transactions' table")
+                    
+                    # Create token_usage table
+                    if "token_usage" not in existing_tables:
+                        db.execute(text("""
+                            CREATE TABLE IF NOT EXISTS token_usage (
+                                id SERIAL PRIMARY KEY,
+                                user_id INTEGER,
+                                endpoint VARCHAR,
+                                model VARCHAR DEFAULT 'gpt-4o-mini',
+                                input_tokens INTEGER DEFAULT 0,
+                                output_tokens INTEGER DEFAULT 0,
+                                total_tokens INTEGER DEFAULT 0,
+                                estimated_cost REAL,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """))
+                        db.commit()
+                        print("[MIGRATION] Created 'token_usage' table")
+                except Exception as e:
+                    db.rollback()
+                    print(f"[MIGRATION] Error during PostgreSQL migration: {e}")
+            
+            print("[MIGRATION] Database migration completed successfully")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[MIGRATION] Migration error: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Run migration on startup
+print("[STARTUP] Running database migration...")
+run_migration()
+
+# ============================================================================
 # FASTAPI APP
 # ============================================================================
 app = FastAPI(title="AI Study Assistant API", version="1.0.0")
@@ -1142,7 +1398,16 @@ async def summarize_from_files(
                 import re
                 json_match = re.search(r'\{.*\}', result_json, re.DOTALL)
                 if json_match:
-                    result = json.loads(json_match.group(0))
+                    try:
+                        result = json.loads(json_match.group(0))
+                    except:
+                        result = {
+                            "summary": {
+                                "title": "Summary",
+                                "sections": [{"heading": "Content", "bullets": [result_json]}]
+                            },
+                            "citations": []
+                        }
                 else:
                     result = {
                         "summary": {
@@ -1151,6 +1416,72 @@ async def summarize_from_files(
                         },
                         "citations": []
                     }
+            
+            # Ensure result has correct structure: {summary: {...}, citations: [...]}
+            if "summary" not in result:
+                # Check for core_concepts (common in no-files prompts)
+                if "core_concepts" in result and not result.get("sections"):
+                    print("[SUMMARY NO-FILES] Found core_concepts, transforming to sections...")
+                    sections = []
+                    for idx, concept in enumerate(result.get("core_concepts", [])):
+                        if isinstance(concept, dict):
+                            concept_term = concept.get("concept", concept.get("term", f"Concept {idx + 1}"))
+                            concept_explanation = concept.get("explanation", "")
+                            concept_examples = concept.get("examples", [])
+                            
+                            definition = concept.get("definition", "")
+                            if not definition and concept_explanation:
+                                sentences = concept_explanation.split(".")
+                                definition = sentences[0].strip() + "." if sentences[0].strip() else concept_explanation[:100]
+                            
+                            example = ""
+                            if concept_examples:
+                                if isinstance(concept_examples[0], dict):
+                                    example = concept_examples[0].get("example", "")
+                                elif isinstance(concept_examples[0], str):
+                                    example = concept_examples[0]
+                            
+                            sections.append({
+                                "heading": concept_term,
+                                "concepts": [{
+                                    "term": concept_term,
+                                    "definition": definition or concept_term,
+                                    "explanation": concept_explanation or definition,
+                                    "example": example,
+                                    "key_points": concept.get("key_points", []) if isinstance(concept.get("key_points"), list) else []
+                                }]
+                            })
+                    
+                    result = {
+                        "summary": {
+                            "title": result.get("title", "Summary"),
+                            "overview": result.get("overview", ""),
+                            "learning_objectives": result.get("learning_objectives", []),
+                            "sections": sections,
+                            "formula_sheet": result.get("formula_sheet", []),
+                            "glossary": result.get("glossary", [])
+                        },
+                        "citations": []
+                    }
+                elif "title" in result or "sections" in result:
+                    # It's the summary object itself, wrap it
+                    result = {
+                        "summary": result,
+                        "citations": result.get("citations", [])
+                    }
+                else:
+                    # Unknown structure, create default - DO NOT put the entire result as a string!
+                    print(f"[SUMMARY NO-FILES] Unknown structure: {list(result.keys())}")
+                    result = {
+                        "summary": {
+                            "title": "Summary",
+                            "overview": "Content generated successfully",
+                            "sections": [{"heading": "Content", "bullets": ["Please check the console for detailed structure information."]}]
+                        },
+                        "citations": []
+                    }
+            elif "citations" not in result:
+                result["citations"] = []
             
             return result
         except Exception as e:
@@ -1293,6 +1624,120 @@ async def summarize_from_files(
         try:
             result = parse_json_robust(result_json)
             print("[SUMMARY] JSON parsed successfully")
+            
+            # Ensure result has the correct structure: {summary: {...}, citations: [...]}
+            # If result doesn't have 'summary' key, it might be the summary object itself
+            if "summary" not in result:
+                print("[SUMMARY] Result doesn't have 'summary' key, checking structure...")
+                print(f"[SUMMARY] Result keys: {list(result.keys())}")
+                
+                # Check if it has learning_objectives or core_concepts (common AI output formats)
+                has_learning_objectives = "learning_objectives" in result
+                has_core_concepts = "core_concepts" in result
+                has_title = "title" in result
+                has_sections = "sections" in result
+                
+                # PRIORITY 1: Transform core_concepts into sections if needed (most common issue)
+                if has_core_concepts and not has_sections:
+                    print("[SUMMARY] Found core_concepts, transforming to sections structure...")
+                    # Convert core_concepts to sections format
+                    sections = []
+                    for idx, concept in enumerate(result.get("core_concepts", [])):
+                        # If concept is a dict with 'concept' key (old format), transform it
+                        if isinstance(concept, dict):
+                            concept_term = concept.get("concept", concept.get("term", f"Concept {idx + 1}"))
+                            concept_explanation = concept.get("explanation", "")
+                            concept_examples = concept.get("examples", [])
+                            
+                            # Extract definition from explanation if not provided
+                            definition = concept.get("definition", "")
+                            if not definition and concept_explanation:
+                                # Use first sentence as definition
+                                sentences = concept_explanation.split(".")
+                                definition = sentences[0].strip() + "." if sentences[0].strip() else concept_explanation[:100]
+                            
+                            # Extract example
+                            example = ""
+                            if concept_examples:
+                                if isinstance(concept_examples[0], dict):
+                                    example = concept_examples[0].get("example", "")
+                                elif isinstance(concept_examples[0], str):
+                                    example = concept_examples[0]
+                            
+                            # Create a section for this concept
+                            section = {
+                                "heading": concept_term,
+                                "concepts": [{
+                                    "term": concept_term,
+                                    "definition": definition or concept_term,
+                                    "explanation": concept_explanation or definition,
+                                    "example": example,
+                                    "key_points": concept.get("key_points", []) if isinstance(concept.get("key_points"), list) else []
+                                }]
+                            }
+                            sections.append(section)
+                        else:
+                            # If concept is a string or other format, create a basic section
+                            sections.append({
+                                "heading": f"Concept {idx + 1}",
+                                "concepts": [{
+                                    "term": str(concept)[:50],
+                                    "definition": str(concept),
+                                    "explanation": str(concept),
+                                    "key_points": []
+                                }]
+                            })
+                    
+                    # Create proper summary structure
+                    result = {
+                        "summary": {
+                            "title": result.get("title", "Summary"),
+                            "overview": result.get("overview", ""),
+                            "learning_objectives": result.get("learning_objectives", []),
+                            "sections": sections,
+                            "formula_sheet": result.get("formula_sheet", []),
+                            "glossary": result.get("glossary", [])
+                        },
+                        "citations": result.get("citations", [])
+                    }
+                    print(f"[SUMMARY] Transformed to sections structure with {len(sections)} sections")
+                
+                # PRIORITY 2: Check if it looks like a summary object (has title or sections)
+                elif has_title or has_sections:
+                    # It's the summary object itself, wrap it
+                    print("[SUMMARY] Result is summary object, wrapping it")
+                    result = {
+                        "summary": result,
+                        "citations": result.get("citations", [])
+                    }
+                else:
+                    # Unknown structure - check if it's a dict that might contain the summary
+                    print(f"[SUMMARY] Unknown result structure: {list(result.keys())}")
+                    # Try to see if it's a string representation of the summary
+                    if len(result) == 1 and isinstance(list(result.values())[0], str):
+                        # Might be a stringified JSON
+                        try:
+                            import json
+                            parsed = json.loads(list(result.values())[0])
+                            if "summary" in parsed or "sections" in parsed or "learning_objectives" in parsed:
+                                result = parsed
+                                if "summary" not in result:
+                                    result = {"summary": result, "citations": []}
+                        except:
+                            pass
+                    
+                    # If still not valid, create error response
+                    if "summary" not in result:
+                        print(f"[SUMMARY] Creating error response for invalid structure")
+                        result = create_error_response(
+                            f"Unexpected response structure. Keys: {list(result.keys())}. Expected: summary with sections, or learning_objectives/core_concepts.",
+                            len(result_json)
+                        )
+            else:
+                # Ensure citations exist
+                if "citations" not in result:
+                    result["citations"] = []
+                    
         except ValueError as e:
             print(f"[SUMMARY] All JSON parse attempts failed: {e}")
             result = create_error_response(
@@ -1300,7 +1745,11 @@ async def summarize_from_files(
                 len(result_json)
             )
         
-        # Calculate comprehensive quality score
+        # Calculate comprehensive quality score - ensure summary exists
+        if "summary" not in result:
+            print("[SUMMARY ERROR] Result still doesn't have 'summary' key after normalization")
+            result = create_error_response("Internal error: summary structure invalid", 0)
+        
         quality_metrics = calculate_comprehensive_quality_score(result)
         score = quality_metrics.get("final_ready_score", 0.5)
         is_final_ready = quality_metrics.get("is_final_ready", False)
@@ -1360,6 +1809,19 @@ async def summarize_from_files(
                 # Try to parse repaired output
                 try:
                     repaired_result = parse_json_robust(repaired_json)
+                    
+                    # Ensure repaired_result has correct structure
+                    if "summary" not in repaired_result:
+                        if "title" in repaired_result or "sections" in repaired_result:
+                            repaired_result = {
+                                "summary": repaired_result,
+                                "citations": repaired_result.get("citations", [])
+                            }
+                        else:
+                            print(f"[SELF-REPAIR] Repaired result has invalid structure, keeping original")
+                            repaired_result = result
+                    elif "citations" not in repaired_result:
+                        repaired_result["citations"] = []
                     
                     # Check if repair improved quality
                     repaired_metrics = calculate_comprehensive_quality_score(repaired_result)
@@ -1428,10 +1890,18 @@ async def summarize_from_files(
         except Exception as telemetry_error:
             print(f"[TELEMETRY WARNING] Failed to record: {telemetry_error}")
         
+        # Final validation: ensure result has correct structure before returning
+        if "summary" not in result:
+            print("[SUMMARY ERROR] Final validation failed: result missing 'summary' key")
+            result = create_error_response("Internal error: invalid summary structure", 0)
+        elif "citations" not in result:
+            result["citations"] = []
+        
         # Cache the result (only if not error)
         if "error" not in result.get("summary", {}).get("title", "").lower():
             set_cached(cache_key, json.dumps(result), db)
         
+        print(f"[SUMMARY] Returning result with structure: summary={bool(result.get('summary'))}, citations={bool(result.get('citations'))}")
         return result
         
     except Exception as e:
@@ -2692,147 +3162,13 @@ async def get_low_quality_patterns_endpoint(
 
 @app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")
-async def migrate_database(db: Session = Depends(get_db)):
-    """One-time migration to add name, surname, folder columns, and telemetry table"""
+async def migrate_database():
+    """Manually trigger database migration"""
     try:
-        # Import telemetry model to register it
-        from app.models.telemetry import SummaryQuality
-        
-        # Create table if it doesn't exist
-        from sqlalchemy import inspect
-        inspector = inspect(engine)
-        existing_tables = inspector.get_table_names()
-        
-        # Create telemetry table if missing
-        if "summary_quality" not in existing_tables:
-            SummaryQuality.__table__.create(engine)
-            print("[MIGRATION] Created summary_quality table")
-        
-        # Try to add columns using raw SQL with text()
-        if DATABASE_URL.startswith("sqlite"):
-            # SQLite
-            try:
-                db.execute(text("ALTER TABLE users ADD COLUMN name TEXT"))
-            except:
-                pass
-            try:
-                db.execute(text("ALTER TABLE users ADD COLUMN surname TEXT"))
-            except:
-                pass
-            try:
-                db.execute(text("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"))
-            except:
-                pass
-            try:
-                db.execute(text("ALTER TABLE history ADD COLUMN folder_id INTEGER"))
-            except:
-                pass
-            # Create folders table
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS folders (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    name TEXT,
-                    color TEXT,
-                    icon TEXT,
-                    created_at TIMESTAMP
-                )
-            """))
-            # Create transactions table
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    stripe_session_id TEXT UNIQUE,
-                    stripe_customer_id TEXT,
-                    stripe_subscription_id TEXT,
-                    stripe_payment_intent_id TEXT,
-                    amount REAL,
-                    currency TEXT DEFAULT 'usd',
-                    status TEXT,
-                    tier TEXT,
-                    event_type TEXT,
-                    metadata TEXT,
-                    created_at TIMESTAMP,
-                    updated_at TIMESTAMP
-                )
-            """))
-            # Create token_usage table
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS token_usage (
-                    id INTEGER PRIMARY KEY,
-                    user_id INTEGER,
-                    endpoint TEXT,
-                    model TEXT DEFAULT 'gpt-4o-mini',
-                    input_tokens INTEGER DEFAULT 0,
-                    output_tokens INTEGER DEFAULT 0,
-                    total_tokens INTEGER DEFAULT 0,
-                    estimated_cost REAL,
-                    created_at TIMESTAMP
-                )
-            """))
-        else:
-            # PostgreSQL
-            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR"))
-            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname VARCHAR"))
-            db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin INTEGER DEFAULT 0"))
-            db.execute(text("ALTER TABLE history ADD COLUMN IF NOT EXISTS folder_id INTEGER"))
-            # Create folders table
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS folders (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER,
-                    name VARCHAR,
-                    color VARCHAR,
-                    icon VARCHAR,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            # Create transactions table
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER,
-                    stripe_session_id VARCHAR UNIQUE,
-                    stripe_customer_id VARCHAR,
-                    stripe_subscription_id VARCHAR,
-                    stripe_payment_intent_id VARCHAR,
-                    amount REAL,
-                    currency VARCHAR DEFAULT 'usd',
-                    status VARCHAR,
-                    tier VARCHAR,
-                    event_type VARCHAR,
-                    metadata TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            # Create token_usage table
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS token_usage (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER,
-                    endpoint VARCHAR,
-                    model VARCHAR DEFAULT 'gpt-4o-mini',
-                    input_tokens INTEGER DEFAULT 0,
-                    output_tokens INTEGER DEFAULT 0,
-                    total_tokens INTEGER DEFAULT 0,
-                    estimated_cost REAL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-        
-        db.commit()
+        run_migration()
         return {"status": "success", "message": "Database migrated successfully - all columns and tables added"}
     except Exception as e:
-        # Columns might already exist or other error
-        db.rollback()
         error_msg = str(e)
-        
-        # Check if columns already exist
-        if "already exists" in error_msg.lower() or "duplicate column" in error_msg.lower():
-            return {"status": "success", "message": "Columns/tables already exist - no migration needed"}
-        
         return {"status": "error", "message": error_msg}
 
 if __name__ == "__main__":
