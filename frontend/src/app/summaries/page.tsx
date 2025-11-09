@@ -3,6 +3,7 @@
 // Version: 2025-01-11-v3 - Exam-ready summary renderer
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient, historyAPI } from '@/lib/api'
+import MathText from '@/components/MathText'
 
 // New exam-ready schema
 interface Concept {
@@ -82,8 +83,48 @@ export default function SummariesPage() {
     if (viewHistory) {
       try {
         const historyData = JSON.parse(viewHistory)
-        setData(historyData)
-        sessionStorage.removeItem('viewHistory')
+        console.log('Loading history data:', historyData)
+        
+        // Normalize the data structure - handle both direct data and wrapped data
+        let normalizedData: SummaryData | null = null
+        
+        if (historyData && historyData.summary) {
+          // Already in correct format: {summary: {...}, citations: [...]}
+          normalizedData = historyData
+        } else if (historyData && typeof historyData === 'object') {
+          // Might be just the summary object, wrap it
+          normalizedData = {
+            summary: historyData,
+            citations: []
+          }
+        }
+        
+        if (normalizedData && normalizedData.summary) {
+          console.log('Setting normalized history data:', normalizedData)
+          console.log('Summary sections:', normalizedData.summary.sections)
+          setData(normalizedData)
+          // Don't remove viewHistory immediately - let it persist in case of navigation issues
+          // sessionStorage.removeItem('viewHistory')
+        } else {
+          console.error('Invalid history data structure:', historyData)
+          console.error('Trying to recover - checking if historyData has summary properties directly')
+          // Last attempt: check if it's a valid summary object
+          if (historyData && (historyData.title || historyData.sections)) {
+            console.log('Found summary-like structure, wrapping it')
+            const recoveredData: SummaryData = {
+              summary: historyData as Summary,
+              citations: historyData.citations || []
+            }
+            setData(recoveredData)
+          } else {
+            console.error('Could not recover history data')
+          }
+        }
+        
+        // Remove viewHistory after a short delay to allow state to update
+        setTimeout(() => {
+          sessionStorage.removeItem('viewHistory')
+        }, 1000)
       } catch (e) {
         console.error('Failed to load history:', e)
       }
@@ -99,6 +140,8 @@ export default function SummariesPage() {
         console.error('Failed to load uploaded files:', e)
       }
     }
+    
+    // Note: We don't clear data on mount - let it persist from previous generation
   }, [])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -197,37 +240,193 @@ export default function SummariesPage() {
         prompt: prompt || undefined,
       })
 
-      setData(response.data)
+      console.log('API Response received:', response.data)
+      console.log('Response data type:', typeof response.data)
+      console.log('Response data keys:', response.data ? Object.keys(response.data) : 'null')
       
-      let titlePrefix = ''
-      if (fileIds) {
-        const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
-        if (uploadedFilesStr) {
-          try {
-            const uploadedFiles = JSON.parse(uploadedFilesStr)
-            titlePrefix = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
-            if (uploadedFiles.length > 2) {
-              titlePrefix += ` +${uploadedFiles.length - 2} more`
-            }
-          } catch (e) {
-            titlePrefix = 'Documents'
-          }
+      // Normalize the response data structure
+      let normalizedData: SummaryData | null = null
+      let rawData = response.data
+      
+      // Handle case where response.data might be a string that needs parsing
+      if (typeof rawData === 'string') {
+        try {
+          console.log('Response data is a string, attempting to parse')
+          rawData = JSON.parse(rawData)
+        } catch (e) {
+          console.error('Failed to parse response data as JSON:', e)
+          alert('Invalid response format: received string that cannot be parsed as JSON')
+          setLoading(false)
+          return
         }
-      } else if (prompt.trim()) {
-        titlePrefix = `Topic: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`
       }
       
-      await historyAPI.save({
-        type: 'summary',
-        title: `${titlePrefix} - ${response.data.summary?.title || 'Summary'}`,
-        data: response.data
-      })
+      if (rawData) {
+        // Check if it's already in the correct format
+        if (rawData.summary && typeof rawData.summary === 'object') {
+          // Handle case where summary itself might be a string
+          if (typeof rawData.summary === 'string') {
+            try {
+              rawData.summary = JSON.parse(rawData.summary)
+            } catch (e) {
+              console.error('Failed to parse summary string:', e)
+            }
+          }
+          // Already in correct format: {summary: {...}, citations: [...]}
+          console.log('Data is in correct format with summary key')
+          normalizedData = {
+            summary: rawData.summary,
+            citations: rawData.citations || []
+          }
+        } 
+        // Check if it's the summary object directly (has title or sections)
+        else if (rawData.title || (rawData.sections && Array.isArray(rawData.sections))) {
+          // Just the summary object, wrap it
+          console.log('Data is summary object directly, wrapping it')
+          normalizedData = {
+            summary: rawData,
+            citations: rawData.citations || []
+          }
+        }
+        // Check if summary is nested differently
+        else if (rawData.data && rawData.data.summary) {
+          console.log('Data is nested under data key')
+          normalizedData = {
+            summary: rawData.data.summary,
+            citations: rawData.data.citations || []
+          }
+        }
+      }
       
-      sessionStorage.removeItem('uploadedFiles')
-      sessionStorage.removeItem('uploadedFileIds')
-      setFiles([])
+      // Validate and normalize the summary structure
+      if (normalizedData && normalizedData.summary) {
+        // Ensure sections is an array of objects, not strings
+        if (normalizedData.summary.sections) {
+          normalizedData.summary.sections = normalizedData.summary.sections.map((section: any, idx: number) => {
+            // If section is a string, convert it to a proper section object
+            if (typeof section === 'string') {
+              return {
+                heading: `Section ${idx + 1}`,
+                bullets: [section],
+                concepts: []
+              }
+            }
+            // Ensure section has required properties
+            if (!section.heading) {
+              section.heading = `Section ${idx + 1}`
+            }
+            // Ensure concepts is an array
+            if (!section.concepts) {
+              section.concepts = []
+            }
+            // Ensure bullets is an array if it exists
+            if (section.bullets && !Array.isArray(section.bullets)) {
+              section.bullets = [section.bullets]
+            }
+            return section
+          })
+        } else if (normalizedData.summary.title && !normalizedData.summary.sections) {
+          // If we have a title but no sections, create a default section
+          normalizedData.summary.sections = [{
+            heading: 'Content',
+            bullets: [normalizedData.summary.overview || 'No content available'],
+            concepts: []
+          }]
+        }
+        
+        // Ensure concepts in each section are objects, not strings
+        normalizedData.summary.sections?.forEach((section: any) => {
+          if (section.concepts && Array.isArray(section.concepts)) {
+            section.concepts = section.concepts.map((concept: any, idx: number) => {
+              // If concept is a string, convert it to a proper concept object
+              if (typeof concept === 'string') {
+                return {
+                  term: `Concept ${idx + 1}`,
+                  definition: concept,
+                  explanation: concept,
+                  key_points: []
+                }
+              }
+              // Ensure concept has required properties
+              if (!concept.term) {
+                concept.term = `Concept ${idx + 1}`
+              }
+              if (!concept.definition) {
+                concept.definition = concept.explanation || ''
+              }
+              if (!concept.explanation) {
+                concept.explanation = concept.definition || ''
+              }
+              return concept
+            })
+          }
+        })
+      }
+      
+      if (normalizedData && normalizedData.summary) {
+        console.log('Normalized data:', normalizedData)
+        
+        let titlePrefix = ''
+        if (fileIds) {
+          const uploadedFilesStr = sessionStorage.getItem('uploadedFiles')
+          if (uploadedFilesStr) {
+            try {
+              const uploadedFiles = JSON.parse(uploadedFilesStr)
+              titlePrefix = uploadedFiles.map((f: any) => f.filename).slice(0, 2).join(', ')
+              if (uploadedFiles.length > 2) {
+                titlePrefix += ` +${uploadedFiles.length - 2} more`
+              }
+            } catch (e) {
+              titlePrefix = 'Documents'
+            }
+          }
+        } else if (prompt.trim()) {
+          titlePrefix = `Topic: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`
+        }
+        
+        // Save to history (non-blocking) - save the normalized structure
+        try {
+          await historyAPI.save({
+            type: 'summary',
+            title: `${titlePrefix} - ${normalizedData.summary?.title || 'Summary'}`,
+            data: normalizedData
+          })
+        } catch (historyError) {
+          console.warn('Failed to save to history:', historyError)
+          // Don't fail the request if history save fails
+        }
+        
+        // Set data AFTER all processing is done - this ensures the summary is displayed
+        // Deep clone to ensure React detects the change
+        setData(JSON.parse(JSON.stringify(normalizedData)))
+        
+        // Clear files after successful generation (but keep data in state)
+        sessionStorage.removeItem('uploadedFiles')
+        sessionStorage.removeItem('uploadedFileIds')
+        setFiles([])
+        
+        // Clear prompt after successful generation
+        setPrompt('')
+      } else {
+        console.error('Invalid response structure. Full response:', response)
+        console.error('Response data:', JSON.stringify(response.data, null, 2))
+        console.error('Expected structure: {summary: {...}, citations: [...]} or {title: "...", sections: [...]}')
+        
+        // Try to extract any useful information for debugging
+        if (response.data) {
+          console.error('Available keys in response.data:', Object.keys(response.data))
+          if (response.data.error) {
+            console.error('Error in response:', response.data.error)
+          }
+        }
+        
+        alert(`Received invalid response from server. Please check the browser console for details.\n\nResponse structure doesn't match expected format.`)
+        setLoading(false)
+        return // Exit early to prevent further processing
+      }
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to generate summary')
+      console.error('Summary generation error:', error)
+      alert(error.response?.data?.detail || error.message || 'Failed to generate summary')
     } finally {
       setLoading(false)
     }
@@ -245,14 +444,136 @@ export default function SummariesPage() {
     )
   }
 
-  if (data) {
-    const summary = data.summary
+  // Debug: Log current state (can be removed in production)
+  // console.log('Render - data state:', data)
+  // console.log('Render - data.summary:', data?.summary)
+  // console.log('Render - data.summary?.sections:', data?.summary?.sections)
+  
+  if (data && data.summary) {
+    let summary = data.summary
     
-    // Calculate stats
-    const totalConcepts = summary.sections.reduce((acc, s) => acc + (s.concepts?.length || 0), 0)
-    const totalBullets = summary.sections.reduce((acc, s) => acc + (s.bullets?.length || 0), 0)
-    const totalFormulas = summary.formula_sheet?.length || 0
-    const totalGlossary = summary.glossary?.length || 0
+    // Validate and normalize summary structure
+    // Handle case where summary might be a string
+    if (typeof summary === 'string') {
+      try {
+        console.log('Summary is a string in render, parsing...')
+        summary = JSON.parse(summary)
+      } catch (e) {
+        console.error('Failed to parse summary string in render:', e)
+        return (
+          <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12 flex items-center justify-center">
+            <div className="glass-card p-8 text-center max-w-2xl">
+              <div className="text-4xl mb-4">⚠️</div>
+              <h2 className="text-2xl font-bold text-red-400 mb-4">Invalid Summary Data</h2>
+              <p className="text-slate-300 mb-4">The summary data is in an invalid format and cannot be displayed.</p>
+              <button
+                onClick={() => setData(null)}
+                className="btn-primary"
+              >
+                Start Over
+              </button>
+            </div>
+          </div>
+        )
+      }
+    }
+    
+    // Ensure sections is an array
+    if (!Array.isArray(summary.sections)) {
+      console.warn('Sections is not an array in render:', summary.sections, typeof summary.sections)
+      if (typeof summary.sections === 'string') {
+        try {
+          summary.sections = JSON.parse(summary.sections)
+        } catch (e) {
+          summary.sections = []
+        }
+      } else if (!summary.sections) {
+        // If no sections but we have overview, create a section from it
+        if (summary.overview) {
+          summary.sections = [{
+            heading: 'Overview',
+            bullets: [summary.overview],
+            concepts: []
+          }]
+        } else {
+          summary.sections = []
+        }
+      } else {
+        summary.sections = []
+      }
+    }
+    
+    // Normalize sections to ensure they have the right structure
+    summary.sections = summary.sections.map((section: any, idx: number) => {
+      // If section is a string, convert to object
+      if (typeof section === 'string') {
+        return {
+          heading: `Section ${idx + 1}`,
+          bullets: [section],
+          concepts: []
+        }
+      }
+      // Ensure section is an object with required fields
+      if (typeof section !== 'object' || section === null) {
+        return {
+          heading: `Section ${idx + 1}`,
+          bullets: [],
+          concepts: []
+        }
+      }
+      // Ensure heading exists
+      if (!section.heading) {
+        section.heading = `Section ${idx + 1}`
+      }
+      // Ensure concepts is an array
+      if (!Array.isArray(section.concepts)) {
+        section.concepts = []
+      }
+      // Normalize concepts
+      section.concepts = section.concepts.map((concept: any, cIdx: number) => {
+        if (typeof concept === 'string') {
+          return {
+            term: `Concept ${cIdx + 1}`,
+            definition: concept,
+            explanation: concept,
+            key_points: []
+          }
+        }
+        if (typeof concept !== 'object' || concept === null) {
+          return {
+            term: `Concept ${cIdx + 1}`,
+            definition: '',
+            explanation: '',
+            key_points: []
+          }
+        }
+        // Ensure required fields exist
+        return {
+          term: concept.term || `Concept ${cIdx + 1}`,
+          definition: concept.definition || concept.explanation || '',
+          explanation: concept.explanation || concept.definition || '',
+          example: concept.example || '',
+          key_points: Array.isArray(concept.key_points) ? concept.key_points : [],
+          pitfalls: Array.isArray(concept.pitfalls) ? concept.pitfalls : [],
+          when_to_use: Array.isArray(concept.when_to_use) ? concept.when_to_use : [],
+          limitations: Array.isArray(concept.limitations) ? concept.limitations : []
+        }
+      })
+      // Ensure bullets is an array if it exists
+      if (section.bullets && !Array.isArray(section.bullets)) {
+        section.bullets = [section.bullets]
+      }
+      return section
+    })
+    
+    // Calculate stats with safe checks
+    const totalConcepts = summary.sections?.reduce((acc, s) => acc + (s.concepts?.length || 0), 0) || 0
+    const totalBullets = summary.sections?.reduce((acc, s) => acc + (s.bullets?.length || 0), 0) || 0
+    const totalFormulas = Array.isArray(summary.formula_sheet) ? summary.formula_sheet.length : 0
+    const totalGlossary = Array.isArray(summary.glossary) ? summary.glossary.length : 0
+    
+    // console.log('Render - Stats calculated:', { totalConcepts, totalBullets, totalFormulas, totalGlossary })
+    // console.log('Render - Normalized sections:', summary.sections)
 
     return (
       <div className="min-h-screen bg-[#0F172A] pt-20 px-4 pb-12">
@@ -268,10 +589,10 @@ export default function SummariesPage() {
               <div className="text-5xl">📚</div>
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-[#14B8A6] to-[#06B6D4] bg-clip-text text-transparent">
-                  {summary.title}
+                  {summary.title || 'Summary'}
                 </h1>
                 {summary.overview && (
-                  <p className="text-slate-300 mt-3 leading-relaxed">{summary.overview}</p>
+                  <p className="text-slate-300 mt-3 leading-relaxed"><MathText text={summary.overview} /></p>
                 )}
               </div>
             </div>
@@ -280,7 +601,7 @@ export default function SummariesPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
               <div className="p-4 bg-gradient-to-br from-teal-500/10 to-teal-600/10 border border-teal-500/30 rounded-xl">
                 <div className="text-teal-400 text-sm font-medium mb-1">Sections</div>
-                <div className="text-2xl font-bold text-slate-100">{summary.sections.length}</div>
+                <div className="text-2xl font-bold text-slate-100">{summary.sections?.length || 0}</div>
               </div>
               <div className="p-4 bg-gradient-to-br from-cyan-500/10 to-cyan-600/10 border border-cyan-500/30 rounded-xl">
                 <div className="text-cyan-400 text-sm font-medium mb-1">Concepts</div>
@@ -310,7 +631,7 @@ export default function SummariesPage() {
                     <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mr-3 mt-0.5">
                       <span className="text-teal-400 text-xs font-bold">{i + 1}</span>
                     </span>
-                    <span className="text-slate-300 leading-relaxed">{obj}</span>
+                    <span className="text-slate-300 leading-relaxed"><MathText text={obj} /></span>
                   </li>
                 ))}
               </ul>
@@ -318,8 +639,9 @@ export default function SummariesPage() {
           )}
 
           {/* Main Content Sections */}
+          {summary.sections && summary.sections.length > 0 ? (
           <div className="space-y-8">
-            {summary.sections && summary.sections.map((section, sectionIdx) => (
+            {summary.sections.map((section, sectionIdx) => (
               <div key={sectionIdx} className="glass-card animate-slide-up" style={{ animationDelay: `${sectionIdx * 0.1}s` }}>
                 <div className="flex items-start gap-4 mb-6">
                   <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/30 rounded-xl flex items-center justify-center text-teal-400 font-bold">
@@ -340,16 +662,18 @@ export default function SummariesPage() {
                           <div className="flex-1">
                             <h3 className="text-xl font-semibold text-slate-100 mb-2">{concept.term}</h3>
                             <p className="text-sm text-cyan-400 italic mb-3 pl-4 border-l-2 border-cyan-500/30">
-                              {concept.definition}
+                              <MathText text={concept.definition} />
                             </p>
                             <p className="text-slate-300 leading-relaxed mb-4">
-                              {concept.explanation}
+                              <MathText text={concept.explanation} />
                             </p>
                             
                             {concept.example && (
                               <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg mb-4">
                                 <div className="text-xs font-semibold text-blue-400 mb-1 uppercase tracking-wide">Example</div>
-                                <p className="text-slate-300 text-sm leading-relaxed">{concept.example}</p>
+                                <p className="text-slate-300 text-sm leading-relaxed">
+                                  <MathText text={concept.example} />
+                                </p>
                               </div>
                             )}
                             
@@ -360,7 +684,7 @@ export default function SummariesPage() {
                                   {concept.key_points.map((point, i) => (
                                     <li key={i} className="flex items-start text-sm">
                                       <span className="text-teal-400 mr-2">▸</span>
-                                      <span className="text-slate-300">{point}</span>
+                                      <span className="text-slate-300"><MathText text={point} /></span>
                                     </li>
                                   ))}
                                 </ul>
@@ -374,7 +698,7 @@ export default function SummariesPage() {
                                   {concept.pitfalls.map((pitfall, i) => (
                                     <li key={i} className="flex items-start text-sm">
                                       <span className="text-amber-400 mr-2">⚠</span>
-                                      <span className="text-slate-300">{pitfall}</span>
+                                      <span className="text-slate-300"><MathText text={pitfall} /></span>
                                     </li>
                                   ))}
                                 </ul>
@@ -388,7 +712,7 @@ export default function SummariesPage() {
                                   {concept.when_to_use.map((condition, i) => (
                                     <li key={i} className="flex items-start text-sm">
                                       <span className="text-green-400 mr-2">✓</span>
-                                      <span className="text-slate-300">{condition}</span>
+                                      <span className="text-slate-300"><MathText text={condition} /></span>
                                     </li>
                                   ))}
                                 </ul>
@@ -402,7 +726,7 @@ export default function SummariesPage() {
                                   {concept.limitations.map((limitation, i) => (
                                     <li key={i} className="flex items-start text-sm">
                                       <span className="text-red-400 mr-2">⊗</span>
-                                      <span className="text-slate-300">{limitation}</span>
+                                      <span className="text-slate-300"><MathText text={limitation} /></span>
                                     </li>
                                   ))}
                                 </ul>
@@ -423,7 +747,7 @@ export default function SummariesPage() {
                         <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mr-3 mt-0.5 group-hover:scale-110 transition-transform">
                           <span className="text-teal-400 text-xs">✓</span>
                         </span>
-                        <span className="text-slate-300 leading-relaxed">{bullet}</span>
+                        <span className="text-slate-300 leading-relaxed"><MathText text={bullet} /></span>
                       </li>
                     ))}
                   </ul>
@@ -431,6 +755,13 @@ export default function SummariesPage() {
               </div>
             ))}
           </div>
+          ) : (
+            <div className="glass-card p-8 text-center">
+              <div className="text-4xl mb-4">📄</div>
+              <div className="text-xl text-slate-300 mb-2">No sections available</div>
+              <div className="text-sm text-slate-400">The summary data is incomplete or still being processed.</div>
+            </div>
+          )}
 
           {/* Formula Sheet */}
           {summary.formula_sheet && summary.formula_sheet.length > 0 && (
@@ -445,7 +776,7 @@ export default function SummariesPage() {
                     <div className="text-lg font-semibold text-slate-100 mb-2">{formula.name}</div>
                     {(formula.formula || formula.expression) && (
                       <div className="text-2xl font-mono text-purple-300 mb-3 p-3 bg-black/20 rounded-lg">
-                        {formula.expression || formula.formula}
+                        <MathText text={formula.expression || formula.formula || ''} />
                       </div>
                     )}
                     {formula.variables && (
@@ -458,7 +789,9 @@ export default function SummariesPage() {
                     {formula.worked_example && (
                       <div className="mt-3 p-3 bg-black/20 rounded-lg border border-purple-500/20">
                         <div className="text-xs text-purple-400 font-semibold mb-2 uppercase tracking-wide">Worked Example</div>
-                        <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{formula.worked_example}</div>
+                        <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                          <MathText text={formula.worked_example} />
+                        </div>
                       </div>
                     )}
                     
@@ -472,7 +805,7 @@ export default function SummariesPage() {
                     {(formula.when_to_use || formula.notes) && (
                       <div className="text-sm text-slate-400 mt-3">
                         <span className="text-purple-400 font-semibold">Notes: </span>
-                        {formula.notes || formula.when_to_use}
+                        <MathText text={formula.notes || formula.when_to_use || ''} />
                       </div>
                     )}
                   </div>
@@ -492,7 +825,7 @@ export default function SummariesPage() {
                 {summary.glossary.map((term, idx) => (
                   <div key={idx} className="p-4 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/30 rounded-xl hover:border-emerald-500/50 transition-all">
                     <div className="font-semibold text-emerald-300 mb-1">{term.term}</div>
-                    <div className="text-sm text-slate-300">{term.definition}</div>
+                    <div className="text-sm text-slate-300"><MathText text={term.definition} /></div>
                   </div>
                 ))}
               </div>
