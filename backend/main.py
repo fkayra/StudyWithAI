@@ -64,12 +64,28 @@ file_content_store = {}
 # DATABASE SETUP
 # ============================================================================
 # check_same_thread is only for SQLite
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+try:
+    if DATABASE_URL.startswith("sqlite"):
+        engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    else:
+        # For PostgreSQL, add connection pool settings and SSL if needed
+        engine = create_engine(
+            DATABASE_URL,
+            pool_pre_ping=True,  # Verify connections before using
+            pool_recycle=300,    # Recycle connections after 5 minutes
+        )
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base = declarative_base()
+    print(f"[DATABASE] Database engine created successfully (URL: {DATABASE_URL[:20]}...)")
+except Exception as e:
+    print(f"[DATABASE ERROR] Failed to create database engine: {e}")
+    import traceback
+    traceback.print_exc()
+    # Create a dummy engine to prevent crashes - migrations will handle actual connection
+    engine = None
+    SessionLocal = None
+    Base = declarative_base()
+    print("[DATABASE WARNING] Using fallback database setup - some features may not work")
 
 class User(Base):
     __tablename__ = "users"
@@ -159,13 +175,26 @@ class TokenUsage(Base):
     estimated_cost = Column(Float, nullable=True)  # Estimated cost in USD
     created_at = Column(DateTime, default=datetime.utcnow)
 
-Base.metadata.create_all(bind=engine)
+# Create tables if engine is available (non-blocking)
+try:
+    if engine:
+        Base.metadata.create_all(bind=engine)
+        print("[DATABASE] Tables created/verified successfully")
+    else:
+        print("[DATABASE WARNING] Skipping table creation - engine not available")
+except Exception as e:
+    print(f"[DATABASE WARNING] Table creation failed: {e}")
+    # Don't crash - tables might already exist or connection will be retried
 
 # ============================================================================
 # DATABASE MIGRATION FUNCTION
 # ============================================================================
 def run_migration():
     """Run database migrations to ensure all required columns and tables exist"""
+    if not engine:
+        print("[MIGRATION] Skipping migration - database engine not available")
+        return
+    
     try:
         from sqlalchemy import inspect
         inspector = inspect(engine)
@@ -413,9 +442,16 @@ def run_migration():
         import traceback
         traceback.print_exc()
 
-# Run migration on startup
+# Run migration on startup (non-blocking - app will start even if migration fails)
 print("[STARTUP] Running database migration...")
-run_migration()
+try:
+    run_migration()
+    print("[STARTUP] Migration completed successfully")
+except Exception as e:
+    print(f"[STARTUP WARNING] Migration failed but continuing startup: {e}")
+    import traceback
+    traceback.print_exc()
+    # Don't crash the app - migration can be run manually later
 
 # ============================================================================
 # FASTAPI APP
@@ -611,6 +647,8 @@ class UserResponse(BaseModel):
 # DEPENDENCIES
 # ============================================================================
 def get_db():
+    if not SessionLocal:
+        raise HTTPException(status_code=503, detail="Database connection not available. Please check backend configuration.")
     db = SessionLocal()
     try:
         yield db
