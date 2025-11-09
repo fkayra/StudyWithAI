@@ -591,6 +591,10 @@ class UserUpdate(BaseModel):
     tier: Optional[str] = None
     is_admin: Optional[bool] = None
 
+class BootstrapAdminRequest(BaseModel):
+    email: str
+    secret_key: Optional[str] = None
+
 class UserResponse(BaseModel):
     id: int
     email: str
@@ -3159,6 +3163,65 @@ async def get_low_quality_patterns_endpoint(
     except Exception as e:
         return {"error": str(e)}
 
+
+@app.post("/admin/bootstrap-admin")
+async def bootstrap_admin(
+    request: BootstrapAdminRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Bootstrap the first admin user. 
+    Only works if:
+    1. No admins exist yet, OR
+    2. A valid secret key is provided (from BOOTSTRAP_SECRET_KEY env var)
+    """
+    try:
+        # Check if any admins exist
+        admin_count = db.query(User).filter(
+            (User.is_admin == 1) | (User.is_admin == True)
+        ).count()
+        
+        # If admins exist, require secret key
+        if admin_count > 0:
+            expected_secret = os.getenv("BOOTSTRAP_SECRET_KEY")
+            if not expected_secret:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Admins already exist. Set BOOTSTRAP_SECRET_KEY environment variable to bootstrap additional admins."
+                )
+            
+            if not request.secret_key or request.secret_key != expected_secret:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Invalid secret key. Cannot bootstrap admin when admins already exist."
+                )
+        
+        # Find the user
+        user = db.query(User).filter(User.email == request.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User with email '{request.email}' not found")
+        
+        # Make user admin
+        user.is_admin = 1
+        db.commit()
+        db.refresh(user)
+        
+        return {
+            "status": "success",
+            "message": f"User '{request.email}' is now an admin",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "surname": user.surname,
+                "is_admin": True
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error bootstrapping admin: {str(e)}")
 
 @app.get("/admin/migrate-database")
 @app.post("/admin/migrate-database")
