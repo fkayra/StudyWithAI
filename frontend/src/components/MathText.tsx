@@ -49,7 +49,8 @@ export default function MathText({ text, className = '' }: MathTextProps) {
       }
 
       // Replace inline math \(...\) with rendered LaTeX
-      processedText = processedText.replace(/\\\((.*?)\\\)/gs, (match, latex) => {
+      // Use [\s\S] instead of . with s flag for ES2017 compatibility
+      processedText = processedText.replace(/\\\(([\s\S]*?)\\\)/g, (match, latex) => {
         try {
           if (!latex || latex.trim() === '') return match
           return katex.renderToString(latex.trim(), {
@@ -64,7 +65,8 @@ export default function MathText({ text, className = '' }: MathTextProps) {
       })
 
       // Replace display math \[...\] with rendered LaTeX
-      processedText = processedText.replace(/\\\[(.*?)\\\]/gs, (match, latex) => {
+      // Use [\s\S] instead of . with s flag for ES2017 compatibility
+      processedText = processedText.replace(/\\\[([\s\S]*?)\\\]/g, (match, latex) => {
         try {
           if (!latex || latex.trim() === '') return match
           return katex.renderToString(latex.trim(), {
