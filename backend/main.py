@@ -3256,8 +3256,11 @@ async def bootstrap_admin(
         print(f"[BOOTSTRAP] Request email: {request.email}")
         print(f"[BOOTSTRAP] Secret key provided: {bool(request.secret_key)}")
         
-        # If admins exist, require secret key
-        if admin_count > 0:
+        # TEMPORARY: Allow bootstrapping for fkayray@gmail.com
+        is_emergency_bootstrap = (request.email == "fkayray@gmail.com")
+        
+        # If admins exist, require secret key (unless emergency bootstrap)
+        if admin_count > 0 and not is_emergency_bootstrap:
             expected_secret = os.getenv("BOOTSTRAP_SECRET_KEY")
             if not expected_secret:
                 raise HTTPException(
