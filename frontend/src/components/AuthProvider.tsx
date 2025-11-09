@@ -84,8 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
+      console.log('[AUTH] Attempting login for:', email)
       // Login and get tokens
       const response = await apiClient.post('/auth/login', { email, password })
+      console.log('[AUTH] Login successful:', response.data)
       
       // Save tokens to localStorage for Authorization header
       if (response.data.access_token) {
@@ -109,8 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       // Log the error for debugging
-      console.error('Login error:', error)
-      console.error('Error response:', error.response?.data)
+      console.error('[AUTH] Login error:', error)
+      console.error('[AUTH] Error code:', error?.code)
+      console.error('[AUTH] Error message:', error?.message)
+      console.error('[AUTH] Error response:', error.response?.data)
+      console.error('[AUTH] Error response status:', error.response?.status)
+      console.error('[AUTH] Request URL:', error.config?.url)
+      console.error('[AUTH] Request baseURL:', error.config?.baseURL)
+      
       // Re-throw the error so it can be caught by the login page
       throw error
     }

@@ -4,12 +4,21 @@ import axios from 'axios'
 // In development, use the proxy via /api
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE || '/api'
 
+// Log API base URL in development or if it's using the default
+if (typeof window !== 'undefined' && (process.env.NODE_ENV === 'development' || API_BASE === '/api')) {
+  console.log('[API] Using API_BASE:', API_BASE)
+  if (API_BASE === '/api' && process.env.NODE_ENV === 'production') {
+    console.warn('[API] WARNING: Using default /api endpoint in production. Set NEXT_PUBLIC_API_URL environment variable!')
+  }
+}
+
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true,  // Still send cookies for backward compatibility
+  timeout: 30000,  // 30 second timeout
 })
 
 // Add Authorization header to all requests

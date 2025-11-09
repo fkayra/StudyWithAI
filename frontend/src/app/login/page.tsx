@@ -26,7 +26,35 @@ export default function LoginPage() {
       // Handle axios errors - extract error message from response
       console.error('Login error:', err)
       console.error('Error response:', err?.response)
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Invalid email or password. Please try again.'
+      console.error('Error code:', err?.code)
+      console.error('Error message:', err?.message)
+      
+      // Check for network errors
+      const isNetworkError = !err?.response && (err?.code === 'ERR_NETWORK' || err?.message?.includes('Network Error') || err?.message?.includes('Failed to fetch'))
+      
+      let errorMessage = 'Invalid email or password. Please try again.'
+      
+      if (isNetworkError) {
+        // Get the actual URL that was attempted
+        const attemptedUrl = err?.config?.baseURL || err?.config?.url || 'unknown'
+        const isDefaultApi = attemptedUrl === '/api' || attemptedUrl?.includes('/api/auth/login')
+        
+        if (isDefaultApi) {
+          errorMessage = 'Network error: Backend API URL not configured. Please set NEXT_PUBLIC_API_URL environment variable in Vercel to your Railway backend URL (e.g., https://your-backend.railway.app). Check VERCEL_SETUP.md for instructions.'
+        } else {
+          errorMessage = `Network error: Cannot connect to the server at ${attemptedUrl}. Please check your internet connection and ensure the backend is running. If the URL looks incorrect, verify NEXT_PUBLIC_API_URL is set correctly in Vercel.`
+        }
+        console.error('[LOGIN] Network error detected.')
+        console.error('[LOGIN] Attempted URL:', err?.config?.baseURL + err?.config?.url)
+        console.error('[LOGIN] Error code:', err?.code)
+        console.error('[LOGIN] Error message:', err?.message)
+        console.error('[LOGIN] If this is production, check VERCEL_SETUP.md for setup instructions.')
+      } else if (err?.response?.data?.detail) {
+        errorMessage = err.response.data.detail
+      } else if (err?.message) {
+        errorMessage = err.message
+      }
+      
       setError(errorMessage)
       setLoading(false)
     }
