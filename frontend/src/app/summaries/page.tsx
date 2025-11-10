@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient, historyAPI } from '@/lib/api'
 import MathText from '@/components/MathText'
+import MermaidDiagram from '@/components/MermaidDiagram'
 
 // New exam-ready schema
 interface Concept {
@@ -850,8 +851,18 @@ export default function SummariesPage() {
                   <div key={idx} className="p-6 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/30 rounded-xl hover:border-blue-500/50 transition-all">
                     <div className="font-semibold text-blue-300 mb-2 text-lg">{diagram.title}</div>
                     <div className="text-sm text-slate-400 mb-4 italic">{diagram.description}</div>
-                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 font-mono text-sm text-slate-300 whitespace-pre-wrap overflow-x-auto">
-                      {diagram.content}
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 overflow-x-auto">
+                      {/* Render Mermaid diagram or show as code if not Mermaid syntax */}
+                      {diagram.content.trim().startsWith('graph ') || 
+                       diagram.content.trim().startsWith('flowchart ') ||
+                       diagram.content.trim().startsWith('sequenceDiagram') ||
+                       diagram.content.trim().startsWith('classDiagram') ? (
+                        <MermaidDiagram content={diagram.content} />
+                      ) : (
+                        <pre className="font-mono text-sm text-slate-300 whitespace-pre-wrap">
+                          {diagram.content}
+                        </pre>
+                      )}
                     </div>
                     <div className="mt-2 text-xs text-slate-500">Type: {diagram.type}</div>
                   </div>

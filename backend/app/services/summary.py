@@ -251,9 +251,9 @@ OUTPUT REQUIREMENTS:
 - Comprehensive: Use available token budget fully (aim for max_output_cap)
 - Don't be unnecessarily brief - depth matters
 - Include pitfalls, when_to_use, limitations where applicable
-- AT LEAST 2-4 diagrams (visualizations, flowcharts, trees)
+- AT LEAST 2-4 diagrams (visualizations, flowcharts, trees) using Mermaid or ASCII art
 - AT LEAST 2-3 pseudocode examples for algorithms/procedures
-- AT LEAST 3-5 practice problems with full solutions
+- AT LEAST 3-5 practice problems with VISUAL solutions (if problem asks to "construct" or "draw", solution MUST include the actual diagram/drawing, not just instructions)
 - No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
 
 MINDSET CHECK:
@@ -334,7 +334,7 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
       {{
         "problem": "<Full problem statement>",
         "difficulty": "easy|medium|hard",
-        "solution": "<Complete solution>",
+        "solution": "<Complete solution WITH VISUALS if applicable (e.g., for 'construct a network', include the actual diagram in Mermaid or ASCII art, not just instructions)>",
         "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
         "key_concepts": ["<Concept 1>", "<Concept 2>"]
       }}
@@ -351,9 +351,9 @@ DEPTH & COMPREHENSIVENESS REQUIREMENTS:
 ✓ Each concept explanation: 150-250 words
 ✓ Include examples where applicable (don't leave blank)
 ✓ Include pitfalls, when_to_use, limitations where you have information
-✓ Diagrams: AT LEAST 2-4 visual representations
+✓ Diagrams: AT LEAST 2-4 visual representations (Mermaid or ASCII art)
 ✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
-✓ Practice Problems: AT LEAST 3-5 with full solutions
+✓ Practice Problems: AT LEAST 3-5 with VISUAL solutions (if problem asks to construct/draw, solution must show the actual diagram)
 ✓ Use available token budget (12,000-16,000 tokens available)
 ✓ Don't be unnecessarily brief - fill the space with quality content
 
@@ -392,9 +392,9 @@ VALIDATION CHECKLIST (before output):
 ✓ AT LEAST 6 sections created
 ✓ Each section has 2-3+ concepts
 ✓ Each concept: 150-250 word explanation
-✓ Diagrams: 2-4+ visual representations
+✓ Diagrams: 2-4+ visual representations (use Mermaid syntax: graph TD, flowchart LR, etc.)
 ✓ Pseudocode: 2-3+ algorithm examples (if applicable)
-✓ Practice Problems: 3-5+ with full solutions
+✓ Practice Problems: 3-5+ with VISUAL solutions (e.g., if asking to "construct X", solution must include the actual Mermaid diagram of X, not instructions)
 ✓ Claims are specific and concrete (not vague)
 ✓ Citations reference source material
 ✓ Used available token budget effectively (not unnecessarily brief)
