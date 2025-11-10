@@ -18,7 +18,7 @@ export const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,  // Still send cookies for backward compatibility
-  timeout: 30000,  // 30 second timeout
+  timeout: 180000,  // 3 minute timeout (AI now generates more comprehensive content)
 })
 
 // Add Authorization header to all requests
