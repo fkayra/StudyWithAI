@@ -245,6 +245,13 @@ BRIEFING STRUCTURE (MANDATORY):
    - Use bullet points for scannability
    - Include concrete details: numbers, dates, names, cases
 
+🚨 CRITICAL BAYESIAN/PROBABILISTIC NETWORK RULE 🚨
+IF the material involves Bayesian networks, Markov chains, probabilistic graphical models, or ANY network with probabilities:
+→ EVERY edge in diagram MUST have probability/weight label
+→ Example CORRECT: A[Rain] -->|P=0.8| B[Wet]
+→ Example WRONG: A[Rain] --> B[Wet]  ❌ MISSING PROBABILITY!
+→ This is NOT optional - it's REQUIRED for the diagram to be usable!
+
 OUTPUT REQUIREMENTS:
 - Specific and concrete: Include numbers, dates, names, data points
 - Evidence-based: Ground claims in source material
@@ -253,12 +260,16 @@ OUTPUT REQUIREMENTS:
 - Include pitfalls, when_to_use, limitations where applicable
 - AT LEAST 2-4 diagrams (visualizations, flowcharts, trees):
   • If source contains charts/graphs/figures → Recreate EXACTLY with ALL details (values, numbers, labels, probabilities)
-  • For Bayesian/probabilistic networks → Include edge labels with probability values (graph TD; A -->|P=0.7| B)
+  • For Bayesian/probabilistic networks → MANDATORY: Include edge labels with probability values
+    CORRECT: graph TD; A[Node1] -->|P=0.7| B[Node2]; A -->|P=0.3| C[Node3];
+    WRONG: graph TD; A[Node1] --> B[Node2]; ❌ NO PROBABILITY = UNUSABLE!
   • For concepts that can be visualized → Create Mermaid diagrams
   • Use LaTeX in diagram labels if needed (e.g., -->|$P(A|B)=0.3$|)
   • Each diagram must have clear description explaining what it shows
 - AT LEAST 2-3 pseudocode examples for algorithms/procedures
-- AT LEAST 3-5 practice problems with VISUAL solutions (if problem asks to "construct" or "draw", solution MUST include the actual diagram/drawing, not just instructions)
+- AT LEAST 3-5 practice problems with VISUAL solutions:
+  • If problem asks to "construct" or "draw" → solution MUST include actual diagram
+  • If constructing Bayesian/probabilistic network → MUST include probability values on edges
 - No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
 
 MINDSET CHECK:
@@ -328,11 +339,26 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
       {{
         "title": "<Diagram title>",
         "description": "<What this diagram shows AND interpretation if from source file>",
-        "content": "<Mermaid syntax (preferred) or ASCII art. 
-                    CRITICAL RULES:
-                    - If from source file → Copy ALL details accurately (values, labels, numbers, probabilities)
-                    - For probabilistic networks (Bayesian, Markov, etc.) → Include edge labels with probability values
-                    - Example Bayesian: graph TD; A[Node1] -->|P=0.7| B[Node2]; A -->|P=0.3| C[Node3];
+        "content": "<Mermaid syntax (preferred) or ASCII art.
+                    
+                    🚨 CRITICAL FOR BAYESIAN/PROBABILISTIC NETWORKS:
+                    EVERY edge MUST have probability label! Without it, diagram is UNUSABLE!
+                    
+                    CORRECT EXAMPLE (Bayesian Network):
+                    graph TD
+                      Cloudy[Cloudy] -->|P=0.8| Rain[Rain]
+                      Cloudy -->|P=0.2| NoRain[No Rain]
+                      Rain -->|P=0.9| Wet[Wet Grass]
+                      NoRain -->|P=0.1| Wet
+                    
+                    WRONG EXAMPLE (MISSING PROBABILITIES - DO NOT DO THIS):
+                    graph TD
+                      Cloudy --> Rain
+                      Rain --> Wet
+                    ❌ This is UNUSABLE! Cannot calculate probabilities!
+                    
+                    Other Rules:
+                    - If from source file → Copy ALL details accurately
                     - For charts from source → Preserve all data points and values>",
         "type": "tree|flowchart|graph|hierarchy|chart_from_source|bayesian_network",
         "source": "<OPTIONAL: 'original_file' if recreating a chart/graph from source, omit if new diagram>"
@@ -350,7 +376,23 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
       {{
         "problem": "<Full problem statement>",
         "difficulty": "easy|medium|hard",
-        "solution": "<Complete solution WITH VISUALS if applicable (e.g., for 'construct a network', include the actual diagram in Mermaid or ASCII art, not just instructions)>",
+        "solution": "<Complete solution WITH VISUALS if applicable.
+                     
+                     🚨 IF PROBLEM ASKS TO CONSTRUCT BAYESIAN/PROBABILISTIC NETWORK:
+                     Solution MUST include the diagram WITH probability values on edges!
+                     
+                     CORRECT:
+                     graph TD
+                       A[Cloudy] -->|P=0.8| B[Rain]
+                       A -->|P=0.2| C[No Rain]
+                       B -->|P=0.9| D[Wet Grass]
+                     
+                     WRONG:
+                     graph TD
+                       A[Cloudy] --> B[Rain] --> D[Wet Grass]
+                     ❌ MISSING PROBABILITIES!
+                     
+                     For other construction problems: include actual diagram in Mermaid or ASCII art, not just instructions>",
         "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
         "key_concepts": ["<Concept 1>", "<Concept 2>"]
       }}
@@ -370,6 +412,7 @@ DEPTH & COMPREHENSIVENESS REQUIREMENTS:
 ✓ Diagrams: AT LEAST 2-4 visual representations:
   • If source has charts/graphs → Include them with interpretation
   • Create new diagrams for complex concepts (Mermaid syntax preferred)
+  • 🚨 FOR BAYESIAN/PROBABILISTIC NETWORKS → EVERY edge MUST have probability label!
 ✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
 ✓ Practice Problems: AT LEAST 3-5 with VISUAL solutions (if problem asks to construct/draw, solution must show the actual diagram)
 ✓ Use available token budget (12,000-16,000 tokens available)
@@ -413,8 +456,11 @@ VALIDATION CHECKLIST (before output):
 ✓ Diagrams: 2-4+ visual representations:
   • Check source for charts/graphs/figures → Recreate with interpretation
   • Create new diagrams for complex concepts (use Mermaid syntax: graph TD, flowchart LR, etc.)
+  • 🚨 IF BAYESIAN/PROBABILISTIC NETWORKS: Check EVERY edge has probability label (-->|P=0.7|)
 ✓ Pseudocode: 2-3+ algorithm examples (if applicable)
-✓ Practice Problems: 3-5+ with VISUAL solutions (e.g., if asking to "construct X", solution must include the actual Mermaid diagram of X, not instructions)
+✓ Practice Problems: 3-5+ with VISUAL solutions:
+  • If asking to "construct X" → solution must include actual Mermaid diagram of X
+  • 🚨 IF CONSTRUCTING BAYESIAN NETWORK: Diagram MUST have probability values on ALL edges
 ✓ Claims are specific and concrete (not vague)
 ✓ Citations reference source material
 ✓ Used available token budget effectively (not unnecessarily brief)
