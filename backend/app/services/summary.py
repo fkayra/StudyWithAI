@@ -251,7 +251,10 @@ OUTPUT REQUIREMENTS:
 - Comprehensive: Use available token budget fully (aim for max_output_cap)
 - Don't be unnecessarily brief - depth matters
 - Include pitfalls, when_to_use, limitations where applicable
-- AT LEAST 2-4 diagrams (visualizations, flowcharts, trees) using Mermaid or ASCII art
+- AT LEAST 2-4 diagrams (visualizations, flowcharts, trees):
+  • If source contains charts/graphs/figures → Include them with interpretation
+  • For concepts that can be visualized → Create Mermaid or ASCII diagrams
+  • Each diagram must have clear description explaining what it shows
 - AT LEAST 2-3 pseudocode examples for algorithms/procedures
 - AT LEAST 3-5 practice problems with VISUAL solutions (if problem asks to "construct" or "draw", solution MUST include the actual diagram/drawing, not just instructions)
 - No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
@@ -266,7 +269,10 @@ PLANNING (internal, before output):
 1) Identify ALL main themes from all chunks
 2) Create AT LEAST 6 sections (aim for 8-12 for rich material)
 3) For each section: AT LEAST 2-3 concepts with depth
-4) Create 2-4 diagrams (trees, flowcharts, hierarchies for complex concepts)
+4) Create 2-4 diagrams:
+   • FIRST: Check if source has charts/graphs/figures → Recreate them with interpretation
+   • THEN: Create new diagrams for complex concepts (trees, flowcharts, hierarchies)
+   • Use Mermaid syntax where possible (graph TD, flowchart LR, etc.)
 5) Create 2-3 pseudocode examples (for algorithms/procedures)
 6) Create 3-5 practice problems with full solutions (varying difficulty)
 7) Aim to use available token budget (you have 12,000-16,000 tokens available)
@@ -317,9 +323,10 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
     "diagrams": [
       {{
         "title": "<Diagram title>",
-        "description": "<What this diagram shows>",
+        "description": "<What this diagram shows AND interpretation if from source file>",
         "content": "<ASCII art, tree structure, or Mermaid syntax>",
-        "type": "tree|flowchart|graph|hierarchy"
+        "type": "tree|flowchart|graph|hierarchy|chart_from_source",
+        "source": "<OPTIONAL: 'original_file' if recreating a chart/graph from source, omit if new diagram>"
       }}
     ],
     "pseudocode": [
@@ -351,7 +358,9 @@ DEPTH & COMPREHENSIVENESS REQUIREMENTS:
 ✓ Each concept explanation: 150-250 words
 ✓ Include examples where applicable (don't leave blank)
 ✓ Include pitfalls, when_to_use, limitations where you have information
-✓ Diagrams: AT LEAST 2-4 visual representations (Mermaid or ASCII art)
+✓ Diagrams: AT LEAST 2-4 visual representations:
+  • If source has charts/graphs → Include them with interpretation
+  • Create new diagrams for complex concepts (Mermaid syntax preferred)
 ✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
 ✓ Practice Problems: AT LEAST 3-5 with VISUAL solutions (if problem asks to construct/draw, solution must show the actual diagram)
 ✓ Use available token budget (12,000-16,000 tokens available)
@@ -392,7 +401,9 @@ VALIDATION CHECKLIST (before output):
 ✓ AT LEAST 6 sections created
 ✓ Each section has 2-3+ concepts
 ✓ Each concept: 150-250 word explanation
-✓ Diagrams: 2-4+ visual representations (use Mermaid syntax: graph TD, flowchart LR, etc.)
+✓ Diagrams: 2-4+ visual representations:
+  • Check source for charts/graphs/figures → Recreate with interpretation
+  • Create new diagrams for complex concepts (use Mermaid syntax: graph TD, flowchart LR, etc.)
 ✓ Pseudocode: 2-3+ algorithm examples (if applicable)
 ✓ Practice Problems: 3-5+ with VISUAL solutions (e.g., if asking to "construct X", solution must include the actual Mermaid diagram of X, not instructions)
 ✓ Claims are specific and concrete (not vague)
