@@ -28,20 +28,32 @@ SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP
 
 def get_chunk_summary_prompt(language: str = "en") -> str:
     """
-    Prompt for summarizing individual chunks (MAP phase)
+    Prompt for extracting complete study material from chunks (MAP phase)
+    NOT summarizing - TEACHING and EXPLAINING fully
     Returns structured mini-JSON to preserve concept/formula/example separation
-    ENHANCED: Now includes few-shot examples for better quality
     """
     lang_instr = "Write in TURKISH." if language == "tr" else "Write in ENGLISH."
     
-    return f"""Extract COMPREHENSIVE, DEEPLY DETAILED knowledge from this course excerpt.
+    return f"""You are creating COMPLETE STUDY MATERIAL from this course excerpt (NOT a summary).
+
+⚠️  CRITICAL: This is NOT a summary. Extract and EXPAND all knowledge into complete, exam-ready notes.
 
 {lang_instr}
 
+YOUR MISSION:
+- TEACH each concept fully (as if writing a textbook chapter)
+- EXPLAIN every detail (students will study from this alone)
+- EXPAND on the material (add context, examples, explanations)
+- Include ALL information (nothing should be omitted)
+
 DEPTH REQUIREMENTS:
-- Each concept: Full explanation (200+ words), multiple worked examples
-- Each formula: Complete derivation + 2-3 numerical examples
-- DON'T SKIP ANYTHING: Include all topics, even if they seem minor
+- Each concept: Full explanation (300+ words), 3-4 detailed worked examples
+- Each formula: Complete derivation + 3+ step-by-step numerical examples  
+- Each theorem: Full proof sketch + applications + when to use
+- DON'T SKIP ANYTHING: Include all topics, even if they seem minor or "obvious"
+- ADD background info if concepts need prerequisites
+
+MINDSET: "Could a student learn this topic from my output alone?"
 
 {FEW_SHOT_EXAMPLES}
 
@@ -190,8 +202,8 @@ def quality_score_legacy(result: dict) -> float:
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
-    Soft Merge mode: covers all themes, scales sections dynamically (FULL or SHORT)
-    Enhanced with evrensel quality rules
+    REDUCE phase: Merge all chunk knowledge into complete exam preparation material
+    NOT a summary - COMPLETE STUDY GUIDE that replaces original document
     """
     lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
@@ -199,24 +211,54 @@ def get_final_merge_prompt(language: str = "en", additional_instructions: str = 
     # Domain-specific guidance
     domain_guidance = ""
     if domain == "technical":
-        domain_guidance = "\n- NUMERIC EXAMPLES REQUIRED: Include actual numbers, calculations, and step-by-step solutions in every example."
+        domain_guidance = "\n- NUMERIC EXAMPLES REQUIRED: Include actual numbers, complete calculations, and step-by-step solutions (300+ words per example)."
     elif domain == "social":
-        domain_guidance = "\n- ANCHORED EXAMPLES REQUIRED: Include dates, names, quotes, and specific historical/case references in examples."
+        domain_guidance = "\n- ANCHORED EXAMPLES REQUIRED: Include dates, names, quotes, and specific historical/case references with full context (300+ words per example)."
     else:
-        domain_guidance = "\n- CONCRETE EXAMPLES: Use numeric or anchored examples as appropriate to the domain."
+        domain_guidance = "\n- CONCRETE EXAMPLES: Use numeric or anchored examples as appropriate to the domain (300+ words per example)."
 
-    return f"""GOAL
-Create a comprehensive, exam-ready study guide from the provided material. It must stand alone as the only thing a student needs before a final.
+    return f"""🎯 PRIMARY GOAL
+Create COMPLETE EXAM PREPARATION NOTES from the provided material.
+
+⚠️  CRITICAL: You are NOT creating a summary. You are creating a COMPLETE STUDY GUIDE that:
+- REPLACES the original material entirely
+- Is the ONLY thing students will use to prepare for their exam
+- Must be MORE comprehensive and detailed than the original
+- Should teach concepts from scratch
+
+Students will NEVER see the original document - only your notes.
+Therefore: EXPAND, don't condense. TEACH, don't summarize. EXPLAIN, don't abbreviate.
 
 LANGUAGE
 {lang_instr}
 
-CONSTRAINTS
-- Single pass, one JSON object. No markdown fences, no meta commentary.
-- Do NOT include any practice questions.
-- Be domain-agnostic; do NOT assume a specific book or course.
-- Prefer concrete, worked examples over vague prose.
-- No empty arrays: if you cannot populate a field meaningfully, **omit** that field entirely.{domain_guidance}{additional}
+OUTPUT FORMAT
+- Single pass, one comprehensive JSON object
+- No markdown fences, no meta commentary
+- Valid JSON with proper escaping
+
+WHAT TO INCLUDE (Remember: COMPLETE STUDY GUIDE):
+- ✓ Every concept with 500-800 word explanations
+- ✓ Every formula with full derivations and 3-5 worked examples
+- ✓ Every algorithm with complete walkthroughs
+- ✓ Background concepts and prerequisites
+- ✓ Multiple detailed examples per concept (200-300 words each)
+- ✓ Common mistakes and edge cases
+- ✓ Real-world applications and context
+
+WHAT TO EXCLUDE:
+- ❌ Practice questions (use that space for deeper explanations instead)
+- ❌ Vague phrases like "for example, consider..." without concrete examples
+- ❌ Generic statements without supporting detail
+- ❌ Empty arrays (if you can't populate meaningfully, omit the field){domain_guidance}{additional}
+
+MINDSET CHECK - Before starting, ask yourself:
+"If a student studied ONLY from my notes (never seeing the original), could they:
+ - Understand all concepts from scratch?
+ - Solve exam problems independently?
+ - Pass a comprehensive final exam?"
+
+If ANY answer is NO → You need MORE depth, MORE examples, MORE explanation.
 
 SILENT PLANNING (do internally before writing):
 1) Identify **all** themes/topics in the material and rank by centrality.
