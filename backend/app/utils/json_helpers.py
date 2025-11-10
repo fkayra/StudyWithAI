@@ -79,7 +79,7 @@ def detect_empty_fields(parsed_json: dict) -> list:
     critical_arrays = {
         "learning_objectives": 2,  # Min 2 objectives
         "sections": 2,             # Min 2 sections
-        "glossary": 8              # Min 8 terms
+        # NOTE: glossary removed in favor of diagrams/pseudocode/practice
     }
     
     for field, min_count in critical_arrays.items():

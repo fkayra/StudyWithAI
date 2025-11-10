@@ -693,9 +693,13 @@ def validate_citations_depth(result: Dict[str, Any]) -> List[str]:
     sections = summary.get("sections", [])
     formulas = summary.get("formula_sheet", [])
     
-    # Check citation structure
+    # Check citation structure (with type safety)
     shallow_citations = 0
     for citation in citations:
+        # Skip if citation is not a dict (defensive programming)
+        if not isinstance(citation, dict):
+            print(f"[QUALITY WARNING] Citation is not a dict: {type(citation)}")
+            continue
         has_detail = citation.get("page_range") or citation.get("section_or_heading") or citation.get("section")
         if not has_detail:
             shallow_citations += 1
