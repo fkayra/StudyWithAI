@@ -281,11 +281,16 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
             "term": "<Key concept/finding>",
             "definition": "<Concise definition or statement>",
             "explanation": "<Analysis with evidence: what it means, why it matters, implications. Include specific data, examples, cases. 2-3 focused paragraphs>",
-            "example": "<Specific case study or concrete example with details - OMIT if none>",
-            "key_points": ["<Bullet 1>", "<Bullet 2>"],
-            "pitfalls": ["<Common mistake or limitation - OMIT if none>"],
-            "when_to_use": ["<Application condition - OMIT if none>"],
-            "limitations": ["<Edge case or constraint - OMIT if none>"]
+            "key_points": ["<Bullet 1>", "<Bullet 2>"]
+            
+            // OPTIONAL FIELDS - Only include if you have content:
+            // "example": "<Specific case study>",  ← Include if you have example
+            // "pitfalls": ["<Common mistake>"],    ← Include if you have pitfalls
+            // "when_to_use": ["<Condition>"],      ← Include if you have usage info
+            // "limitations": ["<Constraint>"]      ← Include if you have limitations
+            
+            // NEVER write empty arrays like "when_to_use": []
+            // Just don't include the field at all!
           }}
         ]
       }}
@@ -319,13 +324,24 @@ DEPTH & COMPREHENSIVENESS REQUIREMENTS:
 ✓ Use available token budget (12,000-16,000 tokens available)
 ✓ Don't be unnecessarily brief - fill the space with quality content
 
-TOKEN OPTIMIZATION RULES:
-⚠️ OMIT fields only if genuinely no content:
-  - If no example AND no example possible → omit "example"
-  - If no pitfalls found in material → omit "pitfalls"
-  - If no when_to_use info → omit "when_to_use"
-  - If no limitations mentioned → omit "limitations"
-  - If truly no formulas in material → omit "formula_sheet"
+TOKEN OPTIMIZATION RULES (CRITICAL):
+⚠️ NEVER include empty arrays! Omit the field entirely:
+  
+  ❌ BAD: "when_to_use": []        ← Wastes tokens!
+  ✅ GOOD: (don't include the field at all)
+  
+  ❌ BAD: "limitations": []        ← Wastes tokens!
+  ✅ GOOD: (don't include the field at all)
+  
+  ❌ BAD: "pitfalls": []           ← Wastes tokens!
+  ✅ GOOD: (don't include the field at all)
+
+OMIT these fields if empty:
+  - "example" → omit if no example
+  - "pitfalls" → omit if no pitfalls
+  - "when_to_use" → omit if no usage conditions  
+  - "limitations" → omit if no limitations
+  - "formula_sheet" → omit if no formulas
   
 But if you CAN add content, DO IT! Use the available tokens.
 
@@ -935,8 +951,19 @@ def merge_summaries(
                     additional_instructions=enhanced_instructions
                 )
                 print("[COVERAGE] ✓ Regeneration complete")
+                
+                # Re-validate after regeneration
+                coverage_result = validate_coverage(original_text, result, min_coverage=0.85)
+                print(f"[COVERAGE] Post-regen coverage: {coverage_result['coverage_score']:.1%}")
             else:
                 print(f"[COVERAGE] ✅ Coverage validated ({coverage_result['coverage_score']:.1%})")
+            
+            # Add coverage info to result for frontend display
+            if coverage_result['missing_topics']:
+                result['coverage'] = {
+                    'score': round(coverage_result['coverage_score'], 2),
+                    'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
+                }
         
         # Return as JSON string (for compatibility with existing pipeline)
         return json.dumps(result, ensure_ascii=False, indent=2)

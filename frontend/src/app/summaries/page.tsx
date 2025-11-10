@@ -51,6 +51,11 @@ interface Summary {
   // exam_practice removed - no longer generated
 }
 
+interface Coverage {
+  score: number
+  missing_topics: string[]
+}
+
 interface Citation {
   file_id: string
   evidence: string
@@ -60,6 +65,7 @@ interface Citation {
 interface SummaryData {
   summary: Summary
   citations: Citation[]
+  coverage?: Coverage  // Optional: coverage info if available
 }
 
 interface UploadedFile {
@@ -860,6 +866,34 @@ export default function SummariesPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Missing Topics (Coverage Info) */}
+          {data.coverage && data.coverage.missing_topics && data.coverage.missing_topics.length > 0 && (
+            <div className="glass-card mt-8 animate-scale-in">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="text-3xl">⚠️</div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-semibold text-slate-100">Topics Not Covered</h2>
+                  <p className="text-sm text-amber-400 mt-1">Coverage: {(data.coverage.score * 100).toFixed(0)}% - The following topics from the source were not included in the summary</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {data.coverage.missing_topics.map((topic, index) => (
+                  <div key={index} className="p-3 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <div className="text-amber-400 text-xs mt-0.5">▸</div>
+                      <div className="text-sm text-slate-300">{topic}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <div className="text-xs text-blue-300">
+                  💡 <span className="font-semibold">Tip:</span> These topics were detected in the source material but may not have been included in the summary. You can refer back to the original document for details on these specific topics.
+                </div>
               </div>
             </div>
           )}
