@@ -252,8 +252,10 @@ OUTPUT REQUIREMENTS:
 - Don't be unnecessarily brief - depth matters
 - Include pitfalls, when_to_use, limitations where applicable
 - AT LEAST 2-4 diagrams (visualizations, flowcharts, trees):
-  • If source contains charts/graphs/figures → Include them with interpretation
-  • For concepts that can be visualized → Create Mermaid or ASCII diagrams
+  • If source contains charts/graphs/figures → Recreate EXACTLY with ALL details (values, numbers, labels, probabilities)
+  • For Bayesian/probabilistic networks → Include edge labels with probability values (graph TD; A -->|P=0.7| B)
+  • For concepts that can be visualized → Create Mermaid diagrams
+  • Use LaTeX in diagram labels if needed (e.g., -->|$P(A|B)=0.3$|)
   • Each diagram must have clear description explaining what it shows
 - AT LEAST 2-3 pseudocode examples for algorithms/procedures
 - AT LEAST 3-5 practice problems with VISUAL solutions (if problem asks to "construct" or "draw", solution MUST include the actual diagram/drawing, not just instructions)
@@ -270,9 +272,11 @@ PLANNING (internal, before output):
 2) Create AT LEAST 6 sections (aim for 8-12 for rich material)
 3) For each section: AT LEAST 2-3 concepts with depth
 4) Create 2-4 diagrams:
-   • FIRST: Check if source has charts/graphs/figures → Recreate them with interpretation
+   • FIRST: Check if source has charts/graphs/figures → Recreate EXACTLY with ALL details (values, labels, probabilities)
    • THEN: Create new diagrams for complex concepts (trees, flowcharts, hierarchies)
-   • Use Mermaid syntax where possible (graph TD, flowchart LR, etc.)
+   • Use Mermaid syntax (graph TD, flowchart LR, etc.)
+   • For Bayesian/probabilistic networks → Include edge labels with probability values (e.g., A -->|P=0.7| B)
+   • For charts from source → Preserve ALL data points and values accurately
 5) Create 2-3 pseudocode examples (for algorithms/procedures)
 6) Create 3-5 practice problems with full solutions (varying difficulty)
 7) Aim to use available token budget (you have 12,000-16,000 tokens available)
@@ -313,9 +317,9 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
     "formula_sheet": [
       {{
         "name": "<formula / algorithm / method>",
-        "expression": "<MATHEMATICAL notation ONLY - e.g., f(x) = ax² + bx + c>",
-        "variables": {{"symbol": "meaning"}},
-        "worked_example": "<short numeric example with actual calculations>",
+        "expression": "<LaTeX MATHEMATICAL notation - e.g., f(x) = ax^2 + bx + c or \\prod_{{i=1}}^{{n}} P(x_i|parents(X_i))>",
+        "variables": {{"symbol": "meaning (use LaTeX if needed: x_i, \\theta, etc.)"}},
+        "worked_example": "<short numeric example with actual calculations, use LaTeX for math: $P(A,B,C) = P(A) \\cdot P(B|A) \\cdot P(C|B)$>",
         "pseudocode": "<OPTIONAL: if algorithm, put step-by-step procedure here>",
         "notes": "<when it applies, constraints, complexity>"
       }}
@@ -324,8 +328,13 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
       {{
         "title": "<Diagram title>",
         "description": "<What this diagram shows AND interpretation if from source file>",
-        "content": "<ASCII art, tree structure, or Mermaid syntax>",
-        "type": "tree|flowchart|graph|hierarchy|chart_from_source",
+        "content": "<Mermaid syntax (preferred) or ASCII art. 
+                    CRITICAL RULES:
+                    - If from source file → Copy ALL details accurately (values, labels, numbers, probabilities)
+                    - For probabilistic networks (Bayesian, Markov, etc.) → Include edge labels with probability values
+                    - Example Bayesian: graph TD; A[Node1] -->|P=0.7| B[Node2]; A -->|P=0.3| C[Node3];
+                    - For charts from source → Preserve all data points and values>",
+        "type": "tree|flowchart|graph|hierarchy|chart_from_source|bayesian_network",
         "source": "<OPTIONAL: 'original_file' if recreating a chart/graph from source, omit if new diagram>"
       }}
     ],
