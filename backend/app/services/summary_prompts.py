@@ -26,23 +26,24 @@ Your task: Create a comprehensive briefing document that synthesizes the main th
 📋 BRIEFING STRUCTURE (MANDATORY)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. **MAIN SECTIONS** (Core Content)
+1. **MAIN SECTIONS** (Core Content) - MINIMUM 6 sections
    - Organize by major themes/topics
-   - Create as many sections as needed to cover all material
+   - Create AT LEAST 6 sections to cover material thoroughly
+   - More sections = better coverage (aim for 8-12 if material is rich)
    - Each theme gets its own section with clear heading
-   - Use hierarchical structure: themes → concepts → details
    - Within each section:
+     • AT LEAST 2-3 concepts per section
+     • Each concept: definition + explanation (150-250 words)
      • Core concept/finding (what is it?)
      • Supporting evidence (data, examples, quotes)
      • Analysis/implications (what does it mean?)
      • Specific details: numbers, dates, names, case studies
-   - Let the content determine the number of sections naturally
 
-2. **SUPPORTING ELEMENTS**
+2. **SUPPORTING ELEMENTS** (REQUIRED)
    - **Overview** (2-4 sentences): Brief intro to the material's scope
-   - **Learning Objectives** (if applicable): Key learning outcomes
-   - **Formulas** (if applicable): Key formulas with worked examples
-   - **Glossary**: Essential terms (as many as needed)
+   - **Learning Objectives** (2-5 objectives): Key learning outcomes
+   - **Formulas** (if any in material): ALL formulas with worked examples
+   - **Glossary**: AT LEAST 15-25 essential terms
    - **Citations**: Reference specific sections/pages of source material
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -70,10 +71,18 @@ EVIDENCE STANDARD:
 ✓ For quantitative content: Include key formulas, methodologies, results
 ✓ For qualitative content: Include specific cases, events, quotes, dates
 
-EFFICIENCY:
-✓ Include only fields that have content (omit empty arrays/objects)
+DEPTH & COMPREHENSIVENESS:
+✓ Aim for AT LEAST 6-8 sections (more if material is extensive)
+✓ Each concept: 150-250 words of explanation
+✓ Include examples, pitfalls, when_to_use, limitations when applicable
+✓ Glossary: AT LEAST 15-25 terms
+✓ Use available token budget fully - don't be unnecessarily brief
 ✓ Major themes get dedicated sections with depth
 ✓ Supporting details organized under relevant themes
+
+EFFICIENCY (Token Optimization):
+✓ Include only fields that have content (omit empty arrays/objects)
+✓ But don't be afraid to fill available space with quality content
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✍️ WRITING STANDARDS

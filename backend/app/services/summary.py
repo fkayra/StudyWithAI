@@ -228,23 +228,26 @@ LANGUAGE
 
 BRIEFING STRUCTURE (MANDATORY):
 
-1. **MAIN SECTIONS** (as many as needed)
+1. **MAIN SECTIONS** (MINIMUM 6 sections)
    - Organize by major themes/topics
+   - Create AT LEAST 6 sections (aim for 8-12 if material is rich)
    - Each theme = own section with clear heading
-   - Create enough sections to cover ALL material thoroughly
    - Within each section:
+     • AT LEAST 2-3 concepts per section
+     • Each concept: 150-250 words explanation
      • Core concept/finding
      • Supporting evidence (data, examples, specifics)
      • Analysis (what it means, implications)
    - Use bullet points for scannability
    - Include concrete details: numbers, dates, names, cases
-   - Let content determine section count naturally
 
 OUTPUT REQUIREMENTS:
 - Specific and concrete: Include numbers, dates, names, data points
 - Evidence-based: Ground claims in source material
-- Objective tone: Analytical, not promotional
-- Efficient: Comprehensive but concise
+- Comprehensive: Use available token budget fully (aim for max_output_cap)
+- Don't be unnecessarily brief - depth matters
+- Include pitfalls, when_to_use, limitations where applicable
+- AT LEAST 15-25 glossary terms
 - No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
 
 MINDSET CHECK:
@@ -255,9 +258,11 @@ If NO → Add specificity, evidence, and synthesis.
 
 PLANNING (internal, before output):
 1) Identify ALL main themes from all chunks
-2) Synthesize evidence under each theme
-3) Create as many sections as needed for complete coverage
-4) Omit empty fields to save tokens
+2) Create AT LEAST 6 sections (aim for 8-12 for rich material)
+3) For each section: AT LEAST 2-3 concepts with depth
+4) Aim to use available token budget (you have 12,000-16,000 tokens available)
+5) Include pitfalls, when_to_use, limitations when you have info
+6) Omit fields only if genuinely no content (don't be lazy)
 
 OUTPUT EXACTLY THIS JSON SCHEMA:
 {{
@@ -304,33 +309,44 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
   ]
 }}
 
-CRITICAL TOKEN OPTIMIZATION RULES:
-⚠️ OMIT empty fields entirely (not empty arrays, just don't include the key):
-  - If no example → don't include "example" field
-  - If no pitfalls → don't include "pitfalls" field
-  - If no when_to_use → don't include "when_to_use" field
-  - If no limitations → don't include "limitations" field
-  - If no formula_sheet → don't include "formula_sheet" field
+DEPTH & COMPREHENSIVENESS REQUIREMENTS:
+✓ AT LEAST 6 sections (8-12 for rich material)
+✓ AT LEAST 2-3 concepts per section
+✓ Each concept explanation: 150-250 words
+✓ Include examples where applicable (don't leave blank)
+✓ Include pitfalls, when_to_use, limitations where you have information
+✓ Glossary: AT LEAST 15-25 terms
+✓ Use available token budget (12,000-16,000 tokens available)
+✓ Don't be unnecessarily brief - fill the space with quality content
+
+TOKEN OPTIMIZATION RULES:
+⚠️ OMIT fields only if genuinely no content:
+  - If no example AND no example possible → omit "example"
+  - If no pitfalls found in material → omit "pitfalls"
+  - If no when_to_use info → omit "when_to_use"
+  - If no limitations mentioned → omit "limitations"
+  - If truly no formulas in material → omit "formula_sheet"
   
-This saves thousands of tokens! Only include fields with actual content.
+But if you CAN add content, DO IT! Use the available tokens.
 
 QUALITY & COMPLETENESS RULES:
-- All major themes covered in dedicated sections (create as many as needed)
+- All major themes covered in dedicated sections (AT LEAST 6)
 - Evidence-based: Include specific data, numbers, dates, names, cases
-- Formula_sheet (if applicable): Include key formulas/methods with:
+- Formula_sheet (if any in material): Include ALL formulas with:
   ✓ expression = MATH NOTATION
   ✓ variables = symbol meanings
-  ✓ worked_example if relevant (OMIT if not applicable)
-  ✓ pseudocode only for algorithms
-- Glossary: As many essential terms as needed
+  ✓ worked_example with calculations
+  ✓ pseudocode for algorithms
 - Validate JSON (no trailing commas, balanced braces)
 
 VALIDATION CHECKLIST (before output):
-✓ Each section has clear theme with supporting evidence
+✓ AT LEAST 6 sections created
+✓ Each section has 2-3+ concepts
+✓ Each concept: 150-250 word explanation
+✓ Glossary has 15-25+ terms
 ✓ Claims are specific and concrete (not vague)
 ✓ Citations reference source material
-✓ NO EMPTY ARRAYS/OBJECTS (omit the field entirely)
-✓ Only include fields that have actual content
+✓ Used available token budget effectively (not unnecessarily brief)
 
 OUTPUT PURE JSON NOW (no other text):"""
 
