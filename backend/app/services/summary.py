@@ -1,10 +1,12 @@
 """
 AI-powered summary service with map-reduce for large documents
 Includes domain detection and quality guardrails for consistent output
+Enhanced with deep learning prompts for maximum depth and coverage
 """
 from typing import List, Optional, Dict
 import os
 import requests
+import re
 from app.config import (
     OPENAI_MODEL, TEMPERATURE, TOP_P,
     CHUNK_INPUT_TARGET, MERGE_OUTPUT_BUDGET
@@ -17,65 +19,31 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 # ========== PROMPTS ==========
+# Import enhanced deep prompts for maximum quality
+from app.services.summary_prompts import SYSTEM_PROMPT_DEEP, FEW_SHOT_EXAMPLES
 
-SYSTEM_PROMPT = """You are StudyWithAI, an elite academic tutor specializing in deep conceptual understanding. Your mission: transform course materials into comprehensive, deeply explanatory study notes that build mastery.
-
-CORE PRINCIPLES (NON-NEGOTIABLE):
-1. **Complete Coverage**: Cover EVERY major concept, formula, and algorithm in the material
-2. **Maximum Depth**: Use all available tokens for thorough explanations, NOT practice questions
-3. **Worked Examples**: Provide an example for every concept/formula.
-   - In quantitative/technical domains use **numeric** examples with actual calculations,
-   - In qualitative domains use **anchored** examples (dates, names, quotes, cases).
-4. **Teach Directly**: Write as if teaching the student, not describing the document
-5. **Quality Standards**:
-   - Each concept: definition, extensive explanation (3-4 paragraphs), multiple concrete examples with calculations
-   - Each formula: full variable definitions, derivation steps, multiple worked examples, edge cases
-   - Each algorithm: purpose, step-by-step procedure, complexity analysis, implementation notes, common pitfalls
-
-OUTPUT REQUIREMENTS:
-- COMPREHENSIVE: Cover all major topics (minimum 3-5 sections)
-- DEEPLY DETAILED: Each concept needs extensive explanation with multiple examples
-- PRACTICAL: Include worked calculations, algorithm complexity, edge cases
-- COMPLETE: Formula sheet and glossary REQUIRED
-- NO PRACTICE QUESTIONS: Use that token budget for deeper explanations instead
-- JSON ONLY: Output pure JSON (no markdown, no extra text)
-
-EVRENSEL QUALITY RULES (UNIVERSAL, DOMAIN-AGNOSTIC):
-1. **Expression vs Pseudocode**: Keep `expression` as mathematical notation (e.g., f(x) = ax² + bx + c). Put pseudocode/algorithm steps into `pseudocode` or `notes` field.
-2. **Minor Themes Integration**: Do **not** create a separate "Additional Topics" section. Integrate overflow/minor themes as brief sub-concepts under the most relevant section.
-3. **Domain-Aware Examples**: 
-   - For quantitative domains (math, physics, CS, economics, stats): Ensure at least one numeric example per concept with actual numbers
-   - For qualitative domains (law, literature, history): Use anchored examples with dates, names, quotes
-   - Auto-detect domain and adapt accordingly
-4. **Citation Depth**: Include specific page_range or section_or_heading in citations for traceability
-5. **Tone**: Keep tone instructional, concise subheadings, avoid domain-specific verbosity unless detected
-
-⚠️ PRE-FINALIZATION SELF-CHECK:
-Before outputting, verify your work against your internal plan:
-✓ Did you cover all topics from your outline?
-✓ Does every formula have: expression (MATH ONLY) + variables + multiple worked examples?
-✓ Did you move any pseudocode from 'expression' to 'pseudocode' field?
-✓ Does every concept have at least 2-3 concrete examples (numeric for quant, anchored for qual)?
-✓ Did you include algorithm complexity analysis where applicable?
-✓ Does glossary have ≥10 substantive terms?
-✓ Is JSON structure complete and valid (all brackets closed)?
-✓ Did you use full token budget for depth (no practice questions)?
-✓ Did you include 'Additional Topics (Condensed)' section if needed?
-✓ Do citations have section_or_heading or page_range details?
-
-If any check fails, revise before output."""
+# Use the deep prompt system-wide
+SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP
 
 
 def get_chunk_summary_prompt(language: str = "en") -> str:
     """
     Prompt for summarizing individual chunks (MAP phase)
     Returns structured mini-JSON to preserve concept/formula/example separation
+    ENHANCED: Now includes few-shot examples for better quality
     """
     lang_instr = "Write in TURKISH." if language == "tr" else "Write in ENGLISH."
     
-    return f"""Extract structured knowledge from this course excerpt.
+    return f"""Extract COMPREHENSIVE, DEEPLY DETAILED knowledge from this course excerpt.
 
 {lang_instr}
+
+DEPTH REQUIREMENTS:
+- Each concept: Full explanation (200+ words), multiple worked examples
+- Each formula: Complete derivation + 2-3 numerical examples
+- DON'T SKIP ANYTHING: Include all topics, even if they seem minor
+
+{FEW_SHOT_EXAMPLES}
 
 OUTPUT AS VALID JSON (no markdown fences):
 
