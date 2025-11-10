@@ -776,14 +776,17 @@ def merge_summaries(
     additional_instructions: str = "",
     out_budget: int = 1500,
     domain: str = "general",
-    chunk_citations: List[Dict] = None
+    chunk_citations: List[Dict] = None,
+    original_text: str = ""  # NEW: For coverage validation
 ) -> str:
     """
     Merge structured chunk JSONs into final exam-ready summary (REDUCE phase)
     Now receives structured mini-JSONs from MAP phase
+    ENHANCED: Includes coverage validation to ensure no topics are skipped
     Returns final JSON string
     """
     import json
+    from app.utils.coverage_validator import validate_coverage, generate_coverage_report
     
     # Parse chunk JSONs and aggregate
     all_concepts = []
@@ -854,6 +857,39 @@ def merge_summaries(
             additional_instructions=additional_instructions or ""
         )
         print("[REDUCE] Two-stage REDUCE completed successfully ✓")
+        
+        # COVERAGE VALIDATION: Check if all topics are covered
+        if original_text:
+            print("[COVERAGE] Validating topic coverage...")
+            coverage_result = validate_coverage(original_text, result, min_coverage=0.85)
+            print(generate_coverage_report(coverage_result))
+            
+            # If coverage is insufficient, add missing topics and regenerate
+            if not coverage_result['passed'] and coverage_result['missing_topics']:
+                print(f"[COVERAGE] ⚠️  Coverage insufficient ({coverage_result['coverage_score']:.1%})")
+                print(f"[COVERAGE] Adding {len(coverage_result['missing_topics'])} missing topics...")
+                
+                # Create enhanced instructions with missing topics
+                missing_topics_str = ", ".join(coverage_result['missing_topics'][:10])
+                coverage_instructions = f"\n\n⚠️  CRITICAL: The following topics MUST be included but are currently missing: {missing_topics_str}"
+                if len(coverage_result['missing_topics']) > 10:
+                    coverage_instructions += f" (and {len(coverage_result['missing_topics']) - 10} more)"
+                coverage_instructions += "\n\nAdd these topics as new sections or integrate them into existing relevant sections. DO NOT skip any of them."
+                
+                # Regenerate with coverage fix (one retry only)
+                enhanced_instructions = (additional_instructions or "") + coverage_instructions
+                print("[COVERAGE] Regenerating with missing topics...")
+                result = reduce_two_stage(
+                    aggregated_knowledge=aggregated_knowledge,
+                    language=language,
+                    domain=domain,
+                    out_cap=out_budget,
+                    additional_instructions=enhanced_instructions
+                )
+                print("[COVERAGE] ✓ Regeneration complete")
+            else:
+                print(f"[COVERAGE] ✅ Coverage validated ({coverage_result['coverage_score']:.1%})")
+        
         # Return as JSON string (for compatibility with existing pipeline)
         return json.dumps(result, ensure_ascii=False, indent=2)
     
@@ -1000,7 +1036,7 @@ def map_reduce_summary(
             "char_end": sum(len(chunks[j]) for j in range(i+1))
         })
     
-    # 4. REDUCE: Merge into final JSON with citation tracking
+    # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
     print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
     final_summary = merge_summaries(
         chunk_summaries,
@@ -1008,7 +1044,8 @@ def map_reduce_summary(
         additional_instructions=enhanced_instructions,
         out_budget=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
         domain=domain,
-        chunk_citations=chunk_citations
+        chunk_citations=chunk_citations,
+        original_text=full_text  # Pass original text for coverage validation
     )
     
     print("[MAP-REDUCE] Complete!")
