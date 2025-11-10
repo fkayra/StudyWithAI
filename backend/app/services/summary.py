@@ -228,27 +228,17 @@ LANGUAGE
 
 BRIEFING STRUCTURE (MANDATORY):
 
-1. **EXECUTIVE SUMMARY** (3-5 bullet points)
-   - Most critical takeaways upfront
-   - Key findings, conclusions, or insights
-   - Must be standalone (decision-makers may only read this)
-   - Each bullet: 1-2 sentences maximum
-
-2. **MAIN THEMES** (4-8 themed sections)
+1. **MAIN SECTIONS** (as many as needed)
    - Organize by major themes/topics
    - Each theme = own section with clear heading
+   - Create enough sections to cover ALL material thoroughly
    - Within each section:
      • Core concept/finding
      • Supporting evidence (data, examples, specifics)
      • Analysis (what it means, implications)
-     • Connections to other themes (if relevant)
    - Use bullet points for scannability
    - Include concrete details: numbers, dates, names, cases
-
-3. **KEY INSIGHTS** (3-5 major conclusions)
-   - Synthesize across themes
-   - Main conclusions from the analysis
-   - Patterns, trends, implications
+   - Let content determine section count naturally
 
 OUTPUT REQUIREMENTS:
 - Specific and concrete: Include numbers, dates, names, data points
@@ -264,21 +254,19 @@ MINDSET CHECK:
 If NO → Add specificity, evidence, and synthesis.
 
 PLANNING (internal, before output):
-1) Identify 4-8 main themes from all chunks
+1) Identify ALL main themes from all chunks
 2) Synthesize evidence under each theme
-3) Extract 3-5 overarching insights
-4) Prioritize most critical information for executive summary
+3) Create as many sections as needed for complete coverage
+4) Omit empty fields to save tokens
 
-OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
+OUTPUT EXACTLY THIS JSON SCHEMA:
 {{
   "summary": {{
-    "title": "Briefing: <topic>",
-    "executive_summary": [
-      "Critical takeaway 1 (1-2 sentences with specific evidence)",
-      "Critical takeaway 2 (1-2 sentences with specific evidence)",
-      "Critical takeaway 3...",
-      "Critical takeaway 4...",
-      "Critical takeaway 5 (optional)"
+    "title": "Study Notes: <topic>",
+    "overview": "<2-4 sentences on scope and key topics covered>",
+    "learning_objectives": [
+      "Learning outcome 1",
+      "Learning outcome 2"
     ],
     "sections": [
       {{
@@ -288,22 +276,14 @@ OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
             "term": "<Key concept/finding>",
             "definition": "<Concise definition or statement>",
             "explanation": "<Analysis with evidence: what it means, why it matters, implications. Include specific data, examples, cases. 2-3 focused paragraphs>",
-            "example": "<Optional: Specific case study or concrete example with details>",
-            "key_points": ["<Bullet 1>", "<Bullet 2>", "<Bullet 3>"],
-            "pitfalls": ["<Optional: Limitations, caveats, or important notes>"]
-          }},
-          {{
-            "term": "<Additional concept under this theme>",
-            "definition": "<Brief definition>",
-            "key_points": ["<critical fact>"]
+            "example": "<Specific case study or concrete example with details - OMIT if none>",
+            "key_points": ["<Bullet 1>", "<Bullet 2>"],
+            "pitfalls": ["<Common mistake or limitation - OMIT if none>"],
+            "when_to_use": ["<Application condition - OMIT if none>"],
+            "limitations": ["<Edge case or constraint - OMIT if none>"]
           }}
         ]
       }}
-    ],
-    "key_insights": [
-      "Overarching insight 1 synthesizing across themes",
-      "Main conclusion 2 with implications",
-      "Pattern or trend 3 identified from analysis"
     ],
     "formula_sheet": [
       {{
@@ -324,26 +304,33 @@ OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
   ]
 }}
 
+CRITICAL TOKEN OPTIMIZATION RULES:
+⚠️ OMIT empty fields entirely (not empty arrays, just don't include the key):
+  - If no example → don't include "example" field
+  - If no pitfalls → don't include "pitfalls" field
+  - If no when_to_use → don't include "when_to_use" field
+  - If no limitations → don't include "limitations" field
+  - If no formula_sheet → don't include "formula_sheet" field
+  
+This saves thousands of tokens! Only include fields with actual content.
+
 QUALITY & COMPLETENESS RULES:
-- Executive summary MUST capture the 3-5 most critical takeaways
-- All major themes covered in dedicated sections (4-8 sections typical)
+- All major themes covered in dedicated sections (create as many as needed)
 - Evidence-based: Include specific data, numbers, dates, names, cases
 - Formula_sheet (if applicable): Include key formulas/methods with:
   ✓ expression = MATH NOTATION
   ✓ variables = symbol meanings
-  ✓ brief worked example if relevant
+  ✓ worked_example if relevant (OMIT if not applicable)
   ✓ pseudocode only for algorithms
-- Glossary: 15-25 essential terms
-- Remove empty fields; validate JSON (no trailing commas, balanced braces)
+- Glossary: As many essential terms as needed
+- Validate JSON (no trailing commas, balanced braces)
 
 VALIDATION CHECKLIST (before output):
-✓ Executive summary captures most critical insights
 ✓ Each section has clear theme with supporting evidence
-✓ Key insights synthesize across themes
 ✓ Claims are specific and concrete (not vague)
 ✓ Citations reference source material
-✓ Tone is objective, analytical, professional
-✓ Would satisfy a demanding executive or reviewer
+✓ NO EMPTY ARRAYS/OBJECTS (omit the field entirely)
+✓ Only include fields that have actual content
 
 OUTPUT PURE JSON NOW (no other text):"""
 

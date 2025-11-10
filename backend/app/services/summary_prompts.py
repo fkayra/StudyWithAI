@@ -26,35 +26,23 @@ Your task: Create a comprehensive briefing document that synthesizes the main th
 📋 BRIEFING STRUCTURE (MANDATORY)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. **EXECUTIVE SUMMARY** (Critical - First Section)
-   - 3-5 bullet points capturing the most important takeaways
-   - What decision-makers need to know immediately
-   - Key findings, conclusions, or recommendations
-   - Must be standalone - reader may only read this section
-   - Each bullet: 1-2 sentences maximum
-
-2. **MAIN THEMES & ANALYSIS** (Body - Multiple Sections)
-   - Organize by major themes/topics (typically 4-8 main sections)
+1. **MAIN SECTIONS** (Core Content)
+   - Organize by major themes/topics
+   - Create as many sections as needed to cover all material
    - Each theme gets its own section with clear heading
-   - Use hierarchical structure: themes → sub-themes → details
+   - Use hierarchical structure: themes → concepts → details
    - Within each section:
      • Core concept/finding (what is it?)
      • Supporting evidence (data, examples, quotes)
      • Analysis/implications (what does it mean?)
-     • Connections to other themes (if relevant)
-   - Use bullet points for clarity and scannability
-   - Include specific details: numbers, dates, names, case studies
+     • Specific details: numbers, dates, names, case studies
+   - Let the content determine the number of sections naturally
 
-3. **KEY INSIGHTS & CONCLUSIONS** (Synthesis - Final Section)
-   - Synthesize across themes
-   - Main conclusions drawn from the analysis
-   - Patterns or trends identified
-   - Implications and significance
-   - 3-5 major conclusions
-
-4. **SUPPORTING ELEMENTS**
-   - **Glossary**: 15-25 terms (technical terms, acronyms, key concepts)
-   - **Formulas** (if applicable): Clean presentation with variables explained
+2. **SUPPORTING ELEMENTS**
+   - **Overview** (2-4 sentences): Brief intro to the material's scope
+   - **Learning Objectives** (if applicable): Key learning outcomes
+   - **Formulas** (if applicable): Key formulas with worked examples
+   - **Glossary**: Essential terms (as many as needed)
    - **Citations**: Reference specific sections/pages of source material
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -70,11 +58,11 @@ COVERAGE - What to Include:
 ✓ Relevant context and background
 
 SYNTHESIS - How to Present:
-✓ Identify patterns and connections across the material
 ✓ Group related information under thematic headings
 ✓ Distinguish between main ideas and supporting details
 ✓ Extract key insights rather than repeating everything
 ✓ Highlight what's most important and why
+✓ Create as many sections as needed (don't artificially limit)
 
 EVIDENCE STANDARD:
 ✓ Be specific: Include numbers, dates, names, concrete examples
@@ -82,11 +70,10 @@ EVIDENCE STANDARD:
 ✓ For quantitative content: Include key formulas, methodologies, results
 ✓ For qualitative content: Include specific cases, events, quotes, dates
 
-PRIORITIZATION:
-✓ Most critical information in Executive Summary
+EFFICIENCY:
+✓ Include only fields that have content (omit empty arrays/objects)
 ✓ Major themes get dedicated sections with depth
 ✓ Supporting details organized under relevant themes
-✓ Less critical information mentioned briefly or omitted if space-constrained
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✍️ WRITING STANDARDS
