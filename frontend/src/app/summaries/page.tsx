@@ -34,12 +34,27 @@ interface Formula {
   complexity?: string  // New: Big-O notation
 }
 
-interface GlossaryTerm {
-  term: string
-  definition: string
+interface Diagram {
+  title: string
+  description: string
+  content: string
+  type: string
 }
 
-// ExamPractice interface removed - no longer part of schema
+interface Pseudocode {
+  name: string
+  code: string
+  explanation: string
+  example_trace?: string
+}
+
+interface PracticeProblem {
+  problem: string
+  difficulty: string
+  solution: string
+  steps: string[]
+  key_concepts: string[]
+}
 
 interface Summary {
   title: string
@@ -47,8 +62,9 @@ interface Summary {
   learning_objectives?: string[]
   sections: Section[]
   formula_sheet?: Formula[]
-  glossary?: GlossaryTerm[]
-  // exam_practice removed - no longer generated
+  diagrams?: Diagram[]
+  pseudocode?: Pseudocode[]
+  practice_problems?: PracticeProblem[]
 }
 
 interface Coverage {
@@ -576,7 +592,9 @@ export default function SummariesPage() {
     const totalConcepts = summary.sections?.reduce((acc, s) => acc + (s.concepts?.length || 0), 0) || 0
     const totalBullets = summary.sections?.reduce((acc, s) => acc + (s.bullets?.length || 0), 0) || 0
     const totalFormulas = Array.isArray(summary.formula_sheet) ? summary.formula_sheet.length : 0
-    const totalGlossary = Array.isArray(summary.glossary) ? summary.glossary.length : 0
+    const totalDiagrams = Array.isArray(summary.diagrams) ? summary.diagrams.length : 0
+    const totalPseudocode = Array.isArray(summary.pseudocode) ? summary.pseudocode.length : 0
+    const totalPractice = Array.isArray(summary.practice_problems) ? summary.practice_problems.length : 0
     
     // console.log('Render - Stats calculated:', { totalConcepts, totalBullets, totalFormulas, totalGlossary })
     // console.log('Render - Normalized sections:', summary.sections)
@@ -614,12 +632,12 @@ export default function SummariesPage() {
                 <div className="text-2xl font-bold text-slate-100">{totalConcepts || totalBullets}</div>
               </div>
               <div className="p-4 bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/30 rounded-xl">
-                <div className="text-blue-400 text-sm font-medium mb-1">Formulas</div>
-                <div className="text-2xl font-bold text-slate-100">{totalFormulas}</div>
+                <div className="text-blue-400 text-sm font-medium mb-1">Diagrams</div>
+                <div className="text-2xl font-bold text-slate-100">{totalDiagrams}</div>
               </div>
-              <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 rounded-xl">
-                <div className="text-emerald-400 text-sm font-medium mb-1">Terms</div>
-                <div className="text-2xl font-bold text-slate-100">{totalGlossary}</div>
+              <div className="p-4 bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/30 rounded-xl">
+                <div className="text-purple-400 text-sm font-medium mb-1">Practice</div>
+                <div className="text-2xl font-bold text-slate-100">{totalPractice}</div>
               </div>
             </div>
           </div>
@@ -820,18 +838,101 @@ export default function SummariesPage() {
             </div>
           )}
 
-          {/* Glossary */}
-          {summary.glossary && summary.glossary.length > 0 && (
+          {/* Diagrams */}
+          {summary.diagrams && summary.diagrams.length > 0 && (
             <div className="glass-card mt-8 animate-scale-in">
               <div className="flex items-center gap-3 mb-6">
-                <div className="text-3xl">📖</div>
-                <h2 className="text-2xl font-semibold text-slate-100">Glossary</h2>
+                <div className="text-3xl">📊</div>
+                <h2 className="text-2xl font-semibold text-slate-100">Visual Diagrams</h2>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {summary.glossary.map((term, idx) => (
-                  <div key={idx} className="p-4 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/30 rounded-xl hover:border-emerald-500/50 transition-all">
-                    <div className="font-semibold text-emerald-300 mb-1">{term.term}</div>
-                    <div className="text-sm text-slate-300"><MathText text={term.definition} /></div>
+              <div className="space-y-6">
+                {summary.diagrams.map((diagram, idx) => (
+                  <div key={idx} className="p-6 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/30 rounded-xl hover:border-blue-500/50 transition-all">
+                    <div className="font-semibold text-blue-300 mb-2 text-lg">{diagram.title}</div>
+                    <div className="text-sm text-slate-400 mb-4 italic">{diagram.description}</div>
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 font-mono text-sm text-slate-300 whitespace-pre-wrap overflow-x-auto">
+                      {diagram.content}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">Type: {diagram.type}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pseudocode */}
+          {summary.pseudocode && summary.pseudocode.length > 0 && (
+            <div className="glass-card mt-8 animate-scale-in">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="text-3xl">💻</div>
+                <h2 className="text-2xl font-semibold text-slate-100">Pseudocode Examples</h2>
+              </div>
+              <div className="space-y-6">
+                {summary.pseudocode.map((pseudo, idx) => (
+                  <div key={idx} className="p-6 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 rounded-xl hover:border-emerald-500/50 transition-all">
+                    <div className="font-semibold text-emerald-300 mb-3 text-lg">{pseudo.name}</div>
+                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 font-mono text-sm text-slate-300 whitespace-pre-wrap overflow-x-auto mb-4">
+                      {pseudo.code}
+                    </div>
+                    <div className="text-sm text-slate-400 mb-3">
+                      <span className="font-semibold text-teal-400">Explanation:</span> {pseudo.explanation}
+                    </div>
+                    {pseudo.example_trace && (
+                      <div className="p-3 bg-teal-500/10 border border-teal-500/30 rounded-lg">
+                        <div className="text-xs text-teal-400 font-semibold mb-1">Example Trace:</div>
+                        <div className="text-sm text-slate-300 font-mono">{pseudo.example_trace}</div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Practice Problems */}
+          {summary.practice_problems && summary.practice_problems.length > 0 && (
+            <div className="glass-card mt-8 animate-scale-in">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="text-3xl">🎯</div>
+                <h2 className="text-2xl font-semibold text-slate-100">Practice Problems</h2>
+              </div>
+              <div className="space-y-6">
+                {summary.practice_problems.map((problem, idx) => (
+                  <div key={idx} className="p-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl hover:border-purple-500/50 transition-all">
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="px-3 py-1 bg-purple-500/20 border border-purple-500/40 rounded-full text-xs font-semibold text-purple-300 uppercase">
+                        {problem.difficulty}
+                      </span>
+                      <span className="text-slate-500 text-sm">Problem {idx + 1}</span>
+                    </div>
+                    <div className="mb-4 text-slate-200 leading-relaxed">
+                      <span className="font-semibold text-purple-300">Problem:</span> <MathText text={problem.problem} />
+                    </div>
+                    <div className="mb-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                      <div className="font-semibold text-pink-300 mb-2">Solution Steps:</div>
+                      <ol className="space-y-2">
+                        {problem.steps.map((step, sIdx) => (
+                          <li key={sIdx} className="flex items-start text-sm text-slate-300">
+                            <span className="flex-shrink-0 w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center mr-3 text-xs font-bold text-purple-300">
+                              {sIdx + 1}
+                            </span>
+                            <span className="flex-1"><MathText text={step} /></span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                    <div className="mb-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                      <div className="text-sm text-purple-300 font-semibold mb-1">Final Answer:</div>
+                      <div className="text-slate-200"><MathText text={problem.solution} /></div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs text-slate-500">Key Concepts:</span>
+                      {problem.key_concepts.map((concept, cIdx) => (
+                        <span key={cIdx} className="px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded text-xs text-purple-300">
+                          {concept}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

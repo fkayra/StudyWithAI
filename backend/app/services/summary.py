@@ -135,7 +135,7 @@ def detect_domain(text: str) -> str:
 def quality_score_legacy(result: dict) -> float:
     """
     Calculate quality score (0.0-1.0) based on content depth and richness.
-    Focus: concept depth, formula completeness, examples, glossary (NO practice questions)
+    Focus: concept depth, formula completeness, examples, diagrams, pseudocode, practice problems
     """
     try:
         s = result.get("summary", {})
@@ -167,29 +167,33 @@ def quality_score_legacy(result: dict) -> float:
         # Count formulas and check completeness
         formulas = s.get("formula_sheet", [])
         num_formulas = len(formulas)
-        formulas_with_derivation = sum(1 for f in formulas if f.get("derivation_steps") or "deriv" in f.get("notes", "").lower())
-        formulas_with_examples = sum(1 for f in formulas if f.get("worked_examples") or "example" in f.get("notes", "").lower())
+        formulas_with_examples = sum(1 for f in formulas if f.get("worked_example") or "example" in f.get("notes", "").lower())
         
-        # Count glossary terms
-        num_glossary = len(s.get("glossary", []))
+        # Count new interactive features
+        num_diagrams = len(s.get("diagrams", []))
+        num_pseudocode = len(s.get("pseudocode", []))
+        num_practice = len(s.get("practice_problems", []))
         
-        # Calculate weighted score (depth-focused)
+        # Calculate weighted score (depth + interactivity)
         concept_depth_score = min((avg_explanation_length / 400), 1.0)  # 400 chars = good depth
         example_richness_score = min(avg_examples_per_concept / 2.0, 1.0)  # 2 examples per concept = target
         formula_completeness_score = formulas_with_examples / max(num_formulas, 1) if num_formulas > 0 else 0.5
-        glossary_score = min(num_glossary / 10, 1.0)  # 10 terms = target
+        diagrams_score = min(num_diagrams / 3, 1.0)  # 3 diagrams = target
+        pseudocode_score = min(num_pseudocode / 2, 1.0)  # 2 pseudocode = target
+        practice_score = min(num_practice / 4, 1.0)  # 4 practice problems = target
         
         score = (
-            concept_depth_score * 0.30 +        # 30% for explanation depth
-            example_richness_score * 0.30 +     # 30% for example richness
-            formula_completeness_score * 0.25 + # 25% for formula completeness
-            glossary_score * 0.15               # 15% for glossary
+            concept_depth_score * 0.25 +        # 25% for explanation depth
+            example_richness_score * 0.20 +     # 20% for example richness
+            formula_completeness_score * 0.15 + # 15% for formula completeness
+            diagrams_score * 0.15 +             # 15% for visual diagrams
+            pseudocode_score * 0.10 +           # 10% for pseudocode
+            practice_score * 0.15               # 15% for practice problems
         )
         
         print(f"[QUALITY SCORE] Concepts: {num_concepts}, Avg explanation: {int(avg_explanation_length)} chars, "
-              f"Avg examples/concept: {avg_examples_per_concept:.1f}, Formulas: {num_formulas} "
-              f"(derivation: {formulas_with_derivation}, examples: {formulas_with_examples}), "
-              f"Glossary: {num_glossary}, Score: {score:.2f}")
+              f"Avg examples/concept: {avg_examples_per_concept:.1f}, Formulas: {num_formulas} (examples: {formulas_with_examples}), "
+              f"Diagrams: {num_diagrams}, Pseudocode: {num_pseudocode}, Practice: {num_practice}, Score: {score:.2f}")
         
         return round(score, 2)
     except Exception as e:
@@ -247,7 +251,9 @@ OUTPUT REQUIREMENTS:
 - Comprehensive: Use available token budget fully (aim for max_output_cap)
 - Don't be unnecessarily brief - depth matters
 - Include pitfalls, when_to_use, limitations where applicable
-- AT LEAST 15-25 glossary terms
+- AT LEAST 2-4 diagrams (visualizations, flowcharts, trees)
+- AT LEAST 2-3 pseudocode examples for algorithms/procedures
+- AT LEAST 3-5 practice problems with full solutions
 - No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
 
 MINDSET CHECK:
@@ -260,9 +266,12 @@ PLANNING (internal, before output):
 1) Identify ALL main themes from all chunks
 2) Create AT LEAST 6 sections (aim for 8-12 for rich material)
 3) For each section: AT LEAST 2-3 concepts with depth
-4) Aim to use available token budget (you have 12,000-16,000 tokens available)
-5) Include pitfalls, when_to_use, limitations when you have info
-6) Omit fields only if genuinely no content (don't be lazy)
+4) Create 2-4 diagrams (trees, flowcharts, hierarchies for complex concepts)
+5) Create 2-3 pseudocode examples (for algorithms/procedures)
+6) Create 3-5 practice problems with full solutions (varying difficulty)
+7) Aim to use available token budget (you have 12,000-16,000 tokens available)
+8) Include pitfalls, when_to_use, limitations when you have info
+9) Omit fields only if genuinely no content (don't be lazy)
 
 OUTPUT EXACTLY THIS JSON SCHEMA:
 {{
@@ -305,8 +314,30 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
         "notes": "<when it applies, constraints, complexity>"
       }}
     ],
-    "glossary": [
-      {{"term": "<term>", "definition": "<one-line, testable definition>"}}
+    "diagrams": [
+      {{
+        "title": "<Diagram title>",
+        "description": "<What this diagram shows>",
+        "content": "<ASCII art, tree structure, or Mermaid syntax>",
+        "type": "tree|flowchart|graph|hierarchy"
+      }}
+    ],
+    "pseudocode": [
+      {{
+        "name": "<Algorithm/Procedure name>",
+        "code": "<Step-by-step pseudocode with proper indentation>",
+        "explanation": "<What it does, when to use, complexity>",
+        "example_trace": "<Optional: trace through with example input>"
+      }}
+    ],
+    "practice_problems": [
+      {{
+        "problem": "<Full problem statement>",
+        "difficulty": "easy|medium|hard",
+        "solution": "<Complete solution>",
+        "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
+        "key_concepts": ["<Concept 1>", "<Concept 2>"]
+      }}
     ]
   }},
   "citations": [
@@ -320,7 +351,9 @@ DEPTH & COMPREHENSIVENESS REQUIREMENTS:
 ✓ Each concept explanation: 150-250 words
 ✓ Include examples where applicable (don't leave blank)
 ✓ Include pitfalls, when_to_use, limitations where you have information
-✓ Glossary: AT LEAST 15-25 terms
+✓ Diagrams: AT LEAST 2-4 visual representations
+✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
+✓ Practice Problems: AT LEAST 3-5 with full solutions
 ✓ Use available token budget (12,000-16,000 tokens available)
 ✓ Don't be unnecessarily brief - fill the space with quality content
 
@@ -359,7 +392,9 @@ VALIDATION CHECKLIST (before output):
 ✓ AT LEAST 6 sections created
 ✓ Each section has 2-3+ concepts
 ✓ Each concept: 150-250 word explanation
-✓ Glossary has 15-25+ terms
+✓ Diagrams: 2-4+ visual representations
+✓ Pseudocode: 2-3+ algorithm examples (if applicable)
+✓ Practice Problems: 3-5+ with full solutions
 ✓ Claims are specific and concrete (not vague)
 ✓ Citations reference source material
 ✓ Used available token budget effectively (not unnecessarily brief)
@@ -403,7 +438,9 @@ Constraints:
   • numeric → real numbers + step-by-step calculation
   • anchored → specific dates/names/cases
 - Each formula → expression (MATH ONLY), variables dict, ≥1 numeric worked_example, optional pseudocode, notes.
-- Glossary ≥ 15 terms.
+- Diagrams: 2-4 visual representations (trees, flowcharts, hierarchies).
+- Pseudocode: 2-3 algorithm examples (if applicable).
+- Practice Problems: 3-5 with full solutions (varying difficulty).
 - Provide citations for each main section and formula sheet.
 - If the outline missed some themes, you MAY add concise sub-concepts, but avoid unnecessary padding.
 - Output single valid JSON, no markdown.
@@ -419,12 +456,13 @@ def get_no_files_prompt(topic: str, language: str = "en") -> str:
 
 {lang_instr}
 
-Use the same JSON structure as file-based summaries. Focus on depth, NOT practice questions:
+Use the same JSON structure as file-based summaries:
 - Learning objectives
 - Core concepts with extensive explanations (3-4 paragraphs) and multiple worked examples
 - Formula sheet with derivations and worked examples (if applicable)
-- Glossary of key terms (minimum 10 terms)
-- DO NOT include practice questions - use all tokens for explanations and examples
+- Diagrams (2-4 visual representations)
+- Pseudocode examples (2-3 if algorithms present)
+- Practice problems (3-5 with full solutions)
 
 Output valid JSON only (no markdown code blocks)."""
 
@@ -558,10 +596,17 @@ def validate_reduce_output(result: dict) -> list:
         elif not re.search(r'\d', worked_example):  # Must contain numeric calculation
             issues.append(f"Formula '{fname}' worked_example must include numeric calculation")
     
-    # Check glossary
-    glossary = summary.get("glossary", [])
-    if len(glossary) < 15:
-        issues.append(f"Glossary too short ({len(glossary)} terms), expected ≥15")
+    # Check new interactive features
+    diagrams = summary.get("diagrams", [])
+    pseudocode = summary.get("pseudocode", [])
+    practice_problems = summary.get("practice_problems", [])
+    
+    if len(diagrams) < 2:
+        issues.append(f"Diagrams too few ({len(diagrams)}), expected ≥2")
+    if len(pseudocode) < 1:  # More lenient since not all topics have algorithms
+        issues.append(f"Pseudocode examples missing or too few ({len(pseudocode)}), expected ≥1")
+    if len(practice_problems) < 3:
+        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥3")
     
     return issues
 
@@ -594,8 +639,10 @@ REQUIREMENTS (APPLY GENERALLY):
    - variables must explain every symbol.
    - worked_example must include real numeric calculation steps.
 
-3) Glossary requirement:
-   - Glossary must contain at least 15 distinct terms total (expand if needed).
+3) Interactive feature requirements:
+   - Diagrams: Must have at least 2 visual representations (trees, flowcharts, hierarchies, graphs).
+   - Pseudocode: Must have at least 1-2 algorithm examples (if applicable to the material).
+   - Practice Problems: Must have at least 3 problems with full solutions and step-by-step explanations.
 
 4) Citations requirement:
    - Each top-level section must include at least one citation with section_or_heading and page_range based on the source.
