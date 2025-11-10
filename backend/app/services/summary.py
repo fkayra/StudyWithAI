@@ -959,14 +959,21 @@ def merge_summaries(
                 print(f"[COVERAGE] ✅ Coverage validated ({coverage_result['coverage_score']:.1%})")
             
             # Add coverage info to result for frontend display
+            # CRITICAL: result is a JSON string, need to parse it first!
             if coverage_result['missing_topics']:
-                result['coverage'] = {
-                    'score': round(coverage_result['coverage_score'], 2),
-                    'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
-                }
+                try:
+                    result_dict = json.loads(result) if isinstance(result, str) else result
+                    result_dict['coverage'] = {
+                        'score': round(coverage_result['coverage_score'], 2),
+                        'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
+                    }
+                    result = json.dumps(result_dict, ensure_ascii=False, indent=2)
+                    print(f"[COVERAGE] ✅ Added {len(coverage_result['missing_topics'][:20])} missing topics to frontend display")
+                except Exception as e:
+                    print(f"[COVERAGE] ⚠️  Failed to add coverage info: {e}")
         
         # Return as JSON string (for compatibility with existing pipeline)
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return json.dumps(result, ensure_ascii=False, indent=2) if not isinstance(result, str) else result
     
     except Exception as e:
         print(f"[REDUCE TWO-STAGE FALLBACK] Error in two-stage REDUCE: {e}")
