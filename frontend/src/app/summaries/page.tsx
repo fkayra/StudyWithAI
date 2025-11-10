@@ -807,7 +807,17 @@ export default function SummariesPage() {
                     {formula.variables && (
                       <div className="text-sm text-slate-300 mb-2">
                         <span className="text-purple-400 font-semibold">Variables: </span>
-                        {typeof formula.variables === 'string' ? formula.variables : JSON.stringify(formula.variables)}
+                        {typeof formula.variables === 'string' ? (
+                          <MathText text={formula.variables} />
+                        ) : (
+                          <span className="space-y-1">
+                            {Object.entries(formula.variables).map(([key, value]) => (
+                              <div key={key} className="ml-2">
+                                <MathText text={`${key}: ${value}`} />
+                              </div>
+                            ))}
+                          </span>
+                        )}
                       </div>
                     )}
                     
