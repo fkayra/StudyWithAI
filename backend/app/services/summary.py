@@ -28,32 +28,29 @@ SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP
 
 def get_chunk_summary_prompt(language: str = "en") -> str:
     """
-    Prompt for extracting complete study material from chunks (MAP phase)
-    NOT summarizing - TEACHING and EXPLAINING fully
+    Prompt for extracting key information from chunks (MAP phase)
+    Focus on identifying main themes, evidence, concepts for synthesis
     Returns structured mini-JSON to preserve concept/formula/example separation
     """
     lang_instr = "Write in TURKISH." if language == "tr" else "Write in ENGLISH."
     
-    return f"""You are creating COMPLETE STUDY MATERIAL from this course excerpt (NOT a summary).
-
-⚠️  CRITICAL: This is NOT a summary. Extract and EXPAND all knowledge into complete, exam-ready notes.
+    return f"""You are analyzing a document excerpt to extract key information for a professional briefing.
 
 {lang_instr}
 
-YOUR MISSION:
-- TEACH each concept fully (as if writing a textbook chapter)
-- EXPLAIN every detail (students will study from this alone)
-- EXPAND on the material (add context, examples, explanations)
-- Include ALL information (nothing should be omitted)
+YOUR TASK:
+Extract the main themes, concepts, evidence, and findings from this excerpt. Focus on:
+- Core concepts and their significance
+- Key data points, statistics, evidence
+- Important formulas, methodologies, frameworks (if present)
+- Notable conclusions or findings
+- Specific examples with concrete details
 
-DEPTH REQUIREMENTS (Efficient but Complete):
-- Each concept: Clear explanation (200-250 words), 2-3 quality worked examples
-- Each formula: Key derivation steps + 2 step-by-step numerical examples  
-- Each theorem: Essential proof elements + applications + when to use
-- DON'T SKIP ANYTHING: Include all topics efficiently
-- Mention key prerequisites briefly
-
-MINDSET: "Could a student learn this topic from my output alone, efficiently?"
+OUTPUT REQUIREMENTS:
+- Be specific: Include numbers, dates, names, concrete details
+- Focus on substance: Extract what matters, not background fluff
+- Maintain objectivity: Present information, not opinions
+- Preserve technical accuracy: Formulas, terms, methodologies must be exact
 
 {FEW_SHOT_EXAMPLES}
 
@@ -94,10 +91,10 @@ OUTPUT AS VALID JSON (no markdown fences):
 }}
 
 RULES:
-- Include ALL concepts, formulas, theorems, and worked examples from the text
-- NO meta-commentary ("this text discusses...") - extract direct knowledge
-- If a category (formulas/theorems/examples) is absent, **omit that field** entirely (do not return empty arrays)
-- Every formula MUST have worked_example with actual numbers
+- Extract main concepts, formulas, and examples from this excerpt
+- Be specific and concrete (numbers, dates, names, data)
+- Omit fields that are absent (no empty arrays)
+- For formulas: include expression and brief explanation
 - Output ONLY valid JSON, no extra text"""
 
 
@@ -202,8 +199,8 @@ def quality_score_legacy(result: dict) -> float:
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
-    REDUCE phase: Merge all chunk knowledge into complete exam preparation material
-    NOT a summary - COMPLETE STUDY GUIDE that replaces original document
+    REDUCE phase: Synthesize all chunks into professional briefing document
+    Focus on main themes, evidence, insights - NOT comprehensive tutorial
     """
     lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
@@ -211,99 +208,102 @@ def get_final_merge_prompt(language: str = "en", additional_instructions: str = 
     # Domain-specific guidance
     domain_guidance = ""
     if domain == "technical":
-        domain_guidance = "\n- NUMERIC EXAMPLES REQUIRED: Include actual numbers, complete calculations, and step-by-step solutions (300+ words per example)."
+        domain_guidance = "\n- For technical content: Include key formulas, methodologies, and quantitative evidence (numbers, benchmarks, metrics)."
     elif domain == "social":
-        domain_guidance = "\n- ANCHORED EXAMPLES REQUIRED: Include dates, names, quotes, and specific historical/case references with full context (300+ words per example)."
+        domain_guidance = "\n- For social/policy content: Include specific cases, dates, names, quotes, and empirical evidence."
     else:
-        domain_guidance = "\n- CONCRETE EXAMPLES: Use numeric or anchored examples as appropriate to the domain (300+ words per example)."
+        domain_guidance = "\n- Include concrete evidence: data points, specific examples, case studies as appropriate."
 
     return f"""🎯 PRIMARY GOAL
-Create COMPLETE EXAM PREPARATION NOTES from the provided material.
+Create a comprehensive BRIEFING DOCUMENT that synthesizes the main themes and ideas from the material.
 
-⚠️  CRITICAL: You are NOT creating a summary. You are creating a COMPLETE STUDY GUIDE that:
-- REPLACES the original material entirely
-- Is the ONLY thing students will use to prepare for their exam
-- Must be MORE comprehensive and detailed than the original
-- Should teach concepts from scratch
-
-Students will NEVER see the original document - only your notes.
-Therefore: EXPAND, don't condense. TEACH, don't summarize. EXPLAIN, don't abbreviate.
+⚠️ CRITICAL: This is an EXECUTIVE BRIEFING, not a textbook or tutorial. Your audience:
+- Needs rapid comprehension of key themes and conclusions
+- Values evidence-based analysis over exhaustive explanation
+- Expects synthesis and insight, not repetition
+- Requires professional, objective, incisive presentation
 
 LANGUAGE
 {lang_instr}
 
-OUTPUT FORMAT
-- Single pass, one comprehensive JSON object
-- No markdown fences, no meta commentary
-- Valid JSON with proper escaping
+BRIEFING STRUCTURE (MANDATORY):
 
-WHAT TO INCLUDE (Complete but Efficient):
-- ✓ Every concept with clear 200-300 word explanations
-- ✓ Every formula with key steps and 2 worked examples
-- ✓ Every algorithm with one complete walkthrough
-- ✓ Key prerequisites mentioned briefly
-- ✓ 2-3 quality examples per concept (100-150 words each)
-- ✓ Important mistakes and edge cases
-- ✓ Key applications mentioned
+1. **EXECUTIVE SUMMARY** (3-5 bullet points)
+   - Most critical takeaways upfront
+   - Key findings, conclusions, or insights
+   - Must be standalone (decision-makers may only read this)
+   - Each bullet: 1-2 sentences maximum
 
-WHAT TO EXCLUDE:
-- ❌ Practice questions (use that space for deeper explanations instead)
-- ❌ Vague phrases like "for example, consider..." without concrete examples
-- ❌ Generic statements without supporting detail
-- ❌ Empty arrays (if you can't populate meaningfully, omit the field){domain_guidance}{additional}
+2. **MAIN THEMES** (4-8 themed sections)
+   - Organize by major themes/topics
+   - Each theme = own section with clear heading
+   - Within each section:
+     • Core concept/finding
+     • Supporting evidence (data, examples, specifics)
+     • Analysis (what it means, implications)
+     • Connections to other themes (if relevant)
+   - Use bullet points for scannability
+   - Include concrete details: numbers, dates, names, cases
 
-MINDSET CHECK - Before starting, ask yourself:
-"If a student studied ONLY from my notes (never seeing the original), could they:
- - Understand all concepts from scratch?
- - Solve exam problems independently?
- - Pass a comprehensive final exam?"
-
-If ANY answer is NO → You need MORE depth, MORE examples, MORE explanation.
-
-SILENT PLANNING (do internally before writing):
-1) Identify **all** themes/topics in the material and rank by centrality.
-2) Allocate depth to top themes (FULL sections) and compress minor themes (SHORT sections).
-3) Do **not** drop any theme; if budget is tight, include a SHORT section (1 concise concept) instead of omitting.
-4) Scale number of sections with content size. MIN ≥ 4 full sections; aim 6–12 total if material is broad.
+3. **KEY INSIGHTS** (3-5 major conclusions)
+   - Synthesize across themes
+   - Main conclusions from the analysis
+   - Patterns, trends, implications
 
 OUTPUT REQUIREMENTS:
-- Include **every discovered theme** as its own section OR as a sub-concept in a related section.
-- FULL sections: 2–5 concepts with dense explanations and an anchored or numeric example.
-- SHORT sections: 1 compact concept (definition + brief explanation + 1–2 key_points). Example optional if genuinely inapplicable.
-- **IMPORTANT**: Integrate overflow themes as **brief sub-concepts** under the most relevant existing section (no standalone "Additional Topics" section):
-  - Add as a minimal concept with term, definition (1 sentence), key_points (1-2 critical facts)
-  - No example needed for these overflow sub-concepts
-  - Keep them concise (50-100 words max)
-- Keep wording specific to the uploaded material (no generic filler).
+- Specific and concrete: Include numbers, dates, names, data points
+- Evidence-based: Ground claims in source material
+- Objective tone: Analytical, not promotional
+- Efficient: Comprehensive but concise
+- No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
+
+MINDSET CHECK:
+"Does this briefing enable rapid comprehension of the material's key themes, evidence, and conclusions?"
+"Would this satisfy a demanding executive or academic reviewer?"
+
+If NO → Add specificity, evidence, and synthesis.
+
+PLANNING (internal, before output):
+1) Identify 4-8 main themes from all chunks
+2) Synthesize evidence under each theme
+3) Extract 3-5 overarching insights
+4) Prioritize most critical information for executive summary
 
 OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
 {{
   "summary": {{
-    "title": "Study Notes: <topic>",
-    "overview": "<2–4 sentences on scope and importance>",
-    "learning_objectives": [
-      "Verb-led, outcome-focused objective 1",
-      "Verb-led, outcome-focused objective 2"
+    "title": "Briefing: <topic>",
+    "executive_summary": [
+      "Critical takeaway 1 (1-2 sentences with specific evidence)",
+      "Critical takeaway 2 (1-2 sentences with specific evidence)",
+      "Critical takeaway 3...",
+      "Critical takeaway 4...",
+      "Critical takeaway 5 (optional)"
     ],
     "sections": [
       {{
-        "heading": "<theme>",
+        "heading": "<Major Theme/Topic>",
         "concepts": [
           {{
-            "term": "<concept>",
-            "definition": "<precise, syllabus-level definition>",
-            "explanation": "<2–3 dense paragraphs teaching mechanism, intuition, edge cases>",
-            "example": "<worked example (numeric OR anchored, as appropriate)>",
-            "key_points": ["<short fact>", "<short fact>"],
-            "pitfalls": ["<common error>", "<boundary condition>"]
+            "term": "<Key concept/finding>",
+            "definition": "<Concise definition or statement>",
+            "explanation": "<Analysis with evidence: what it means, why it matters, implications. Include specific data, examples, cases. 2-3 focused paragraphs>",
+            "example": "<Optional: Specific case study or concrete example with details>",
+            "key_points": ["<Bullet 1>", "<Bullet 2>", "<Bullet 3>"],
+            "pitfalls": ["<Optional: Limitations, caveats, or important notes>"]
           }},
           {{
-            "term": "<overflow minor concept>",
-            "definition": "<1 sentence definition>",
-            "key_points": ["<critical fact for exam>"]
+            "term": "<Additional concept under this theme>",
+            "definition": "<Brief definition>",
+            "key_points": ["<critical fact>"]
           }}
         ]
       }}
+    ],
+    "key_insights": [
+      "Overarching insight 1 synthesizing across themes",
+      "Main conclusion 2 with implications",
+      "Pattern or trend 3 identified from analysis"
     ],
     "formula_sheet": [
       {{
@@ -324,23 +324,26 @@ OUTPUT EXACTLY THIS JSON SCHEMA (no extras, no omissions):
   ]
 }}
 
-BUDGETING & COVERAGE RULES
-- Guarantee coverage of **all themes** (FULL or SHORT).
-- Prefer depth for core themes; compress minor ones in 'Additional Topics (Condensed)' section.
-- Formula_sheet: include every formula/algorithm/method with:
-  ✓ expression = MATH NOTATION (not pseudocode)
-  ✓ variables = complete symbol dictionary
-  ✓ worked_example = numeric calculation with actual numbers
-  ✓ pseudocode = (optional) algorithm steps if needed
-- Remove empty/placeholder fields; validate JSON (no trailing commas, balanced braces).
+QUALITY & COMPLETENESS RULES:
+- Executive summary MUST capture the 3-5 most critical takeaways
+- All major themes covered in dedicated sections (4-8 sections typical)
+- Evidence-based: Include specific data, numbers, dates, names, cases
+- Formula_sheet (if applicable): Include key formulas/methods with:
+  ✓ expression = MATH NOTATION
+  ✓ variables = symbol meanings
+  ✓ brief worked example if relevant
+  ✓ pseudocode only for algorithms
+- Glossary: 15-25 essential terms
+- Remove empty fields; validate JSON (no trailing commas, balanced braces)
 
 VALIDATION CHECKLIST (before output):
-✓ Every primary section has ≥1 citation
-✓ Formula_sheet has ≥1 citation for traceability
-✓ Expression field uses MATH, not pseudocode
-✓ Overflow themes integrated as brief sub-concepts in related sections (NOT separate "Additional Topics")
-✓ Examples are concrete (numeric for quant domains, anchored for qual domains)
-✓ Glossary has ≥10 terms
+✓ Executive summary captures most critical insights
+✓ Each section has clear theme with supporting evidence
+✓ Key insights synthesize across themes
+✓ Claims are specific and concrete (not vague)
+✓ Citations reference source material
+✓ Tone is objective, analytical, professional
+✓ Would satisfy a demanding executive or reviewer
 
 OUTPUT PURE JSON NOW (no other text):"""
 
