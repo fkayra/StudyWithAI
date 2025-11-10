@@ -68,11 +68,21 @@ try:
     if DATABASE_URL.startswith("sqlite"):
         engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
     else:
-        # For PostgreSQL, add connection pool settings and SSL if needed
+        # Optimized for long-running operations and Supabase connection limits
         engine = create_engine(
             DATABASE_URL,
-            pool_pre_ping=True,  # Verify connections before using
-            pool_recycle=300,    # Recycle connections after 5 minutes
+            pool_size=3,              # Reduced for Supabase Session mode limits
+            max_overflow=5,           # Total max = 8 connections
+            pool_recycle=300,         # Recycle connections after 5 minutes
+            pool_pre_ping=True,       # Check connection health before use
+            pool_timeout=10,          # Timeout waiting for connection (seconds)
+            connect_args={
+                "connect_timeout": 10,  # PostgreSQL connection timeout
+                "keepalives": 1,        # Enable TCP keepalives
+                "keepalives_idle": 30,  # Start keepalives after 30s idle
+                "keepalives_interval": 10,  # Keepalive interval
+                "keepalives_count": 5   # Max keepalive probes
+            }
         )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base = declarative_base()
