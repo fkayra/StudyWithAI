@@ -29,10 +29,10 @@ YOU ARE WRITING A COMPLETE TEXTBOOK CHAPTER, NOT A SUMMARY.
 5. **TEACH FROM SCRATCH**: Write as if you're teaching a student who knows NOTHING about this topic and will take a final exam using ONLY your notes. They cannot refer back to the original.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📏 STRICT DEPTH REQUIREMENTS (MINIMUM LENGTHS)
+📏 DEPTH REQUIREMENTS (Balanced: Complete but Efficient)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Remember: This is a COMPLETE STUDY GUIDE, not a summary. More = better.
+Remember: COMPLETE coverage with EFFICIENT depth. Quality > Quantity.
 
 For EACH major concept, you MUST provide:
 
@@ -40,57 +40,53 @@ For EACH major concept, you MUST provide:
    - Precise, formal definition
    - Context: where/when it's used
 
-2. **Core Explanation** (5-8 paragraphs, 400-600 words MINIMUM)
-   - How it works in detail
+2. **Core Explanation** (200-300 words, 3-4 focused paragraphs)
+   - How it works (concise but complete)
    - Why it's important
-   - Underlying principles
-   - Step-by-step breakdown
-   - Edge cases and limitations
-   - Common misconceptions
-   - Relationship to other concepts
+   - Key principles and mechanics
+   - Important edge cases or limitations
+   - Relationship to other concepts (briefly)
 
-3. **Worked Examples** (3-5 examples, 200+ words EACH)
-   - For quantitative topics: Complete numerical calculations with every step shown
+3. **Worked Examples** (2-3 examples, 100-150 words EACH)
+   - For quantitative topics: Complete numerical calculations with key steps shown
    - For qualitative topics: Real cases with dates, names, specific details
-   - Show your work, explain reasoning at each step
-   - Include "why we did this" explanations
+   - Show your work efficiently
+   - Brief explanation of reasoning
 
-4. **Applications** (2-3 paragraphs)
-   - Real-world use cases
-   - Industry applications
-   - Why professionals care about this
+4. **Applications** (1-2 paragraphs, optional if time-constrained)
+   - Key real-world use cases
+   - Why it matters in practice
 
 For EACH formula, you MUST provide:
 
 1. **Expression**: Clean mathematical notation (e.g., f(x) = ax² + bx + c)
 
-2. **Variables**: Explain EVERY symbol, including units
+2. **Variables**: Explain key symbols and units
 
-3. **Derivation** (if applicable): Show how we arrive at this formula (3-5 steps)
+3. **Derivation** (if applicable and important): Key steps (2-3 steps, not full proof)
 
-4. **Worked Examples**: Minimum 3 complete calculations with:
+4. **Worked Examples**: 2 complete calculations with:
    - Given values
-   - Step-by-step substitution
-   - Intermediate calculations
+   - Key substitution steps
    - Final answer with units
-   - Interpretation of result
+   - Brief interpretation
 
-5. **When to Use**: Conditions, constraints, assumptions
+5. **When to Use**: Brief conditions and constraints
 
 For EACH algorithm, you MUST provide:
 
 1. **Purpose**: What problem does it solve?
 
-2. **Step-by-Step Procedure** (pseudocode or detailed steps)
+2. **Step-by-Step Procedure** (concise pseudocode or key steps)
 
 3. **Complexity Analysis**: 
-   - Time complexity with proof
-   - Space complexity with proof
-   - Best/average/worst cases
+   - Time complexity (state, don't prove in detail)
+   - Space complexity (state)
+   - Best/worst cases
 
-4. **Complete Walkthrough**: Work through a real example showing every iteration
+4. **Walkthrough**: One complete example showing key iterations (not every single step)
 
-5. **Implementation Notes**: Common pitfalls, optimization tips
+5. **Implementation Notes**: Critical pitfalls or tips (1-2 sentences)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ COVERAGE REQUIREMENTS
@@ -119,36 +115,35 @@ If NO → Add more depth, more examples, more explanation.
 RULE: When in doubt → EXPAND, don't condense.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 STRUCTURE REQUIREMENTS
+📊 STRUCTURE REQUIREMENTS (Efficient Coverage)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Think of this as writing a COMPLETE TEXTBOOK CHAPTER:
+Balance: COMPLETE coverage with CONCISE presentation.
 
-1. **Sections**: Create enough sections to cover ALL topics comprehensively (typically 8-20)
+1. **Sections**: Cover ALL topics efficiently (typically 6-12 sections)
    - Each section = one major theme
-   - Don't force-merge unrelated topics
-   - Better to have 20 well-explained sections than 5 bloated ones
-   - Each section should be self-contained and comprehensive
+   - Group related sub-topics together intelligently
+   - Ensure every topic from source is included somewhere
+   - Be comprehensive but concise
 
-2. **Concepts per section**: 4-10 concepts
-   - Each concept fully developed with textbook-level depth
-   - Include ALL sub-concepts and related ideas
-   - Explain prerequisites within each concept
-   - Add background information as needed
+2. **Concepts per section**: 3-6 concepts
+   - Each concept explained clearly and completely
+   - Focus on essentials, avoid redundancy
+   - Include key sub-concepts
+   - Prerequisites briefly mentioned if critical
 
-3. **Formula Sheet**: EXHAUSTIVE
-   - Every single formula from the material
-   - Full derivations for each
-   - Minimum 3 worked examples per formula
-   - When to use / when not to use
-   - Common mistakes and how to avoid them
-   - Organized by topic with cross-references
+3. **Formula Sheet**: COMPLETE
+   - Every formula from the material
+   - Key derivation steps (not full proofs)
+   - 2 worked examples per formula
+   - Brief usage notes
+   - Organized by topic
 
-4. **Glossary**: Minimum 40-50 terms
-   - Every technical term, even "simple" ones
-   - Include acronyms, jargon, symbols, notation
-   - Cross-reference to sections
-   - Related terms grouped together
+4. **Glossary**: 20-30 essential terms
+   - Key technical terms and concepts
+   - Important acronyms, jargon, symbols
+   - Concise definitions
+   - Focus on terms students must know
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎨 QUALITY STANDARDS
@@ -239,21 +234,21 @@ COVERAGE:
 □ Is my section count appropriate (8-20 for most documents)?
 □ Did I explain prerequisites and background concepts?
 
-DEPTH (Remember: COMPLETE STUDY GUIDE, not summary):
-□ Is each concept explanation 500-800+ words (not 100-200)?
-□ Does each concept have 4-6 detailed worked examples (not 1-2)?
-□ Did I explain WHY and HOW, not just WHAT?
+DEPTH (Balanced: Complete but Efficient):
+□ Is each concept explanation 200-300 words with clear, focused content?
+□ Does each concept have 2-3 quality worked examples?
+□ Did I explain WHY and HOW efficiently, not just WHAT?
 □ Are my examples concrete with real numbers/names/dates/calculations?
-□ Did I show step-by-step work for all calculations with explanations?
-□ Did I add context, applications, and real-world connections?
-□ Did I explain common mistakes and edge cases?
+□ Did I show key calculation steps (not necessarily every micro-step)?
+□ Did I mention important applications and edge cases?
+□ Is everything necessary included, nothing excessive?
 
 COMPLETENESS:
-□ Does every formula have: expression + variables + full derivation + 3-5 worked examples + when to use?
-□ Does every algorithm have: purpose + pseudocode + complexity proof + complete walkthrough + optimization tips?
-□ Does glossary have 40-50 terms (not just 20-30)?
-□ Do citations reference specific sections/pages with context?
-□ Did I include diagrams/visual explanations where helpful?
+□ Does every formula have: expression + variables + key steps + 2 worked examples?
+□ Does every algorithm have: purpose + pseudocode + complexity + one walkthrough?
+□ Does glossary have 20-30 essential terms?
+□ Do citations reference specific sections/pages?
+□ Is coverage 100% (all topics included) with efficient presentation?
 
 QUALITY - THE CRITICAL QUESTION:
 □ "Could a student who has NEVER seen the original material pass the exam using ONLY my notes?"
@@ -290,14 +285,15 @@ Think: "Textbook chapter" NOT "executive summary"
 Think: "Teaching from scratch" NOT "reviewing key points"  
 Think: "Complete explanation" NOT "brief overview"
 
-EXPAND, don't condense.
-TEACH, don't summarize.
-REPLACE, don't abbreviate.
+COVER EVERYTHING, but be EFFICIENT.
+TEACH COMPLETELY, but be CONCISE.
+REPLACE the original, but don't OVERWRITE.
 
-The more comprehensive and detailed you are, the better.
-There is no "too much detail" - only "not enough detail".
+Balance: Every topic covered + Deep enough to learn + Efficient use of tokens.
+There IS such a thing as "too much detail" - aim for the sweet spot.
 
-Your success metric: Can a student ace their exam using ONLY your notes?"""
+Your success metric: Can a student ace their exam using ONLY your notes, 
+without wasting time reading unnecessary repetition?"""
 
 
 # Few-shot examples for better understanding

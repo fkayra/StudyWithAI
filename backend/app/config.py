@@ -15,7 +15,7 @@ class PlanLimits:
     max_output_cap: int  # adaptive ceiling for output tokens
     rate_limit_24h: int  # requests per 24 hours
 
-# Plan-based limits
+# Plan-based limits (Optimized for quality-cost balance)
 PLAN_LIMITS = {
     "free": PlanLimits(
         max_files_total=3,
@@ -23,7 +23,7 @@ PLAN_LIMITS = {
         max_total_mb=20,
         max_pages_total=80,
         max_input_tokens=12000,
-        max_output_cap=16000,  # Increased for deeper explanations
+        max_output_cap=12000,  # Balanced: complete but efficient
         rate_limit_24h=10
     ),
     "standard": PlanLimits(
@@ -32,7 +32,7 @@ PLAN_LIMITS = {
         max_total_mb=50,
         max_pages_total=200,
         max_input_tokens=40000,
-        max_output_cap=20000,  # Increased for deeper explanations
+        max_output_cap=14000,  # Moderate increase for depth
         rate_limit_24h=50
     ),
     "premium": PlanLimits(  # also handle "pro" alias
@@ -41,7 +41,7 @@ PLAN_LIMITS = {
         max_total_mb=100,
         max_pages_total=350,
         max_input_tokens=80000,
-        max_output_cap=24000,  # Increased for maximum depth
+        max_output_cap=16000,  # Premium depth without excessive cost
         rate_limit_24h=200
     ),
 }
@@ -62,12 +62,12 @@ TOKEN_PER_CHAR = 0.25
 # Chunking configuration for map-reduce
 CHUNK_INPUT_TARGET = 3500  # target tokens per chunk for map phase
 
-# Adaptive chunk output budget based on content density
-CHUNK_OUTPUT_BASE = 800  # Increased from 400 for deeper chunk summaries
-CHUNK_OUTPUT_FORMULA_BOOST = 300  # Increased from 150 for complete derivations
-CHUNK_OUTPUT_THEOREM_BOOST = 400  # Increased from 200 for full proofs
+# Adaptive chunk output budget (Optimized for efficiency)
+CHUNK_OUTPUT_BASE = 600  # Balanced: deep but efficient
+CHUNK_OUTPUT_FORMULA_BOOST = 200  # Key derivation steps, not full proofs
+CHUNK_OUTPUT_THEOREM_BOOST = 250  # Essential proof elements
 
-MERGE_OUTPUT_BUDGET = (5000, 24000)  # Increased from (3000, 12000) for comprehensive output
+MERGE_OUTPUT_BUDGET = (4000, 16000)  # Balanced: comprehensive but cost-effective
 
 # OpenAI configuration
 OPENAI_MODEL = "gpt-4o"  # Best quality model (was gpt-4o-mini)

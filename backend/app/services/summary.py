@@ -46,14 +46,14 @@ YOUR MISSION:
 - EXPAND on the material (add context, examples, explanations)
 - Include ALL information (nothing should be omitted)
 
-DEPTH REQUIREMENTS:
-- Each concept: Full explanation (300+ words), 3-4 detailed worked examples
-- Each formula: Complete derivation + 3+ step-by-step numerical examples  
-- Each theorem: Full proof sketch + applications + when to use
-- DON'T SKIP ANYTHING: Include all topics, even if they seem minor or "obvious"
-- ADD background info if concepts need prerequisites
+DEPTH REQUIREMENTS (Efficient but Complete):
+- Each concept: Clear explanation (200-250 words), 2-3 quality worked examples
+- Each formula: Key derivation steps + 2 step-by-step numerical examples  
+- Each theorem: Essential proof elements + applications + when to use
+- DON'T SKIP ANYTHING: Include all topics efficiently
+- Mention key prerequisites briefly
 
-MINDSET: "Could a student learn this topic from my output alone?"
+MINDSET: "Could a student learn this topic from my output alone, efficiently?"
 
 {FEW_SHOT_EXAMPLES}
 
@@ -237,14 +237,14 @@ OUTPUT FORMAT
 - No markdown fences, no meta commentary
 - Valid JSON with proper escaping
 
-WHAT TO INCLUDE (Remember: COMPLETE STUDY GUIDE):
-- ✓ Every concept with 500-800 word explanations
-- ✓ Every formula with full derivations and 3-5 worked examples
-- ✓ Every algorithm with complete walkthroughs
-- ✓ Background concepts and prerequisites
-- ✓ Multiple detailed examples per concept (200-300 words each)
-- ✓ Common mistakes and edge cases
-- ✓ Real-world applications and context
+WHAT TO INCLUDE (Complete but Efficient):
+- ✓ Every concept with clear 200-300 word explanations
+- ✓ Every formula with key steps and 2 worked examples
+- ✓ Every algorithm with one complete walkthrough
+- ✓ Key prerequisites mentioned briefly
+- ✓ 2-3 quality examples per concept (100-150 words each)
+- ✓ Important mistakes and edge cases
+- ✓ Key applications mentioned
 
 WHAT TO EXCLUDE:
 - ❌ Practice questions (use that space for deeper explanations instead)
