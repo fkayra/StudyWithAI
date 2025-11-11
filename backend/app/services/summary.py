@@ -328,9 +328,9 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
     "formula_sheet": [
       {{
         "name": "<formula / algorithm / method>",
-        "expression": "<LaTeX MATHEMATICAL notation - e.g., f(x) = ax^2 + bx + c or \\prod_{{i=1}}^{{n}} P(x_i|parents(X_i))>",
-        "variables": {{"symbol": "meaning (use LaTeX if needed: x_i, \\theta, etc.)"}},
-        "worked_example": "<short numeric example with actual calculations, use LaTeX for math: $P(A,B,C) = P(A) \\cdot P(B|A) \\cdot P(C|B)$>",
+        "expression": "<LaTeX math - WRAP IN \\\\( \\\\) for inline: \\\\(f(x) = ax^2 + bx + c\\\\) or \\\\(\\\\prod_{{i=1}}^{{n}} P(x_i|parents(X_i))\\\\)>",
+        "variables": {{"symbol": "meaning (use LaTeX wrapped: x_i means \\\\(x_i\\\\))"}},
+        "worked_example": "<Wrap ALL math in \\\\( \\\\): \\\\(P(A,B,C) = P(A) \\\\cdot P(B|A) \\\\cdot P(C|B)\\\\)>",
         "pseudocode": "<OPTIONAL: if algorithm, put step-by-step procedure here>",
         "notes": "<when it applies, constraints, complexity>"
       }}
@@ -1159,34 +1159,37 @@ def merge_summaries(
             }
             
             # FIX DIAGRAM FORMATTING: Add newlines between edges in Mermaid diagrams
+            import re
             if 'diagrams' in result_dict.get('summary', {}):
                 for diagram in result_dict['summary']['diagrams']:
                     if 'content' in diagram:
                         content = diagram['content']
                         # Check if it's Mermaid syntax (starts with graph/flowchart)
                         if content.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
-                            # Fix inline edges: "A --> B B --> C" becomes "A --> B\n  B --> C"
-                            # Pattern: edge followed immediately by another node (no newline)
-                            import re
-                            # Match: "]" or ")" followed by space and arrow
-                            fixed = re.sub(r'(\]|\))(\s*--[>|])', r'\1\n  \2', content)
-                            # Also fix: arrow followed by "[Node]" followed immediately by another arrow
-                            fixed = re.sub(r'(\]|\))(\s+)([A-Z]\[)', r'\1\n  \3', fixed)
+                            # Fix inline edges where nodes appear without newlines
+                            # Pattern 1: "]" followed by space(s) and capital letter with "[" = new node
+                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', content)
+                            # Pattern 2: After arrow with label, if next char is capital = new edge
+                            fixed = re.sub(r'(\|)\s+([A-Z]\[)', r'\1\n  \2', fixed)
                             if fixed != content:
                                 print(f"[DIAGRAM FIX] Fixed inline edges in diagram: {diagram.get('title', 'Untitled')}")
+                                print(f"  BEFORE: {content[:100]}...")
+                                print(f"  AFTER: {fixed[:100]}...")
                                 diagram['content'] = fixed
             
             # Also fix practice problem solutions
             if 'practice_problems' in result_dict.get('summary', {}):
-                for problem in result_dict['summary']['practice_problems']:
+                for idx, problem in enumerate(result_dict['summary']['practice_problems']):
                     if 'solution' in problem:
                         solution = problem['solution']
                         if solution.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
-                            import re
-                            fixed = re.sub(r'(\]|\))(\s*--[>|])', r'\1\n  \2', solution)
-                            fixed = re.sub(r'(\]|\))(\s+)([A-Z]\[)', r'\1\n  \3', fixed)
+                            # Same fix as diagrams
+                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', solution)
+                            fixed = re.sub(r'(\|)\s+([A-Z]\[)', r'\1\n  \2', fixed)
                             if fixed != solution:
-                                print(f"[PRACTICE FIX] Fixed inline edges in practice problem")
+                                print(f"[PRACTICE FIX {idx+1}] Fixed inline edges")
+                                print(f"  BEFORE: {solution}")
+                                print(f"  AFTER: {fixed}")
                                 problem['solution'] = fixed
             
             result = json.dumps(result_dict, ensure_ascii=False, indent=2)
