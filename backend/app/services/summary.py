@@ -803,7 +803,10 @@ def reduce_two_stage(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=outline_user,
             max_output_tokens=1200,
-            temperature=0
+            temperature=0,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
         )
         outline = parse_json_robust(outline_json)
     
@@ -839,7 +842,10 @@ def reduce_two_stage(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=fill_user,
         max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
-        temperature=0
+        temperature=0,
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
     )
     result = parse_json_robust(filled_json)
     
@@ -853,7 +859,10 @@ def reduce_two_stage(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=repair_user,
             max_output_tokens=min(out_cap, 8000),
-            temperature=0
+            temperature=0,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
         )
         result = parse_json_robust(repaired) or result
         print("[REDUCE] Self-repair complete")
