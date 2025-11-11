@@ -342,20 +342,26 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
         "content": "<Mermaid syntax (preferred) or ASCII art.
                     
                     🚨 CRITICAL FOR BAYESIAN/PROBABILISTIC NETWORKS:
-                    EVERY edge MUST have probability label! Without it, diagram is UNUSABLE!
+                    1. EVERY edge MUST have probability label!
+                    2. EACH edge MUST be on a SEPARATE LINE (use \\n)!
                     
                     CORRECT EXAMPLE (Bayesian Network):
                     graph TD
                       Cloudy[Cloudy] -->|P=0.8| Rain[Rain]
-                      Cloudy -->|P=0.2| NoRain[No Rain]
+                      Cloudy -->|P=0.2| NoRain[No Rain]  
                       Rain -->|P=0.9| Wet[Wet Grass]
                       NoRain -->|P=0.1| Wet
                     
-                    WRONG EXAMPLE (MISSING PROBABILITIES - DO NOT DO THIS):
+                    WRONG EXAMPLE 1 (MISSING PROBABILITIES):
                     graph TD
-                      Cloudy --> Rain
-                      Rain --> Wet
-                    ❌ This is UNUSABLE! Cannot calculate probabilities!
+                      Cloudy --> Rain --> Wet
+                    ❌ NO PROBABILITIES!
+                    
+                    WRONG EXAMPLE 2 (ALL ON ONE LINE):
+                    graph TD; Cloudy -->|P=0.8| Rain Rain -->|P=0.9| Wet
+                    ❌ MUST USE NEWLINES BETWEEN EDGES!
+                    
+                    CORRECT FORMAT: Use \\n for newlines, one edge per line
                     
                     Other Rules:
                     - If from source file → Copy ALL details accurately
@@ -381,16 +387,21 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
                      🚨 IF PROBLEM ASKS TO CONSTRUCT BAYESIAN/PROBABILISTIC NETWORK:
                      Solution MUST include the diagram WITH probability values on edges!
                      
-                     CORRECT:
+                     CORRECT FORMAT (MUST USE NEWLINES):
                      graph TD
                        A[Cloudy] -->|P=0.8| B[Rain]
                        A -->|P=0.2| C[No Rain]
                        B -->|P=0.9| D[Wet Grass]
                      
-                     WRONG:
+                     CRITICAL: Each edge MUST be on a NEW LINE!
+                     WRONG: C[Cloudy] -->|P=0.8| R[Rain] R -->|P=0.9| W[Wet Grass]
+                     ❌ All on one line = INVALID!
+                     
+                     CORRECT:
                      graph TD
-                       A[Cloudy] --> B[Rain] --> D[Wet Grass]
-                     ❌ MISSING PROBABILITIES!
+                       C[Cloudy] -->|P=0.8| R[Rain]
+                       R -->|P=0.9| W[Wet Grass]
+                     ✅ Each edge on separate line!
                      
                      For other construction problems: include actual diagram in Mermaid or ASCII art, not just instructions>",
         "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
@@ -994,7 +1005,9 @@ def summarize_chunk(
     chunk_text: str,
     language: str = "en",
     additional_instructions: str = "",
-    out_budget: int = None
+    out_budget: int = None,
+    user_id: Optional[int] = None,
+    db = None
 ) -> str:
     """
     Summarize a single chunk of text (MAP phase)
@@ -1303,7 +1316,9 @@ def map_reduce_summary(
             chunk,
             language=language,
             additional_instructions=additional_instructions,
-            out_budget=None  # Let adaptive budget calculate
+            out_budget=None,  # Let adaptive budget calculate
+            user_id=user_id,
+            db=db
         )
         chunk_summaries.append(summary)
         
