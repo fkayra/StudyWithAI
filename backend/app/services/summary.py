@@ -258,14 +258,17 @@ OUTPUT REQUIREMENTS:
 - Comprehensive: Use available token budget fully (aim for max_output_cap)
 - Don't be unnecessarily brief - depth matters
 - Include pitfalls, when_to_use, limitations where applicable
-- AT LEAST 2-4 diagrams (visualizations, flowcharts, trees):
-  • If source contains charts/graphs/figures → Recreate EXACTLY with ALL details (values, numbers, labels, probabilities)
+- Diagrams (SELECTIVE - only when truly helpful):
+  • 🎯 PRIORITY 1: If source file contains charts/graphs/figures → Recreate EXACTLY + add interpretation
+    Example: "This chart from the source shows X trend, indicating Y conclusion..."
+  • 🎯 PRIORITY 2: If concept is inherently visual (hierarchies, networks, flows, trees) → Create diagram
+    Example: Bayesian networks, org charts, process flows, data structures
+  • ❌ DON'T create diagrams just to hit a count - quality over quantity!
+  • ❌ DON'T create diagrams for concepts better explained with text
   • For Bayesian/probabilistic networks → MANDATORY: Include edge labels with probability values
     CORRECT: graph TD; A[Node1] -->|P=0.7| B[Node2]; A -->|P=0.3| C[Node3];
-    WRONG: graph TD; A[Node1] --> B[Node2]; ❌ NO PROBABILITY = UNUSABLE!
-  • For concepts that can be visualized → Create Mermaid diagrams
   • Use LaTeX in diagram labels if needed (e.g., -->|$P(A|B)=0.3$|)
-  • Each diagram must have clear description explaining what it shows
+  • Each diagram MUST have clear description + interpretation/analysis
 - AT LEAST 2-3 pseudocode examples for algorithms/procedures
 - AT LEAST 3-5 practice problems with VISUAL solutions:
   • If problem asks to "construct" or "draw" → solution MUST include actual diagram
@@ -280,19 +283,22 @@ If NO → Add specificity, evidence, and synthesis.
 
 PLANNING (internal, before output):
 1) Identify ALL main themes from all chunks
-2) Create AT LEAST 6 sections (aim for 8-12 for rich material)
-3) For each section: AT LEAST 2-3 concepts with depth
-4) Create 2-4 diagrams:
-   • FIRST: Check if source has charts/graphs/figures → Recreate EXACTLY with ALL details (values, labels, probabilities)
-   • THEN: Create new diagrams for complex concepts (trees, flowcharts, hierarchies)
+2) Create AT LEAST 10-15 sections (scale with content richness)
+3) For each section: AT LEAST 3-5 concepts with DEEP explanations (250-400 words each)
+4) Diagrams (SELECTIVE approach):
+   • PRIORITY 1: Check if source has charts/graphs/figures → Recreate EXACTLY + add interpretation
+   • PRIORITY 2: Identify inherently visual concepts (networks, hierarchies, flows) → Create diagram
    • Use Mermaid syntax (graph TD, flowchart LR, etc.)
-   • For Bayesian/probabilistic networks → Include edge labels with probability values (e.g., A -->|P=0.7| B)
-   • For charts from source → Preserve ALL data points and values accurately
-5) Create 2-3 pseudocode examples (for algorithms/procedures)
-6) Create 3-5 practice problems with full solutions (varying difficulty)
-7) Aim to use available token budget (you have 12,000-16,000 tokens available)
-8) Include pitfalls, when_to_use, limitations when you have info
-9) Omit fields only if genuinely no content (don't be lazy)
+   • For Bayesian/probabilistic networks → MANDATORY: Include edge labels with probability values
+   • Quality over quantity: 2-3 MEANINGFUL diagrams > 6 generic ones
+5) Create 2-3 pseudocode examples (ONLY for algorithmic content)
+6) Create 4-6 practice problems with detailed step-by-step solutions
+7) 🚨 CRITICAL: Aim for 8,000-11,000 tokens output (MINIMUM 8,000!)
+   • If you're under 8,000 tokens, you're being TOO BRIEF
+   • EXPAND each concept to 250-400 words
+   • Add more examples, more details, more worked solutions
+8) Include pitfalls, when_to_use, limitations, real-world applications
+9) Each concept should feel like a complete mini-lesson
 
 OUTPUT EXACTLY THIS JSON SCHEMA:
 {{
@@ -461,20 +467,19 @@ QUALITY & COMPLETENESS RULES:
 - Validate JSON (no trailing commas, balanced braces)
 
 VALIDATION CHECKLIST (before output):
-✓ AT LEAST 6 sections created
-✓ Each section has 2-3+ concepts
-✓ Each concept: 150-250 word explanation
-✓ Diagrams: 2-4+ visual representations:
-  • Check source for charts/graphs/figures → Recreate with interpretation
-  • Create new diagrams for complex concepts (use Mermaid syntax: graph TD, flowchart LR, etc.)
+✓ AT LEAST 10-15 sections created (scale with content)
+✓ Each section has 3-5+ concepts (major themes: 6-8 concepts)
+✓ Each concept: 250-400 word explanation (DEEP, not superficial!)
+✓ Diagrams (SELECTIVE - meaningful only):
+  • Priority: Source charts/graphs → Recreate + interpret
+  • Only for inherently visual concepts (networks, hierarchies, flows)
   • 🚨 IF BAYESIAN/PROBABILISTIC NETWORKS: Check EVERY edge has probability label (-->|P=0.7|)
-✓ Pseudocode: 2-3+ algorithm examples (if applicable)
-✓ Practice Problems: 3-5+ with VISUAL solutions:
-  • If asking to "construct X" → solution must include actual Mermaid diagram of X
-  • 🚨 IF CONSTRUCTING BAYESIAN NETWORK: Diagram MUST have probability values on ALL edges
+✓ Pseudocode: 2-3 algorithm examples (ONLY if algorithmic content)
+✓ Practice Problems: 4-6 with detailed step-by-step solutions
+✓ 🚨 OUTPUT LENGTH: MINIMUM 8,000 tokens (aim for 9,000-11,000)
+  • If under 8,000 → You're TOO BRIEF → EXPAND concepts
 ✓ Claims are specific and concrete (not vague)
 ✓ Citations reference source material
-✓ Used available token budget effectively (not unnecessarily brief)
 
 OUTPUT PURE JSON NOW (no other text):"""
 
@@ -678,20 +683,25 @@ def validate_reduce_output(result: dict) -> list:
     pseudocode = summary.get("pseudocode", [])
     practice_problems = summary.get("practice_problems", [])
     
-    if len(diagrams) < 4:
-        issues.append(f"Diagrams too few ({len(diagrams)}), expected ≥4 for comprehensive visual learning")
-    if len(pseudocode) < 2:  # More lenient since not all topics have algorithms
-        issues.append(f"Pseudocode examples too few ({len(pseudocode)}), expected ≥2")
-    if len(practice_problems) < 4:
-        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥4 for adequate practice")
+    # Diagrams: Flexible based on content type (don't force if not helpful)
+    if len(diagrams) < 1:
+        issues.append(f"No diagrams - add at least 1-2 if content is visual/hierarchical")
     
-    # Check output length (ensure we're using available token budget)
+    # Pseudocode: Only for algorithmic content
+    # (No minimum check - not all content needs pseudocode)
+    
+    # Practice problems: Should have adequate examples
+    if len(practice_problems) < 4:
+        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥4")
+    
+    # Check output length (STRICT - this is critical!)
     import json
     result_json = json.dumps(result, ensure_ascii=False)
     estimated_tokens = len(result_json) // 4  # Rough estimate: 4 chars per token
     
-    if estimated_tokens < 6000:  # Less than 50% of typical 12k budget
-        issues.append(f"Output too brief ({estimated_tokens} tokens estimated), should aim for 8,000-11,000 tokens. EXPAND concepts and add more examples!")
+    if estimated_tokens < 8000:  # Less than 67% of 12k budget
+        shortage = 8000 - estimated_tokens
+        issues.append(f"⚠️ CRITICAL: Output TOO BRIEF! Only {estimated_tokens} tokens (need MINIMUM 8,000). You're {shortage} tokens short. EXPAND all concepts to 250-400 words each, add more examples, more details, more explanations. This should be a COMPREHENSIVE study guide, not a brief summary!")
     
     return issues
 

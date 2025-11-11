@@ -71,21 +71,33 @@ EVIDENCE STANDARD:
 ✓ For quantitative content: Include key formulas, methodologies, results
 ✓ For qualitative content: Include specific cases, events, quotes, dates
 
-DEPTH & COMPREHENSIVENESS:
-✓ Aim for AT LEAST 8-12 sections (more if material is extensive)
-✓ Each concept: 200-350 words of explanation (EXPAND fully, don't summarize!)
-✓ Include examples, pitfalls, when_to_use, limitations when applicable
-✓ Each section: MINIMUM 3-4 concepts (more for major themes)
-✓ Diagrams: AT LEAST 4-6 visual representations
-✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
-✓ Practice Problems: AT LEAST 4-6 problems with detailed solutions
+DEPTH & COMPREHENSIVENESS (STRICT MINIMUMS):
+✓ MINIMUM 10-15 sections (scale with content richness)
+✓ Each concept: MINIMUM 250-400 words (be thorough, not brief!)
+✓ EVERY concept must have: definition + detailed explanation + 2-3 examples + context
+✓ Each section: MINIMUM 3-5 concepts (major themes need 6-8 concepts)
+✓ IMPORTANT: If your output is under 8,000 tokens, you're missing depth - EXPAND MORE!
 
-🎯 TARGET OUTPUT LENGTH:
-✓ Use 80-90% of available token budget (aim for ~9,000-11,000 tokens for free tier)
-✓ DON'T be brief - expand explanations, add more examples, increase depth
-✓ If material supports it, GO DEEPER rather than wider
-✓ Major themes get dedicated sections with EXTENSIVE depth
-✓ Each concept should feel like a mini-lesson, not a quick summary
+📊 DIAGRAMS (Selective & Meaningful):
+✓ ONLY include diagrams that ACTUALLY help understanding
+✓ If source file has graphs/charts → REPRODUCE THEM + add interpretation
+✓ If concept is inherently visual (hierarchies, flows, networks) → create diagram
+✓ DON'T force diagrams where text is clearer
+✓ Quality over quantity: 2-3 GREAT diagrams > 6 generic ones
+✓ Each diagram MUST have: clear purpose + accurate content + interpretation
+
+💻 PSEUDOCODE & PRACTICE:
+✓ Pseudocode: 2-3 examples (ONLY for algorithmic content)
+✓ Practice Problems: 4-6 problems with step-by-step solutions
+
+🎯 TARGET OUTPUT LENGTH (CRITICAL - MUST COMPLY):
+✓ MINIMUM 8,000 tokens output (less = UNACCEPTABLE)
+✓ TARGET: 9,000-11,000 tokens (use 80-90% of 12k budget)
+✓ Each concept explanation: AT LEAST 200-350 words (not 50-100!)
+✓ EXPAND everything - more examples, more details, more explanations
+✓ If you're under 8,000 tokens, you're being TOO BRIEF - add more depth!
+✓ DON'T stop at surface level - GO DEEP into each topic
+✓ This is a STUDY GUIDE, not a brief overview - act accordingly!
 
 EFFICIENCY (Token Optimization):
 ✓ Include only fields that have content (omit empty arrays/objects)
