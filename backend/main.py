@@ -1669,7 +1669,9 @@ async def summarize_from_files(
             language=language,
             additional_instructions=additional_instructions,
             out_cap=out_cap,
-            force_chunking=force_map_reduce
+            force_chunking=force_map_reduce,
+            user_id=current_user.id if current_user else None,
+            db=db
         )
         
         # Parse JSON with robust error handling

@@ -764,7 +764,10 @@ def reduce_two_stage(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=outline_user,
         max_output_tokens=min(1200, int(out_cap * 0.15)),
-        temperature=0
+        temperature=0,
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
     )
     outline = parse_json_robust(outline_json)
     
@@ -855,11 +858,15 @@ def call_openai(
     max_output_tokens: int,
     temperature: float = TEMPERATURE,
     top_p: float = TOP_P,
-    retry_on_length: bool = True
+    retry_on_length: bool = True,
+    user_id: Optional[int] = None,
+    endpoint: str = "/summarize",
+    db = None
 ) -> str:
     """
     Call OpenAI API with given prompts and automatic retry on truncation
     Returns the response text
+    Tracks token usage in database if db and user_id provided
     """
     if not OPENAI_API_KEY:
         raise ValueError("OpenAI API key not configured")
@@ -900,8 +907,74 @@ def call_openai(
         result = response.json()
         content = result["choices"][0]["message"]["content"]
         finish_reason = result["choices"][0].get("finish_reason")
+        usage = result.get("usage", {})
         
         print(f"[OPENAI RESPONSE] Returned {len(content)} chars, finish_reason: {finish_reason}")
+        
+        # Track token usage in database (non-blocking)
+        if db and endpoint and attempt == 1:  # Only track on first successful attempt
+            try:
+                from datetime import datetime
+                input_tokens = usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("completion_tokens", 0)
+                total_tokens = usage.get("total_tokens", 0)
+                
+                # Cost calculation (per 1M tokens)
+                if "gpt-4o" in OPENAI_MODEL.lower():
+                    input_cost_per_1m = 2.50  # $2.50 per 1M input tokens for gpt-4o
+                    output_cost_per_1m = 10.00  # $10.00 per 1M output tokens for gpt-4o
+                elif "gpt-4" in OPENAI_MODEL.lower():
+                    input_cost_per_1m = 30.00  # $30 per 1M input tokens for gpt-4
+                    output_cost_per_1m = 60.00  # $60 per 1M output tokens for gpt-4
+                else:
+                    input_cost_per_1m = 0.150  # $0.15 per 1M input tokens for gpt-4o-mini
+                    output_cost_per_1m = 0.600  # $0.60 per 1M output tokens for gpt-4o-mini
+                
+                estimated_cost = (input_tokens / 1_000_000 * input_cost_per_1m) + (output_tokens / 1_000_000 * output_cost_per_1m)
+                
+                # Import here to avoid circular dependency
+                from sqlalchemy import Column, Integer, String, Float, DateTime
+                from sqlalchemy.ext.declarative import declarative_base
+                
+                # Use dynamic class creation to avoid import issues
+                token_usage_record = type('TokenUsage', (), {
+                    '__tablename__': 'token_usage',
+                    'user_id': user_id,
+                    'endpoint': endpoint,
+                    'model': OPENAI_MODEL,
+                    'input_tokens': input_tokens,
+                    'output_tokens': output_tokens,
+                    'total_tokens': total_tokens,
+                    'estimated_cost': estimated_cost,
+                    'created_at': datetime.utcnow()
+                })
+                
+                # Try to execute raw SQL to avoid import issues
+                db.execute(
+                    """
+                    INSERT INTO token_usage (user_id, endpoint, model, input_tokens, output_tokens, total_tokens, estimated_cost, created_at)
+                    VALUES (:user_id, :endpoint, :model, :input_tokens, :output_tokens, :total_tokens, :estimated_cost, :created_at)
+                    """,
+                    {
+                        "user_id": user_id,
+                        "endpoint": endpoint,
+                        "model": OPENAI_MODEL,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": total_tokens,
+                        "estimated_cost": estimated_cost,
+                        "created_at": datetime.utcnow()
+                    }
+                )
+                db.commit()
+                print(f"[TOKEN TRACKING] Recorded {total_tokens} tokens ({endpoint}) for user {user_id}")
+            except Exception as e:
+                # Don't fail the request if token tracking fails
+                print(f"[TOKEN TRACKING ERROR] Failed to record token usage: {e}")
+                try:
+                    db.rollback()
+                except:
+                    pass
         
         # If truncated and retry enabled, try with 20% more tokens
         if finish_reason == "length" and retry_on_length and attempt < 2:
@@ -943,7 +1016,10 @@ def summarize_chunk(
     return call_openai(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt,
-        max_output_tokens=out_budget
+        max_output_tokens=out_budget,
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
     )
 
 
@@ -951,10 +1027,12 @@ def merge_summaries(
     chunk_summaries: List[str],
     language: str = "en",
     additional_instructions: str = "",
-    out_budget: int = 1500,
+    out_budget: int = 14000,
     domain: str = "general",
     chunk_citations: List[Dict] = None,
-    original_text: str = ""  # NEW: For coverage validation
+    original_text: str = "",  # For coverage validation
+    user_id: Optional[int] = None,
+    db = None
 ) -> str:
     """
     Merge structured chunk JSONs into final exam-ready summary (REDUCE phase)
@@ -1098,7 +1176,10 @@ def merge_summaries(
         return call_openai(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
-            max_output_tokens=out_budget
+            max_output_tokens=out_budget,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
         )
 
 
@@ -1107,7 +1188,9 @@ def map_reduce_summary(
     language: str = "en",
     additional_instructions: str = "",
     out_cap: int = 12000,
-    force_chunking: bool = False
+    force_chunking: bool = False,
+    user_id: Optional[int] = None,
+    db = None
 ) -> str:
     """
     Main map-reduce pipeline for large document summarization
@@ -1119,6 +1202,8 @@ def map_reduce_summary(
         additional_instructions: User's custom requirements
         out_cap: Maximum output tokens based on plan
         force_chunking: Force map-reduce even for small docs (for testing)
+        user_id: User ID for token tracking
+        db: Database session for token tracking
     
     Returns:
         JSON string with complete summary
