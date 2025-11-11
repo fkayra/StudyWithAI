@@ -923,17 +923,22 @@ def call_openai(
         print(f"[OPENAI RESPONSE] Returned {len(content)} chars, finish_reason: {finish_reason}")
         
         # Track token usage in database (non-blocking)
-        if db and endpoint and attempt == 1:  # Only track on first successful attempt
+        if db and endpoint and attempt == 1 and usage:  # Only track on first successful attempt with usage data
             try:
                 from datetime import datetime
                 input_tokens = usage.get("prompt_tokens", 0)
                 output_tokens = usage.get("completion_tokens", 0)
                 total_tokens = usage.get("total_tokens", 0)
                 
-                print(f"[TOKEN TRACKING] Attempting to record: user_id={user_id}, endpoint={endpoint}, total={total_tokens}")
+                print(f"[TOKEN TRACKING] Attempting to record: user_id={user_id}, endpoint={endpoint}, total={total_tokens}, db={db is not None}")
+                
+                # Skip if no tokens (shouldn't happen, but defensive)
+                if total_tokens == 0:
+                    print(f"[TOKEN TRACKING] ⚠️ Skipping - zero tokens")
+                    return content
                 
                 # Cost calculation (per 1M tokens)
-                if "gpt-4o" in OPENAI_MODEL.lower():
+                if "gpt-4o" in OPENAI_MODEL.lower() and "mini" not in OPENAI_MODEL.lower():
                     input_cost_per_1m = 2.50  # $2.50 per 1M input tokens for gpt-4o
                     output_cost_per_1m = 10.00  # $10.00 per 1M output tokens for gpt-4o
                 elif "gpt-4" in OPENAI_MODEL.lower():
@@ -945,12 +950,15 @@ def call_openai(
                 
                 estimated_cost = (input_tokens / 1_000_000 * input_cost_per_1m) + (output_tokens / 1_000_000 * output_cost_per_1m)
                 
+                print(f"[TOKEN TRACKING] Calculated cost: ${estimated_cost:.4f} (model: {OPENAI_MODEL})")
+                
                 # Use text() for raw SQL with SQLAlchemy
                 from sqlalchemy import text
+                from datetime import datetime
                 
                 sql = text("""
                     INSERT INTO token_usage (user_id, endpoint, model, input_tokens, output_tokens, total_tokens, estimated_cost, created_at)
-                    VALUES (:user_id, :endpoint, :model, :input_tokens, :output_tokens, :total_tokens, :estimated_cost, NOW())
+                    VALUES (:user_id, :endpoint, :model, :input_tokens, :output_tokens, :total_tokens, :estimated_cost, :created_at)
                 """)
                 
                 db.execute(sql, {
@@ -960,13 +968,15 @@ def call_openai(
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
                     "total_tokens": total_tokens,
-                    "estimated_cost": estimated_cost
+                    "estimated_cost": estimated_cost,
+                    "created_at": datetime.utcnow()
                 })
                 db.commit()
                 print(f"[TOKEN TRACKING] ✅ Successfully recorded {total_tokens} tokens ({endpoint}) for user {user_id}, cost: ${estimated_cost:.4f}")
             except Exception as e:
                 # Don't fail the request if token tracking fails
                 print(f"[TOKEN TRACKING ERROR] ❌ Failed to record token usage: {e}")
+                print(f"[TOKEN TRACKING ERROR] Details: user_id={user_id}, endpoint={endpoint}, model={OPENAI_MODEL}, tokens={total_tokens}")
                 import traceback
                 traceback.print_exc()
                 try:
@@ -1182,8 +1192,19 @@ def merge_summaries(
                 for idx, problem in enumerate(result_dict['summary']['practice_problems']):
                     if 'solution' in problem:
                         solution = problem['solution']
-                        if solution.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
-                            # Same fix as diagrams
+                        
+                        # Check if it's Mermaid syntax (with or without prefix)
+                        is_mermaid = solution.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram'))
+                        
+                        # Also detect Mermaid if it has pattern: Node[Label] -->|...| Node[Label]
+                        if not is_mermaid and '-->' in solution and '[' in solution and ']' in solution:
+                            # This looks like Mermaid without prefix - add graph TD
+                            print(f"[PRACTICE FIX {idx+1}] Detected Mermaid without prefix, adding 'graph TD'")
+                            solution = f"graph TD\n  {solution.strip()}"
+                            is_mermaid = True
+                        
+                        if is_mermaid:
+                            # Fix inline edges: add newlines between nodes
                             fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', solution)
                             fixed = re.sub(r'(\|)\s+([A-Z]\[)', r'\1\n  \2', fixed)
                             if fixed != solution:
@@ -1191,6 +1212,8 @@ def merge_summaries(
                                 print(f"  BEFORE: {solution}")
                                 print(f"  AFTER: {fixed}")
                                 problem['solution'] = fixed
+                            else:
+                                problem['solution'] = solution  # Still update with prefix if added
             
             result = json.dumps(result_dict, ensure_ascii=False, indent=2)
             print(f"[COVERAGE] ✅ Coverage added to JSON: {coverage_result['coverage_score']:.1%} score, {len(coverage_result['missing_topics'])} missing topics")
