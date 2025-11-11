@@ -1299,7 +1299,7 @@ def merge_summaries(
                 'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
             }
             
-            # FIX DIAGRAM FORMATTING: Add newlines between edges in Mermaid diagrams
+            # FIX DIAGRAM FORMATTING: Fix Mermaid syntax errors
             import re
             if 'diagrams' in result_dict.get('summary', {}):
                 for diagram in result_dict['summary']['diagrams']:
@@ -1307,15 +1307,48 @@ def merge_summaries(
                         content = diagram['content']
                         # Check if it's Mermaid syntax (starts with graph/flowchart)
                         if content.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
-                            # Fix inline edges where nodes appear without newlines
+                            fixed = content
+                            
+                            # Fix 1: Add brackets to bare node names (Producer → Producer[Producer])
+                            # Match: word followed by --> (but not already in brackets)
+                            # This regex finds node IDs that aren't already bracketed
+                            lines = fixed.split('\n')
+                            fixed_lines = []
+                            for line in lines:
+                                # Skip the graph/flowchart declaration line
+                                if line.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
+                                    fixed_lines.append(line)
+                                    continue
+                                
+                                # Fix bare node names: Producer -->|label| Buffer becomes Producer[Producer] -->|label| Buffer[Buffer]
+                                # Pattern: word at start or after whitespace/newline that's not in brackets
+                                fixed_line = line
+                                
+                                # Find all node names (words that appear before --> or at the end after |)
+                                # Replace: NodeName -->  with  NodeName[NodeName] -->
+                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', r'\1[\1] \2', fixed_line)
+                                
+                                # Replace: | NodeName  with  | NodeName[NodeName]
+                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s|$)', r'| \1[\1] ', fixed_line)
+                                
+                                # Fix 2: Quote edge labels that contain parentheses
+                                # -->|label(x)| becomes -->|"label(x)"|
+                                fixed_line = re.sub(r'-->\|([^|"]+\([^)]*\)[^|"]*)\|', r'-->|"\1"|', fixed_line)
+                                
+                                fixed_lines.append(fixed_line)
+                            
+                            fixed = '\n'.join(fixed_lines)
+                            
+                            # Fix 3: Add newlines between edges if they're on the same line
                             # Pattern 1: "]" followed by space(s) and capital letter with "[" = new node
-                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', content)
+                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', fixed)
                             # Pattern 2: After arrow with label, if next char is capital = new edge
                             fixed = re.sub(r'(\|)\s+([A-Z]\[)', r'\1\n  \2', fixed)
+                            
                             if fixed != content:
-                                print(f"[DIAGRAM FIX] Fixed inline edges in diagram: {diagram.get('title', 'Untitled')}")
-                                print(f"  BEFORE: {content[:100]}...")
-                                print(f"  AFTER: {fixed[:100]}...")
+                                print(f"[DIAGRAM FIX] Fixed Mermaid syntax in diagram: {diagram.get('title', 'Untitled')}")
+                                print(f"  BEFORE: {content[:150]}...")
+                                print(f"  AFTER: {fixed[:150]}...")
                                 diagram['content'] = fixed
             
             # Also fix practice problem solutions
@@ -1335,13 +1368,36 @@ def merge_summaries(
                             is_mermaid = True
                         
                         if is_mermaid:
-                            # Fix inline edges: add newlines between nodes
-                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', solution)
+                            # Apply same fixes as diagrams
+                            fixed = solution
+                            
+                            # Fix 1: Add brackets to bare node names
+                            lines = fixed.split('\n')
+                            fixed_lines = []
+                            for line in lines:
+                                if line.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
+                                    fixed_lines.append(line)
+                                    continue
+                                
+                                fixed_line = line
+                                # Replace: NodeName -->  with  NodeName[NodeName] -->
+                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', r'\1[\1] \2', fixed_line)
+                                # Replace: | NodeName  with  | NodeName[NodeName]
+                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s|$)', r'| \1[\1] ', fixed_line)
+                                # Fix 2: Quote edge labels with parentheses
+                                fixed_line = re.sub(r'-->\|([^|"]+\([^)]*\)[^|"]*)\|', r'-->|"\1"|', fixed_line)
+                                fixed_lines.append(fixed_line)
+                            
+                            fixed = '\n'.join(fixed_lines)
+                            
+                            # Fix 3: Add newlines between edges
+                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', fixed)
                             fixed = re.sub(r'(\|)\s+([A-Z]\[)', r'\1\n  \2', fixed)
+                            
                             if fixed != solution:
-                                print(f"[PRACTICE FIX {idx+1}] Fixed inline edges")
-                                print(f"  BEFORE: {solution}")
-                                print(f"  AFTER: {fixed}")
+                                print(f"[PRACTICE FIX {idx+1}] Fixed Mermaid syntax")
+                                print(f"  BEFORE: {solution[:100]}...")
+                                print(f"  AFTER: {fixed[:100]}...")
                                 problem['solution'] = fixed
                             else:
                                 problem['solution'] = solution  # Still update with prefix if added
