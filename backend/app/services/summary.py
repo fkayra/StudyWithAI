@@ -1476,50 +1476,114 @@ def summarize_no_files(
 ) -> str:
     """
     Generate summary without uploaded files (from prompt only)
-    Uses general knowledge + enforces same quality standards as file-based summaries
-    IMPORTANT: Uses same JSON format as file-based mode (get_final_merge_prompt)
+    Uses general knowledge + same JSON format as file-based summaries
     """
-    # Use the SAME prompt structure as file-based mode for consistency
-    user_prompt = get_final_merge_prompt(language, "", "general")
+    lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     
-    # Add topic-specific instructions
-    topic_instructions = f"""
+    # Build dedicated no-files prompt with correct JSON schema
+    user_prompt = f"""You are creating comprehensive study notes on the topic: "{topic}"
+
+{lang_instr}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ NO FILES MODE - GENERATE FROM KNOWLEDGE BASE
+🎯 TASK: Generate study guide from your knowledge base
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-TOPIC: "{topic}"
+Since no files were uploaded, generate comprehensive content based on your knowledge of "{topic}".
 
-Since no files were uploaded, generate comprehensive study notes based on your knowledge:
+REQUIREMENTS:
+1. ✅ REAL CONTENT with actual names, dates, facts (NO placeholders!)
+2. ✅ MINIMUM 10-15 sections covering main aspects of {topic}
+3. ✅ Each section: 3-5 detailed concepts (250-400 words each)
+4. ✅ MINIMUM 8,000 tokens output (comprehensive depth)
+5. ✅ Real examples, historical context, practical applications
 
-🚨 CRITICAL REQUIREMENTS:
-1. Generate REAL CONTENT about "{topic}" (NO placeholders like "Concept 1")
-2. MINIMUM 10-15 sections with real topic-specific headings
-3. Each section: 3-5 detailed concepts (250-400 words each)
-4. Use actual names, dates, facts, examples from your knowledge
-5. MINIMUM 8,000 tokens output
-
-APPROACH:
-- Identify main themes/aspects of "{topic}"
-- Cover: history, key figures, methodologies, applications, current state
-- Include real-world examples and practical context
-- Add formulas/equations if applicable to topic
-- Diagrams: ONLY if truly helpful (1-3 max)
+CONTENT APPROACH:
+- Main themes and categories within "{topic}"
+- History, key figures, major developments
+- Core principles and methodologies
+- Real-world applications and examples
+- Current state and future directions (if applicable)
+- Formulas/equations (if applicable to topic)
+- Diagrams: ONLY if truly helpful (1-3 visual aids)
 - Practice problems: 4-6 with detailed solutions
 
-VALIDATION:
-✓ ALL content is topic-specific (no generic placeholders)
-✓ Sections have REAL headings (not "Section 1", "Section 2")
-✓ Concepts have REAL names and detailed explanations
-✓ Output is 8,000+ tokens
-
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 OUTPUT EXACT JSON SCHEMA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-COURSE MATERIAL (from your knowledge base):
-Generate comprehensive content about: {topic}
-"""
-    
-    user_prompt += topic_instructions
+Output ONLY valid JSON (no markdown, no code fences):
+
+{{
+  "summary": {{
+    "title": "Study Notes: {topic}",
+    "overview": "<2-3 sentence introduction to {topic}>",
+    "learning_objectives": [
+      "<Specific measurable outcome 1>",
+      "<Specific measurable outcome 2>",
+      "<3-5 objectives total>"
+    ],
+    "sections": [
+      {{
+        "heading": "<Real topic-specific heading (NOT 'Section 1')>",
+        "bullets": ["<Key point>", "<Key point>"],
+        "concepts": [
+          {{
+            "term": "<Real concept name>",
+            "definition": "<Clear definition>",
+            "explanation": "<Detailed 250-400 word explanation with examples>",
+            "example": "<Concrete real-world example>",
+            "key_points": ["<Essential point>", "<Essential point>"]
+          }}
+        ]
+      }}
+    ],
+    "formula_sheet": [
+      {{
+        "name": "<Formula/equation name>",
+        "expression": "<LaTeX: \\\\(formula\\\\)>",
+        "variables": {{"symbol": "meaning"}},
+        "worked_example": "<Step-by-step calculation>",
+        "notes": "<When to use, constraints>"
+      }}
+    ],
+    "diagrams": [
+      {{
+        "title": "<Diagram title>",
+        "description": "<What it shows>",
+        "content": "<Mermaid syntax or description>",
+        "type": "flowchart"
+      }}
+    ],
+    "pseudocode": [
+      {{
+        "title": "<Algorithm name>",
+        "code": "<Step-by-step pseudocode>",
+        "explanation": "<What it does>",
+        "example_trace": "<Sample execution>"
+      }}
+    ],
+    "practice_problems": [
+      {{
+        "problem": "<Problem statement>",
+        "difficulty": "easy|medium|hard",
+        "solution": "<Detailed solution>",
+        "steps": ["<Step 1>", "<Step 2>"],
+        "key_concepts": ["<Concept>", "<Concept>"]
+      }}
+    ]
+  }},
+  "citations": ["<General knowledge source>", "<Reference>"]
+}}
+
+🚨 CRITICAL:
+- ALL content must be topic-specific (no "Concept 1" placeholders!)
+- Section headings must be REAL (e.g., "History of {topic}", not "Section 1")
+- Concepts must have DETAILED explanations (250-400 words each)
+- Output MUST be 8,000+ tokens
+- Only include diagrams/pseudocode/formulas if relevant to {topic}
+
+Generate comprehensive study notes about: {topic}"""
     
     return call_openai(
         system_prompt=SYSTEM_PROMPT,
