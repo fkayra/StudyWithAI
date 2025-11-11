@@ -811,7 +811,7 @@ def reduce_two_stage(
         outline = parse_json_robust(outline_json)
     
     # === SELF-REPAIR: Check coverage gaps ===
-    missing = coverage_gaps(outline, aggregated_knowledge)
+    missing = detect_missing_themes(aggregated_knowledge, outline)
     if missing:
         print(f"[REDUCE] Coverage gaps detected: {missing}")
         outline_user += (
@@ -823,7 +823,10 @@ def reduce_two_stage(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=outline_user,
             max_output_tokens=1200,
-            temperature=0
+            temperature=0,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
         )
         outline = parse_json_robust(outline_json)
     
