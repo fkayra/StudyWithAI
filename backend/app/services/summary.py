@@ -1339,7 +1339,9 @@ def map_reduce_summary(
         out_budget=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
         domain=domain,
         chunk_citations=chunk_citations,
-        original_text=full_text  # Pass original text for coverage validation
+        original_text=full_text,  # Pass original text for coverage validation
+        user_id=user_id,
+        db=db
     )
     
     print("[MAP-REDUCE] Complete!")
