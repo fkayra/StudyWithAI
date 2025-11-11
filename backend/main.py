@@ -3526,6 +3526,49 @@ async def get_revenue_stats(
         "net_revenue": total_revenue - total_token_cost
     }
 
+@app.get("/admin/recent-activities")
+async def get_recent_activities(
+    skip: int = 0,
+    limit: int = 100,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get recent user activities across the platform
+    Returns history items with user information
+    """
+    try:
+        # Query history with user join, ordered by newest first
+        activities = (
+            db.query(History, User)
+            .join(User, History.user_id == User.id)
+            .order_by(History.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        
+        result = []
+        for history, user in activities:
+            result.append({
+                "id": history.id,
+                "user_id": user.id,
+                "user_email": user.email,
+                "user_name": f"{user.name or ''} {user.surname or ''}".strip() or None,
+                "user_tier": user.tier,
+                "type": history.type,  # "summary", "flashcards", "truefalse", "exam"
+                "title": history.title,
+                "created_at": history.created_at.isoformat(),
+                "folder_id": history.folder_id
+            })
+        
+        return result
+    except Exception as e:
+        print(f"[ADMIN ERROR] Failed to fetch recent activities: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to fetch activities: {str(e)}")
+
 @app.get("/admin/users/{user_id}/details")
 async def get_user_detailed_info(
     user_id: int,

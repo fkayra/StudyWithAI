@@ -79,7 +79,19 @@ interface RevenueStats {
   net_revenue: number
 }
 
-type Tab = 'overview' | 'users' | 'transactions' | 'tokens' | 'revenue'
+interface Activity {
+  id: number
+  user_id: number
+  user_email: string
+  user_name: string | null
+  user_tier: string
+  type: string  // "summary", "flashcards", "truefalse", "exam"
+  title: string
+  created_at: string
+  folder_id: number | null
+}
+
+type Tab = 'overview' | 'users' | 'transactions' | 'tokens' | 'revenue' | 'activity'
 
 export default function AdminPage() {
   const { user } = useAuth()
@@ -92,6 +104,7 @@ export default function AdminPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [tokenUsage, setTokenUsage] = useState<TokenUsage[]>([])
   const [revenueStats, setRevenueStats] = useState<RevenueStats | null>(null)
+  const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -185,6 +198,15 @@ export default function AdminPage() {
     }
   }
 
+  const loadActivities = async () => {
+    try {
+      const data = await adminAPI.getRecentActivities(0, 100)
+      setActivities(data)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to load activities')
+    }
+  }
+
   useEffect(() => {
     if (activeTab === 'transactions') {
       loadTransactions()
@@ -192,6 +214,8 @@ export default function AdminPage() {
       loadTokenUsage()
     } else if (activeTab === 'revenue') {
       loadRevenueStats()
+    } else if (activeTab === 'activity') {
+      loadActivities()
     }
   }, [activeTab])
 
@@ -263,6 +287,7 @@ export default function AdminPage() {
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: '📊' },
     { id: 'users' as Tab, label: 'Users', icon: '👥' },
+    { id: 'activity' as Tab, label: 'Son İşlemler', icon: '📜' },
     { id: 'transactions' as Tab, label: 'Transactions', icon: '💳' },
     { id: 'tokens' as Tab, label: 'Token Usage', icon: '🔑' },
     { id: 'revenue' as Tab, label: 'Revenue', icon: '💰' }
@@ -795,6 +820,81 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Activity Tab */}
+        {activeTab === 'activity' && (
+          <div className="backdrop-blur-xl bg-slate-800/50 border border-slate-700/50 rounded-2xl p-6 animate-fadeIn">
+            <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-2">
+              <span>📜</span> Son İşlemler ({activities.length})
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Tarih</th>
+                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Kullanıcı</th>
+                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">İşlem Tipi</th>
+                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Başlık</th>
+                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Tier</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activities.map((activity) => {
+                    const typeIcons = {
+                      'summary': '📄',
+                      'flashcards': '🗂️',
+                      'truefalse': '✅',
+                      'exam': '📝'
+                    }
+                    const typeColors = {
+                      'summary': 'from-teal-500/20 to-cyan-500/20 border-teal-500/30 text-teal-300',
+                      'flashcards': 'from-purple-500/20 to-pink-500/20 border-purple-500/30 text-purple-300',
+                      'truefalse': 'from-green-500/20 to-emerald-500/20 border-green-500/30 text-green-300',
+                      'exam': 'from-orange-500/20 to-red-500/20 border-orange-500/30 text-orange-300'
+                    }
+                    return (
+                      <tr key={activity.id} className="border-b border-slate-800/50 hover:bg-slate-700/30 transition-colors">
+                        <td className="py-4 px-4 text-slate-400 text-sm">
+                          {new Date(activity.created_at).toLocaleString('tr-TR', { 
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="text-slate-300 font-medium">{activity.user_email}</div>
+                          {activity.user_name && (
+                            <div className="text-slate-500 text-sm">{activity.user_name}</div>
+                          )}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`px-3 py-1 rounded-lg text-sm font-medium border bg-gradient-to-r ${typeColors[activity.type as keyof typeof typeColors] || 'bg-slate-700/50 text-slate-300'}`}>
+                            <span className="mr-1">{typeIcons[activity.type as keyof typeof typeIcons]}</span>
+                            {activity.type}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-slate-300 max-w-md truncate">
+                          {activity.title}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                            activity.user_tier === 'premium' || activity.user_tier === 'pro'
+                              ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30'
+                              : 'bg-slate-700/50 text-slate-400'
+                          }`}>
+                            {activity.user_tier}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

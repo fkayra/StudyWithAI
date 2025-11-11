@@ -276,6 +276,12 @@ export const adminAPI = {
   async getUserDetails(userId: number) {
     const response = await apiClient.get(`/admin/users/${userId}/details`)
     return response.data
+  },
+
+  // Get recent user activities across platform
+  async getRecentActivities(skip: number = 0, limit: number = 100) {
+    const response = await apiClient.get('/admin/recent-activities', { params: { skip, limit } })
+    return response.data
   }
 }
 
