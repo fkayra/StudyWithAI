@@ -951,13 +951,7 @@ export default function SummariesPage() {
                          problem.solution.trim().startsWith('sequenceDiagram') ||
                          problem.solution.trim().startsWith('classDiagram') ? (
                           <div className="mt-2">
-                            <MermaidDiagram content={problem.solution.split('\n')[0]} />
-                            {/* Show explanation text after diagram if present */}
-                            {problem.solution.split('\n').slice(1).join('\n').trim() && (
-                              <div className="mt-3 text-sm text-slate-300">
-                                <MathText text={problem.solution.split('\n').slice(1).join('\n').trim()} />
-                              </div>
-                            )}
+                            <MermaidDiagram content={problem.solution} />
                           </div>
                         ) : (
                           <MathText text={problem.solution} />
