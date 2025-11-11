@@ -1431,7 +1431,9 @@ async def summarize_from_files(
             result_json = summarize_no_files(
                 topic=req.prompt,
                 language=language,
-                out_cap=limits.max_output_cap
+                out_cap=limits.max_output_cap,
+                user_id=current_user.id if current_user else None,
+                db=db
             )
             
             # Parse and return

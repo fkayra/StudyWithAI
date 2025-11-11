@@ -531,22 +531,68 @@ Constraints:
 
 
 def get_no_files_prompt(topic: str, language: str = "en") -> str:
-    """Prompt for generating summary without uploaded files"""
+    """Prompt for generating summary without uploaded files - from general knowledge"""
     lang_instr = "Generate in TURKISH." if language == "tr" else "Generate in ENGLISH."
     
-    return f"""Create comprehensive study notes on this topic: {topic}
+    return f"""You are creating comprehensive study notes on: "{topic}"
 
 {lang_instr}
 
-Use the same JSON structure as file-based summaries:
-- Learning objectives
-- Core concepts with extensive explanations (3-4 paragraphs) and multiple worked examples
-- Formula sheet with derivations and worked examples (if applicable)
-- Diagrams (2-4 visual representations)
-- Pseudocode examples (2-3 if algorithms present)
-- Practice problems (3-5 with full solutions)
+🎯 YOUR TASK: Generate a complete, detailed study guide based on your knowledge of this topic.
 
-Output valid JSON only (no markdown code blocks)."""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CRITICAL REQUIREMENTS (NO-FILES MODE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Since no files were uploaded, you MUST generate ACTUAL CONTENT from your knowledge base:
+
+1. **REAL CONTENT REQUIRED:**
+   - ❌ NO placeholders like "Concept 1", "Concept 2", "Section 1"
+   - ✅ ACTUAL topic-specific information with real names, dates, facts
+   - ✅ Real examples, real data, real explanations
+   - ✅ If you don't have deep knowledge → focus on core fundamentals + applications
+
+2. **STRUCTURE (same as file-based):**
+   - MINIMUM 10-15 sections covering main aspects of the topic
+   - Each section: 3-5 detailed concepts (250-400 words each)
+   - Learning objectives: 3-5 specific, measurable outcomes
+   - Formula sheet: Include key formulas/equations (if applicable to topic)
+   - Diagrams: 1-3 diagrams ONLY if helpful (hierarchies, processes, relationships)
+   - Pseudocode: 2-3 examples (ONLY for algorithmic/programming topics)
+   - Practice problems: 4-6 with detailed step-by-step solutions
+
+3. **DEPTH & QUALITY:**
+   - Each concept: definition + detailed explanation + 2-3 real examples + applications
+   - Include: history, key figures, methodologies, best practices, common pitfalls
+   - Real-world context: Where is this used? Why does it matter?
+   - Practical demonstrations with concrete examples
+
+4. **OUTPUT LENGTH:**
+   - 🚨 MINIMUM 8,000 tokens output (CRITICAL!)
+   - If you're under 8,000 tokens → You're being TOO BRIEF
+   - Expand explanations, add more examples, include more details
+   - This should be a COMPREHENSIVE study guide, not a quick overview
+
+5. **TOPIC-SPECIFIC APPROACH:**
+   For "{topic}":
+   - Identify main themes/categories within this topic
+   - Cover fundamentals + advanced concepts
+   - Include practical applications and real-world examples
+   - Add historical context if relevant
+   - Discuss current state and future directions (if applicable)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use EXACT JSON format from system prompt (with all required fields: title, overview, learning_objectives, sections with concepts, formula_sheet, diagrams, pseudocode, practice_problems, citations).
+
+🚨 VALIDATION: Before output, check:
+✓ NO placeholder text (all content is topic-specific)
+✓ 10-15+ sections created
+✓ Each concept has 250-400 words
+✓ Real examples included
+✓ Output is 8,000+ tokens
+
+🚨 REMEMBER: Generate REAL CONTENT about "{topic}", NOT placeholders!"""
 
 
 # ========== Helper Functions for Two-Stage REDUCE ==========
@@ -1424,16 +1470,22 @@ def map_reduce_summary(
 def summarize_no_files(
     topic: str,
     language: str = "en",
-    out_cap: int = 12000
+    out_cap: int = 12000,
+    user_id: Optional[int] = None,
+    db = None
 ) -> str:
     """
     Generate summary without uploaded files (from prompt only)
+    Uses general knowledge + enforces same quality standards as file-based summaries
     """
     user_prompt = get_no_files_prompt(topic, language)
     
     return call_openai(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt,
-        max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1])
+        max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
     )
 
