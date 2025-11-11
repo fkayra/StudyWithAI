@@ -739,7 +739,7 @@ REQUIREMENTS (APPLY GENERALLY):
    - Each top-level section must include at least one citation with section_or_heading and page_range based on the source.
    - Evidence snippets should be concise (no truncation).
 
-5) Consistency rule:
+6) Consistency rule:
    - Do NOT invent topics or facts not supported by the user's uploaded document.
 
 Issues to fix:
