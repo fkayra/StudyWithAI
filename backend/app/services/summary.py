@@ -742,7 +742,9 @@ def reduce_two_stage(
     language: str,
     domain: str,
     out_cap: int,
-    additional_instructions: str = ""
+    additional_instructions: str = "",
+    user_id: Optional[int] = None,
+    db = None
 ) -> dict:
     """
     Two-stage REDUCE process:
@@ -1098,7 +1100,9 @@ def merge_summaries(
             language=language,
             domain=domain,
             out_cap=out_budget,
-            additional_instructions=additional_instructions or ""
+            additional_instructions=additional_instructions or "",
+            user_id=user_id,
+            db=db
         )
         print("[REDUCE] Two-stage REDUCE completed successfully ✓")
         
@@ -1128,7 +1132,9 @@ def merge_summaries(
                     language=language,
                     domain=domain,
                     out_cap=out_budget,
-                    additional_instructions=enhanced_instructions
+                    additional_instructions=enhanced_instructions,
+                    user_id=user_id,
+                    db=db
                 )
                 print("[COVERAGE] ✓ Regeneration complete")
                 
@@ -1293,7 +1299,10 @@ def map_reduce_summary(
         return call_openai(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
-            max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1])
+            max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
         )
     
     # Large document: map-reduce with structure-aware chunking
