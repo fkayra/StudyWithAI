@@ -923,66 +923,45 @@ def call_openai(
         print(f"[OPENAI RESPONSE] Returned {len(content)} chars, finish_reason: {finish_reason}")
         
         # Track token usage in database (non-blocking)
-        if db and endpoint and attempt == 1 and usage:  # Only track on first successful attempt with usage data
+        if endpoint and attempt == 1 and usage and user_id:  # Only track on first successful attempt with usage data
             try:
-                from datetime import datetime
                 input_tokens = usage.get("prompt_tokens", 0)
                 output_tokens = usage.get("completion_tokens", 0)
                 total_tokens = usage.get("total_tokens", 0)
                 
-                print(f"[TOKEN TRACKING] Attempting to record: user_id={user_id}, endpoint={endpoint}, total={total_tokens}, db={db is not None}")
-                
-                # Skip if no tokens (shouldn't happen, but defensive)
+                # Skip if no tokens
                 if total_tokens == 0:
                     print(f"[TOKEN TRACKING] ⚠️ Skipping - zero tokens")
-                    return content
-                
-                # Cost calculation (per 1M tokens)
-                if "gpt-4o" in OPENAI_MODEL.lower() and "mini" not in OPENAI_MODEL.lower():
-                    input_cost_per_1m = 2.50  # $2.50 per 1M input tokens for gpt-4o
-                    output_cost_per_1m = 10.00  # $10.00 per 1M output tokens for gpt-4o
-                elif "gpt-4" in OPENAI_MODEL.lower():
-                    input_cost_per_1m = 30.00  # $30 per 1M input tokens for gpt-4
-                    output_cost_per_1m = 60.00  # $60 per 1M output tokens for gpt-4
                 else:
-                    input_cost_per_1m = 0.150  # $0.15 per 1M input tokens for gpt-4o-mini
-                    output_cost_per_1m = 0.600  # $0.60 per 1M output tokens for gpt-4o-mini
-                
-                estimated_cost = (input_tokens / 1_000_000 * input_cost_per_1m) + (output_tokens / 1_000_000 * output_cost_per_1m)
-                
-                print(f"[TOKEN TRACKING] Calculated cost: ${estimated_cost:.4f} (model: {OPENAI_MODEL})")
-                
-                # Use text() for raw SQL with SQLAlchemy
-                from sqlalchemy import text
-                from datetime import datetime
-                
-                sql = text("""
-                    INSERT INTO token_usage (user_id, endpoint, model, input_tokens, output_tokens, total_tokens, estimated_cost, created_at)
-                    VALUES (:user_id, :endpoint, :model, :input_tokens, :output_tokens, :total_tokens, :estimated_cost, :created_at)
-                """)
-                
-                db.execute(sql, {
-                    "user_id": user_id,
-                    "endpoint": endpoint,
-                    "model": OPENAI_MODEL,
-                    "input_tokens": input_tokens,
-                    "output_tokens": output_tokens,
-                    "total_tokens": total_tokens,
-                    "estimated_cost": estimated_cost,
-                    "created_at": datetime.utcnow()
-                })
-                db.commit()
-                print(f"[TOKEN TRACKING] ✅ Successfully recorded {total_tokens} tokens ({endpoint}) for user {user_id}, cost: ${estimated_cost:.4f}")
+                    # Cost calculation (per 1M tokens)
+                    if "gpt-4o" in OPENAI_MODEL.lower() and "mini" not in OPENAI_MODEL.lower():
+                        input_cost_per_1m = 2.50
+                        output_cost_per_1m = 10.00
+                    elif "gpt-4" in OPENAI_MODEL.lower():
+                        input_cost_per_1m = 30.00
+                        output_cost_per_1m = 60.00
+                    else:
+                        input_cost_per_1m = 0.150
+                        output_cost_per_1m = 0.600
+                    
+                    estimated_cost = (input_tokens / 1_000_000 * input_cost_per_1m) + (output_tokens / 1_000_000 * output_cost_per_1m)
+                    
+                    # Use centralized token tracker with fresh session
+                    from app.services.token_tracker import log_token_usage
+                    log_token_usage(
+                        user_id=user_id,
+                        endpoint=endpoint,
+                        model=OPENAI_MODEL,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
+                        estimated_cost=estimated_cost
+                    )
             except Exception as e:
                 # Don't fail the request if token tracking fails
-                print(f"[TOKEN TRACKING ERROR] ❌ Failed to record token usage: {e}")
-                print(f"[TOKEN TRACKING ERROR] Details: user_id={user_id}, endpoint={endpoint}, model={OPENAI_MODEL}, tokens={total_tokens}")
+                print(f"[TOKEN TRACKING ERROR] ❌ Failed to track: {e}")
                 import traceback
                 traceback.print_exc()
-                try:
-                    db.rollback()
-                except:
-                    pass
         
         # If truncated and retry enabled, try with 20% more tokens
         if finish_reason == "length" and retry_on_length and attempt < 2:
