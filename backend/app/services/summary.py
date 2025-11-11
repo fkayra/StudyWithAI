@@ -363,27 +363,31 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
         "description": "<What this diagram shows AND interpretation if from source file>",
         "content": "<Mermaid syntax (preferred) or ASCII art.
                     
-                    🚨 CRITICAL FOR BAYESIAN/PROBABILISTIC NETWORKS:
-                    1. EVERY edge MUST have probability label!
-                    2. EACH edge MUST be on a SEPARATE LINE (use \\n)!
+                    🚨 CRITICAL MERMAID SYNTAX RULES:
                     
-                    CORRECT EXAMPLE (Bayesian Network):
+                    1. EVERY NODE must have brackets: NodeName[NodeName] or NodeName[Label]
+                       WRONG: Producer --> Buffer
+                       CORRECT: Producer[Producer] --> Buffer[Buffer]
+                    
+                    2. Edge labels with special chars (parentheses, etc.) MUST be quoted:
+                       WRONG: -->|sem_wait(empty)|
+                       CORRECT: -->|"sem_wait(empty)"|
+                    
+                    3. EACH edge MUST be on a SEPARATE LINE:
+                       WRONG: A[A] -->|x| B[B] B -->|y| C[C]
+                       CORRECT:
+                       A[A] -->|x| B[B]
+                       B[B] -->|y| C[C]
+                    
+                    4. FOR BAYESIAN/PROBABILISTIC NETWORKS: EVERY edge MUST have probability!
+                       CORRECT: Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
+                    
+                    COMPLETE EXAMPLE (Producer/Consumer):
                     graph TD
-                      Cloudy[Cloudy] -->|P=0.8| Rain[Rain]
-                      Cloudy -->|P=0.2| NoRain[No Rain]  
-                      Rain -->|P=0.9| Wet[Wet Grass]
-                      NoRain -->|P=0.1| Wet
-                    
-                    WRONG EXAMPLE 1 (MISSING PROBABILITIES):
-                    graph TD
-                      Cloudy --> Rain --> Wet
-                    ❌ NO PROBABILITIES!
-                    
-                    WRONG EXAMPLE 2 (ALL ON ONE LINE):
-                    graph TD; Cloudy -->|P=0.8| Rain Rain -->|P=0.9| Wet
-                    ❌ MUST USE NEWLINES BETWEEN EDGES!
-                    
-                    CORRECT FORMAT: Use \\n for newlines, one edge per line
+                      Producer[Producer] -->|"sem_wait(empty)"| Buffer[Buffer]
+                      Buffer[Buffer] -->|"sem_post(full)"| Consumer[Consumer]
+                      Consumer[Consumer] -->|"sem_wait(full)"| Buffer[Buffer]
+                      Buffer[Buffer] -->|"sem_post(empty)"| Producer[Producer]
                     
                     Other Rules:
                     - If from source file → Copy ALL details accurately
