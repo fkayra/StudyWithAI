@@ -16,6 +16,7 @@ class PlanLimits:
     rate_limit_24h: int  # requests per 24 hours
 
 # Plan-based limits (Optimized for quality-cost balance)
+# INCREASED OUTPUT CAPS: More comprehensive summaries without sacrificing quality
 PLAN_LIMITS = {
     "free": PlanLimits(
         max_files_total=3,
@@ -23,7 +24,7 @@ PLAN_LIMITS = {
         max_total_mb=20,
         max_pages_total=80,
         max_input_tokens=12000,
-        max_output_cap=12000,  # Balanced: complete but efficient
+        max_output_cap=14000,  # Increased from 12k: More comprehensive summaries
         rate_limit_24h=10
     ),
     "standard": PlanLimits(
@@ -32,7 +33,7 @@ PLAN_LIMITS = {
         max_total_mb=50,
         max_pages_total=200,
         max_input_tokens=40000,
-        max_output_cap=14000,  # Moderate increase for depth
+        max_output_cap=16000,  # Increased from 14k: Better depth and examples
         rate_limit_24h=50
     ),
     "premium": PlanLimits(  # also handle "pro" alias
@@ -41,7 +42,7 @@ PLAN_LIMITS = {
         max_total_mb=100,
         max_pages_total=350,
         max_input_tokens=80000,
-        max_output_cap=16000,  # Premium depth without excessive cost
+        max_output_cap=18000,  # Increased from 16k: Maximum depth for premium users
         rate_limit_24h=200
     ),
 }
@@ -67,7 +68,7 @@ CHUNK_OUTPUT_BASE = 600  # Balanced: deep but efficient
 CHUNK_OUTPUT_FORMULA_BOOST = 200  # Key derivation steps, not full proofs
 CHUNK_OUTPUT_THEOREM_BOOST = 250  # Essential proof elements
 
-MERGE_OUTPUT_BUDGET = (4000, 16000)  # Balanced: comprehensive but cost-effective
+MERGE_OUTPUT_BUDGET = (4000, 18000)  # Increased upper limit: More comprehensive outputs
 
 # OpenAI configuration
 OPENAI_MODEL = "gpt-4o"  # Best quality model (was gpt-4o-mini)
