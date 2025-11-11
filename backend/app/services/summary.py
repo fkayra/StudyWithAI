@@ -725,11 +725,17 @@ REQUIREMENTS (APPLY GENERALLY):
    - worked_example must include real numeric calculation steps.
 
 3) Interactive feature requirements:
-   - Diagrams: Must have at least 2 visual representations (trees, flowcharts, hierarchies, graphs).
-   - Pseudocode: Must have at least 1-2 algorithm examples (if applicable to the material).
-   - Practice Problems: Must have at least 3 problems with full solutions and step-by-step explanations.
+   - Diagrams: Must have at least 4-6 visual representations (trees, flowcharts, hierarchies, graphs).
+   - Pseudocode: Must have at least 2-3 algorithm examples (if applicable to the material).
+   - Practice Problems: Must have at least 4-6 problems with full solutions and step-by-step explanations.
 
-4) Citations requirement:
+4) Depth requirements:
+   - EXPAND all explanations fully (200-350 words per concept).
+   - Add more examples, cases, and worked solutions.
+   - Don't be brief - use available token budget (aim for 8,000-11,000 tokens output).
+   - Each concept should feel like a complete mini-lesson, not a summary.
+
+5) Citations requirement:
    - Each top-level section must include at least one citation with section_or_heading and page_range based on the source.
    - Evidence snippets should be concise (no truncation).
 
