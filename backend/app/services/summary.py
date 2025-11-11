@@ -930,6 +930,8 @@ def call_openai(
                 output_tokens = usage.get("completion_tokens", 0)
                 total_tokens = usage.get("total_tokens", 0)
                 
+                print(f"[TOKEN TRACKING] Attempting to record: user_id={user_id}, endpoint={endpoint}, total={total_tokens}")
+                
                 # Cost calculation (per 1M tokens)
                 if "gpt-4o" in OPENAI_MODEL.lower():
                     input_cost_per_1m = 2.50  # $2.50 per 1M input tokens for gpt-4o
@@ -943,45 +945,30 @@ def call_openai(
                 
                 estimated_cost = (input_tokens / 1_000_000 * input_cost_per_1m) + (output_tokens / 1_000_000 * output_cost_per_1m)
                 
-                # Import here to avoid circular dependency
-                from sqlalchemy import Column, Integer, String, Float, DateTime
-                from sqlalchemy.ext.declarative import declarative_base
+                # Use text() for raw SQL with SQLAlchemy
+                from sqlalchemy import text
                 
-                # Use dynamic class creation to avoid import issues
-                token_usage_record = type('TokenUsage', (), {
-                    '__tablename__': 'token_usage',
-                    'user_id': user_id,
-                    'endpoint': endpoint,
-                    'model': OPENAI_MODEL,
-                    'input_tokens': input_tokens,
-                    'output_tokens': output_tokens,
-                    'total_tokens': total_tokens,
-                    'estimated_cost': estimated_cost,
-                    'created_at': datetime.utcnow()
-                })
-                
-                # Try to execute raw SQL to avoid import issues
-                db.execute(
-                    """
+                sql = text("""
                     INSERT INTO token_usage (user_id, endpoint, model, input_tokens, output_tokens, total_tokens, estimated_cost, created_at)
-                    VALUES (:user_id, :endpoint, :model, :input_tokens, :output_tokens, :total_tokens, :estimated_cost, :created_at)
-                    """,
-                    {
-                        "user_id": user_id,
-                        "endpoint": endpoint,
-                        "model": OPENAI_MODEL,
-                        "input_tokens": input_tokens,
-                        "output_tokens": output_tokens,
-                        "total_tokens": total_tokens,
-                        "estimated_cost": estimated_cost,
-                        "created_at": datetime.utcnow()
-                    }
-                )
+                    VALUES (:user_id, :endpoint, :model, :input_tokens, :output_tokens, :total_tokens, :estimated_cost, NOW())
+                """)
+                
+                db.execute(sql, {
+                    "user_id": user_id,
+                    "endpoint": endpoint,
+                    "model": OPENAI_MODEL,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens,
+                    "estimated_cost": estimated_cost
+                })
                 db.commit()
-                print(f"[TOKEN TRACKING] Recorded {total_tokens} tokens ({endpoint}) for user {user_id}")
+                print(f"[TOKEN TRACKING] ✅ Successfully recorded {total_tokens} tokens ({endpoint}) for user {user_id}, cost: ${estimated_cost:.4f}")
             except Exception as e:
                 # Don't fail the request if token tracking fails
-                print(f"[TOKEN TRACKING ERROR] Failed to record token usage: {e}")
+                print(f"[TOKEN TRACKING ERROR] ❌ Failed to record token usage: {e}")
+                import traceback
+                traceback.print_exc()
                 try:
                     db.rollback()
                 except:
