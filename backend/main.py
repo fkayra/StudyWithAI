@@ -3526,16 +3526,16 @@ async def get_revenue_stats(
         "net_revenue": total_revenue - total_token_cost
     }
 
-@app.get("/admin/recent-activities")
-async def get_recent_activities(
+@app.get("/admin/all-activities")
+async def get_all_activities(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 500,
     admin_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get recent user activities across the platform
-    Returns history items with user information
+    Get ALL user activities across the platform with token usage information
+    Returns history items with user information and associated token costs
     """
     try:
         # Query history with user join, ordered by newest first
@@ -3550,7 +3550,50 @@ async def get_recent_activities(
         
         result = []
         for history, user in activities:
-            result.append({
+            # Find associated token usage (within ±5 minutes of history creation)
+            # Match by user_id and timestamp proximity
+            time_window_start = history.created_at - timedelta(minutes=5)
+            time_window_end = history.created_at + timedelta(minutes=5)
+            
+            # Try to find the most relevant token usage entry
+            # Prioritize: /summarize for summaries, /generate-exam for exams, etc.
+            endpoint_mapping = {
+                "summary": "/summarize",
+                "flashcards": "/generate-flashcards",
+                "truefalse": "/generate-truefalse",
+                "exam": "/generate-exam"
+            }
+            preferred_endpoint = endpoint_mapping.get(history.type)
+            
+            token_usage = None
+            if preferred_endpoint:
+                # Try to find exact endpoint match first
+                token_usage = (
+                    db.query(TokenUsage)
+                    .filter(
+                        TokenUsage.user_id == user.id,
+                        TokenUsage.endpoint == preferred_endpoint,
+                        TokenUsage.created_at >= time_window_start,
+                        TokenUsage.created_at <= time_window_end
+                    )
+                    .order_by(func.abs(func.extract('epoch', TokenUsage.created_at - history.created_at)))
+                    .first()
+                )
+            
+            # If no exact match, find any token usage in the time window
+            if not token_usage:
+                token_usage = (
+                    db.query(TokenUsage)
+                    .filter(
+                        TokenUsage.user_id == user.id,
+                        TokenUsage.created_at >= time_window_start,
+                        TokenUsage.created_at <= time_window_end
+                    )
+                    .order_by(func.abs(func.extract('epoch', TokenUsage.created_at - history.created_at)))
+                    .first()
+                )
+            
+            activity_data = {
                 "id": history.id,
                 "user_id": user.id,
                 "user_email": user.email,
@@ -3560,11 +3603,25 @@ async def get_recent_activities(
                 "title": history.title,
                 "created_at": history.created_at.isoformat(),
                 "folder_id": history.folder_id
-            })
+            }
+            
+            # Add token usage information if found
+            if token_usage:
+                activity_data["token_usage"] = {
+                    "model": token_usage.model,
+                    "input_tokens": token_usage.input_tokens,
+                    "output_tokens": token_usage.output_tokens,
+                    "total_tokens": token_usage.total_tokens,
+                    "estimated_cost": token_usage.estimated_cost
+                }
+            else:
+                activity_data["token_usage"] = None
+            
+            result.append(activity_data)
         
         return result
     except Exception as e:
-        print(f"[ADMIN ERROR] Failed to fetch recent activities: {e}")
+        print(f"[ADMIN ERROR] Failed to fetch all activities: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to fetch activities: {str(e)}")

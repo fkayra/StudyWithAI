@@ -89,6 +89,13 @@ interface Activity {
   title: string
   created_at: string
   folder_id: number | null
+  token_usage: {
+    model: string
+    input_tokens: number
+    output_tokens: number
+    total_tokens: number
+    estimated_cost: number
+  } | null
 }
 
 type Tab = 'overview' | 'users' | 'transactions' | 'tokens' | 'revenue' | 'activity'
@@ -200,7 +207,7 @@ export default function AdminPage() {
 
   const loadActivities = async () => {
     try {
-      const data = await adminAPI.getRecentActivities(0, 100)
+      const data = await adminAPI.getAllActivities(0, 500)
       setActivities(data)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load activities')
@@ -287,7 +294,7 @@ export default function AdminPage() {
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: '📊' },
     { id: 'users' as Tab, label: 'Users', icon: '👥' },
-    { id: 'activity' as Tab, label: 'Son İşlemler', icon: '📜' },
+    { id: 'activity' as Tab, label: 'Tüm İşlemler', icon: '📜' },
     { id: 'transactions' as Tab, label: 'Transactions', icon: '💳' },
     { id: 'tokens' as Tab, label: 'Token Usage', icon: '🔑' },
     { id: 'revenue' as Tab, label: 'Revenue', icon: '💰' }
@@ -828,17 +835,21 @@ export default function AdminPage() {
         {activeTab === 'activity' && (
           <div className="backdrop-blur-xl bg-slate-800/50 border border-slate-700/50 rounded-2xl p-6 animate-fadeIn">
             <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-2">
-              <span>📜</span> Son İşlemler ({activities.length})
+              <span>📜</span> Tüm İşlemler ({activities.length})
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Tarih</th>
-                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Kullanıcı</th>
-                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">İşlem Tipi</th>
-                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Başlık</th>
-                    <th className="text-left py-4 px-4 text-slate-300 font-semibold">Tier</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Tarih</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Kullanıcı</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">İşlem</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Başlık</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Model</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Input</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Output</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Total</th>
+                    <th className="text-left py-4 px-3 text-slate-300 font-semibold">Cost</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -857,7 +868,7 @@ export default function AdminPage() {
                     }
                     return (
                       <tr key={activity.id} className="border-b border-slate-800/50 hover:bg-slate-700/30 transition-colors">
-                        <td className="py-4 px-4 text-slate-400 text-sm">
+                        <td className="py-4 px-3 text-slate-400 text-xs">
                           {new Date(activity.created_at).toLocaleString('tr-TR', { 
                             day: '2-digit',
                             month: '2-digit',
@@ -866,29 +877,39 @@ export default function AdminPage() {
                             minute: '2-digit'
                           })}
                         </td>
-                        <td className="py-4 px-4">
-                          <div className="text-slate-300 font-medium">{activity.user_email}</div>
-                          {activity.user_name && (
-                            <div className="text-slate-500 text-sm">{activity.user_name}</div>
-                          )}
+                        <td className="py-4 px-3">
+                          <div className="text-slate-300 text-sm">{activity.user_email}</div>
+                          <div className={`text-xs mt-1 ${
+                            activity.user_tier === 'premium' || activity.user_tier === 'pro'
+                              ? 'text-purple-400'
+                              : 'text-slate-500'
+                          }`}>
+                            {activity.user_tier}
+                          </div>
                         </td>
-                        <td className="py-4 px-4">
-                          <span className={`px-3 py-1 rounded-lg text-sm font-medium border bg-gradient-to-r ${typeColors[activity.type as keyof typeof typeColors] || 'bg-slate-700/50 text-slate-300'}`}>
+                        <td className="py-4 px-3">
+                          <span className={`px-2 py-1 rounded-lg text-xs font-medium border bg-gradient-to-r ${typeColors[activity.type as keyof typeof typeColors] || 'bg-slate-700/50 text-slate-300'}`}>
                             <span className="mr-1">{typeIcons[activity.type as keyof typeof typeIcons]}</span>
                             {activity.type}
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-slate-300 max-w-md truncate">
+                        <td className="py-4 px-3 text-slate-300 text-sm max-w-xs truncate">
                           {activity.title}
                         </td>
-                        <td className="py-4 px-4">
-                          <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
-                            activity.user_tier === 'premium' || activity.user_tier === 'pro'
-                              ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30'
-                              : 'bg-slate-700/50 text-slate-400'
-                          }`}>
-                            {activity.user_tier}
-                          </span>
+                        <td className="py-4 px-3 text-slate-400 text-xs">
+                          {activity.token_usage ? activity.token_usage.model : '—'}
+                        </td>
+                        <td className="py-4 px-3 text-slate-300 text-sm">
+                          {activity.token_usage ? activity.token_usage.input_tokens.toLocaleString() : '—'}
+                        </td>
+                        <td className="py-4 px-3 text-slate-300 text-sm">
+                          {activity.token_usage ? activity.token_usage.output_tokens.toLocaleString() : '—'}
+                        </td>
+                        <td className="py-4 px-3 text-teal-400 font-semibold text-sm">
+                          {activity.token_usage ? activity.token_usage.total_tokens.toLocaleString() : '—'}
+                        </td>
+                        <td className="py-4 px-3 text-orange-400 font-bold text-sm">
+                          {activity.token_usage ? `$${activity.token_usage.estimated_cost.toFixed(4)}` : '—'}
                         </td>
                       </tr>
                     )

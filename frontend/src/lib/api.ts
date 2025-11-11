@@ -278,9 +278,9 @@ export const adminAPI = {
     return response.data
   },
 
-  // Get recent user activities across platform
-  async getRecentActivities(skip: number = 0, limit: number = 100) {
-    const response = await apiClient.get('/admin/recent-activities', { params: { skip, limit } })
+  // Get ALL user activities across platform with token usage
+  async getAllActivities(skip: number = 0, limit: number = 500) {
+    const response = await apiClient.get('/admin/all-activities', { params: { skip, limit } })
     return response.data
   }
 }
