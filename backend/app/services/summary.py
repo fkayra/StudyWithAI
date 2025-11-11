@@ -1149,18 +1149,52 @@ def merge_summaries(
             else:
                 print(f"[COVERAGE] ✅ Coverage validated ({coverage_result['coverage_score']:.1%})")
             
-            # Add coverage info to result for frontend display (ALWAYS, even if 100% coverage)
-            # CRITICAL: result is a JSON string, need to parse it first!
-            try:
-                result_dict = json.loads(result) if isinstance(result, str) else result
-                result_dict['coverage'] = {
-                    'score': round(coverage_result['coverage_score'], 2),
-                    'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
-                }
-                result = json.dumps(result_dict, ensure_ascii=False, indent=2)
-                print(f"[COVERAGE] ✅ Coverage added to JSON: {coverage_result['coverage_score']:.1%} score, {len(coverage_result['missing_topics'])} missing topics")
-            except Exception as e:
-                print(f"[COVERAGE] ⚠️  Failed to add coverage info: {e}")
+        # Add coverage info to result for frontend display (ALWAYS, even if 100% coverage)
+        # CRITICAL: result is a JSON string, need to parse it first!
+        try:
+            result_dict = json.loads(result) if isinstance(result, str) else result
+            result_dict['coverage'] = {
+                'score': round(coverage_result['coverage_score'], 2),
+                'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
+            }
+            
+            # FIX DIAGRAM FORMATTING: Add newlines between edges in Mermaid diagrams
+            if 'diagrams' in result_dict.get('summary', {}):
+                for diagram in result_dict['summary']['diagrams']:
+                    if 'content' in diagram:
+                        content = diagram['content']
+                        # Check if it's Mermaid syntax (starts with graph/flowchart)
+                        if content.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
+                            # Fix inline edges: "A --> B B --> C" becomes "A --> B\n  B --> C"
+                            # Pattern: edge followed immediately by another node (no newline)
+                            import re
+                            # Match: "]" or ")" followed by space and arrow
+                            fixed = re.sub(r'(\]|\))(\s*--[>|])', r'\1\n  \2', content)
+                            # Also fix: arrow followed by "[Node]" followed immediately by another arrow
+                            fixed = re.sub(r'(\]|\))(\s+)([A-Z]\[)', r'\1\n  \3', fixed)
+                            if fixed != content:
+                                print(f"[DIAGRAM FIX] Fixed inline edges in diagram: {diagram.get('title', 'Untitled')}")
+                                diagram['content'] = fixed
+            
+            # Also fix practice problem solutions
+            if 'practice_problems' in result_dict.get('summary', {}):
+                for problem in result_dict['summary']['practice_problems']:
+                    if 'solution' in problem:
+                        solution = problem['solution']
+                        if solution.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
+                            import re
+                            fixed = re.sub(r'(\]|\))(\s*--[>|])', r'\1\n  \2', solution)
+                            fixed = re.sub(r'(\]|\))(\s+)([A-Z]\[)', r'\1\n  \3', fixed)
+                            if fixed != solution:
+                                print(f"[PRACTICE FIX] Fixed inline edges in practice problem")
+                                problem['solution'] = fixed
+            
+            result = json.dumps(result_dict, ensure_ascii=False, indent=2)
+            print(f"[COVERAGE] ✅ Coverage added to JSON: {coverage_result['coverage_score']:.1%} score, {len(coverage_result['missing_topics'])} missing topics")
+        except Exception as e:
+            print(f"[COVERAGE] ⚠️  Failed to add coverage info: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Return as JSON string (for compatibility with existing pipeline)
         return json.dumps(result, ensure_ascii=False, indent=2) if not isinstance(result, str) else result
