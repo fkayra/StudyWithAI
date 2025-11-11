@@ -105,6 +105,34 @@ def detect_empty_fields(parsed_json: dict) -> list:
     return empty_fields
 
 
+def fix_escape_sequences(text: str) -> str:
+    """
+    Fix common escape sequence issues in JSON, especially LaTeX formulas
+    
+    Common issues:
+    - \( → \\(
+    - \) → \\)
+    - \[ → \\[
+    - \] → \\]
+    - Other backslash sequences that should be escaped
+    """
+    # Fix LaTeX delimiters and common math symbols
+    replacements = [
+        (r'\\(', r'\\\\('),  # \( → \\(
+        (r'\\)', r'\\\\)'),  # \) → \\)
+        (r'\\[', r'\\\\['),  # \[ → \\[
+        (r'\\]', r'\\\\]'),  # \] → \\]
+        (r'\\\{', r'\\\\\{'),  # \{ → \\{
+        (r'\\\}', r'\\\\\}'),  # \} → \\}
+    ]
+    
+    result = text
+    for old, new in replacements:
+        result = result.replace(old, new)
+    
+    return result
+
+
 def parse_json_robust(text: str, max_attempts: int = 3) -> dict:
     """
     Robustly parse JSON with multiple fallback strategies
@@ -131,7 +159,19 @@ def parse_json_robust(text: str, max_attempts: int = 3) -> dict:
     except json.JSONDecodeError as e1:
         print(f"[JSON PARSE] Attempt 1 failed: {e1}")
     
-    # Attempt 2: Extract and parse
+    # Attempt 2: Fix escape sequences and parse
+    try:
+        fixed = fix_escape_sequences(text)
+        parsed = json.loads(fixed)
+        empty_fields = detect_empty_fields(parsed)
+        if empty_fields:
+            parsed["_empty_fields_detected"] = empty_fields
+        print(f"[JSON PARSE] Attempt 2 succeeded (fixed escape sequences)")
+        return parsed
+    except json.JSONDecodeError as e2:
+        print(f"[JSON PARSE] Attempt 2 failed: {e2}")
+    
+    # Attempt 3: Extract and parse
     try:
         extracted = extract_json_block(text)
         parsed = json.loads(extracted)
@@ -139,37 +179,54 @@ def parse_json_robust(text: str, max_attempts: int = 3) -> dict:
         if empty_fields:
             parsed["_empty_fields_detected"] = empty_fields
         return parsed
-    except json.JSONDecodeError as e2:
-        print(f"[JSON PARSE] Attempt 2 failed: {e2}")
-    
-    # Attempt 3: Balance braces and parse
-    try:
-        extracted = extract_json_block(text)
-        balanced = balance_braces(extracted)
-        parsed = json.loads(balanced)
-        empty_fields = detect_empty_fields(parsed)
-        if empty_fields:
-            parsed["_empty_fields_detected"] = empty_fields
-        return parsed
     except json.JSONDecodeError as e3:
         print(f"[JSON PARSE] Attempt 3 failed: {e3}")
     
-    # Attempt 4: Try to find largest valid JSON object
+    # Attempt 4: Extract, fix escapes, and parse
+    try:
+        extracted = extract_json_block(text)
+        fixed = fix_escape_sequences(extracted)
+        parsed = json.loads(fixed)
+        empty_fields = detect_empty_fields(parsed)
+        if empty_fields:
+            parsed["_empty_fields_detected"] = empty_fields
+        print(f"[JSON PARSE] Attempt 4 succeeded (extract + fix escapes)")
+        return parsed
+    except json.JSONDecodeError as e4:
+        print(f"[JSON PARSE] Attempt 4 failed: {e4}")
+    
+    # Attempt 5: Balance braces and parse
+    try:
+        extracted = extract_json_block(text)
+        balanced = balance_braces(extracted)
+        fixed = fix_escape_sequences(balanced)
+        parsed = json.loads(fixed)
+        empty_fields = detect_empty_fields(parsed)
+        if empty_fields:
+            parsed["_empty_fields_detected"] = empty_fields
+        print(f"[JSON PARSE] Attempt 5 succeeded (balance + fix escapes)")
+        return parsed
+    except json.JSONDecodeError as e5:
+        print(f"[JSON PARSE] Attempt 5 failed: {e5}")
+    
+    # Attempt 6: Try to find largest valid JSON object
     try:
         # Start from beginning, try progressively smaller substrings
         extracted = extract_json_block(text)
         for i in range(len(extracted), len(extracted) // 2, -100):
             candidate = balance_braces(extracted[:i])
+            fixed = fix_escape_sequences(candidate)
             try:
-                parsed = json.loads(candidate)
+                parsed = json.loads(fixed)
                 empty_fields = detect_empty_fields(parsed)
                 if empty_fields:
                     parsed["_empty_fields_detected"] = empty_fields
+                print(f"[JSON PARSE] Attempt 6 succeeded (progressive truncation)")
                 return parsed
             except:
                 continue
-    except Exception as e4:
-        print(f"[JSON PARSE] Attempt 4 failed: {e4}")
+    except Exception as e6:
+        print(f"[JSON PARSE] Attempt 6 failed: {e6}")
     
     # All attempts failed
     raise ValueError(f"Failed to parse JSON after {max_attempts} attempts. Text length: {len(text)}")

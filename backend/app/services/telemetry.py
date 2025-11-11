@@ -55,7 +55,7 @@ def record_summary_quality(
             generation_time_seconds=generation_time_seconds,
             warnings=warnings,
             # Comprehensive quality metrics (evrensel)
-            coverage_score=coverage_score,
+            # coverage_score=coverage_score,  # TODO: Needs DB migration - temporarily disabled
             numeric_density=numeric_density,
             formula_completeness=formula_completeness,
             citation_depth=citation_depth,

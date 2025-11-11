@@ -31,7 +31,8 @@ class SummaryQuality(Base):
     num_glossary_terms = Column(Integer)
     
     # Comprehensive quality metrics (evrensel, domain-agnostic)
-    coverage_score = Column(Float, nullable=True)  # Theme coverage ratio
+    # TODO: coverage_score needs migration - temporarily commented out
+    # coverage_score = Column(Float, nullable=True)  # Theme coverage ratio
     numeric_density = Column(Float, nullable=True)  # % examples with numbers (domain-aware)
     formula_completeness = Column(Float, nullable=True)  # % formulas with variables + examples
     citation_depth = Column(Float, nullable=True)  # % citations with page/section details
