@@ -678,12 +678,20 @@ def validate_reduce_output(result: dict) -> list:
     pseudocode = summary.get("pseudocode", [])
     practice_problems = summary.get("practice_problems", [])
     
-    if len(diagrams) < 2:
-        issues.append(f"Diagrams too few ({len(diagrams)}), expected ≥2")
-    if len(pseudocode) < 1:  # More lenient since not all topics have algorithms
-        issues.append(f"Pseudocode examples missing or too few ({len(pseudocode)}), expected ≥1")
-    if len(practice_problems) < 3:
-        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥3")
+    if len(diagrams) < 4:
+        issues.append(f"Diagrams too few ({len(diagrams)}), expected ≥4 for comprehensive visual learning")
+    if len(pseudocode) < 2:  # More lenient since not all topics have algorithms
+        issues.append(f"Pseudocode examples too few ({len(pseudocode)}), expected ≥2")
+    if len(practice_problems) < 4:
+        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥4 for adequate practice")
+    
+    # Check output length (ensure we're using available token budget)
+    import json
+    result_json = json.dumps(result, ensure_ascii=False)
+    estimated_tokens = len(result_json) // 4  # Rough estimate: 4 chars per token
+    
+    if estimated_tokens < 6000:  # Less than 50% of typical 12k budget
+        issues.append(f"Output too brief ({estimated_tokens} tokens estimated), should aim for 8,000-11,000 tokens. EXPAND concepts and add more examples!")
     
     return issues
 

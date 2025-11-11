@@ -72,17 +72,24 @@ EVIDENCE STANDARD:
 ✓ For qualitative content: Include specific cases, events, quotes, dates
 
 DEPTH & COMPREHENSIVENESS:
-✓ Aim for AT LEAST 6-8 sections (more if material is extensive)
-✓ Each concept: 150-250 words of explanation
+✓ Aim for AT LEAST 8-12 sections (more if material is extensive)
+✓ Each concept: 200-350 words of explanation (EXPAND fully, don't summarize!)
 ✓ Include examples, pitfalls, when_to_use, limitations when applicable
-✓ Glossary: AT LEAST 15-25 terms
-✓ Use available token budget fully - don't be unnecessarily brief
-✓ Major themes get dedicated sections with depth
-✓ Supporting details organized under relevant themes
+✓ Each section: MINIMUM 3-4 concepts (more for major themes)
+✓ Diagrams: AT LEAST 4-6 visual representations
+✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
+✓ Practice Problems: AT LEAST 4-6 problems with detailed solutions
+
+🎯 TARGET OUTPUT LENGTH:
+✓ Use 80-90% of available token budget (aim for ~9,000-11,000 tokens for free tier)
+✓ DON'T be brief - expand explanations, add more examples, increase depth
+✓ If material supports it, GO DEEPER rather than wider
+✓ Major themes get dedicated sections with EXTENSIVE depth
+✓ Each concept should feel like a mini-lesson, not a quick summary
 
 EFFICIENCY (Token Optimization):
 ✓ Include only fields that have content (omit empty arrays/objects)
-✓ But don't be afraid to fill available space with quality content
+✓ But MAXIMIZE quality content - fill available space with depth and examples
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✍️ WRITING STANDARDS
