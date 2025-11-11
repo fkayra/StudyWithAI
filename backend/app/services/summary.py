@@ -1477,8 +1477,49 @@ def summarize_no_files(
     """
     Generate summary without uploaded files (from prompt only)
     Uses general knowledge + enforces same quality standards as file-based summaries
+    IMPORTANT: Uses same JSON format as file-based mode (get_final_merge_prompt)
     """
-    user_prompt = get_no_files_prompt(topic, language)
+    # Use the SAME prompt structure as file-based mode for consistency
+    user_prompt = get_final_merge_prompt(language, "", "general")
+    
+    # Add topic-specific instructions
+    topic_instructions = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ NO FILES MODE - GENERATE FROM KNOWLEDGE BASE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TOPIC: "{topic}"
+
+Since no files were uploaded, generate comprehensive study notes based on your knowledge:
+
+🚨 CRITICAL REQUIREMENTS:
+1. Generate REAL CONTENT about "{topic}" (NO placeholders like "Concept 1")
+2. MINIMUM 10-15 sections with real topic-specific headings
+3. Each section: 3-5 detailed concepts (250-400 words each)
+4. Use actual names, dates, facts, examples from your knowledge
+5. MINIMUM 8,000 tokens output
+
+APPROACH:
+- Identify main themes/aspects of "{topic}"
+- Cover: history, key figures, methodologies, applications, current state
+- Include real-world examples and practical context
+- Add formulas/equations if applicable to topic
+- Diagrams: ONLY if truly helpful (1-3 max)
+- Practice problems: 4-6 with detailed solutions
+
+VALIDATION:
+✓ ALL content is topic-specific (no generic placeholders)
+✓ Sections have REAL headings (not "Section 1", "Section 2")
+✓ Concepts have REAL names and detailed explanations
+✓ Output is 8,000+ tokens
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COURSE MATERIAL (from your knowledge base):
+Generate comprehensive content about: {topic}
+"""
+    
+    user_prompt += topic_instructions
     
     return call_openai(
         system_prompt=SYSTEM_PROMPT,
