@@ -109,28 +109,68 @@ def fix_escape_sequences(text: str) -> str:
     """
     Fix common escape sequence issues in JSON, especially LaTeX formulas
     
-    Common issues:
-    - \( → \\(
-    - \) → \\)
-    - \[ → \\[
-    - \] → \\]
-    - Other backslash sequences that should be escaped
+    Strategy: Replace ALL backslashes with double backslashes in string values,
+    but preserve valid JSON escape sequences (\n, \t, \", \\, etc.)
     """
-    # Fix LaTeX delimiters and common math symbols
-    replacements = [
-        (r'\\(', r'\\\\('),  # \( → \\(
-        (r'\\)', r'\\\\)'),  # \) → \\)
-        (r'\\[', r'\\\\['),  # \[ → \\[
-        (r'\\]', r'\\\\]'),  # \] → \\]
-        (r'\\\{', r'\\\\\{'),  # \{ → \\{
-        (r'\\\}', r'\\\\\}'),  # \} → \\}
-    ]
+    import re
     
-    result = text
-    for old, new in replacements:
-        result = result.replace(old, new)
+    # Valid JSON escape sequences we want to preserve
+    VALID_ESCAPES = {'n', 't', 'r', 'b', 'f', '"', '/', '\\', 'u'}
     
-    return result
+    # Strategy: Find all string values and fix backslashes within them
+    # Match strings: "..." (but not escaped quotes \")
+    def fix_string_backslashes(match):
+        string_content = match.group(1)
+        
+        # Process character by character to handle backslashes correctly
+        result = []
+        i = 0
+        while i < len(string_content):
+            if string_content[i] == '\\':
+                # Check what follows the backslash
+                if i + 1 < len(string_content):
+                    next_char = string_content[i + 1]
+                    
+                    # If it's a valid JSON escape, keep it as-is
+                    if next_char in VALID_ESCAPES:
+                        result.append('\\')
+                        result.append(next_char)
+                        i += 2
+                    # If it's u followed by 4 hex digits (unicode escape), keep it
+                    elif next_char == 'u' and i + 5 < len(string_content):
+                        if all(c in '0123456789abcdefABCDEF' for c in string_content[i+2:i+6]):
+                            result.append(string_content[i:i+6])
+                            i += 6
+                        else:
+                            # Not valid unicode, double the backslash
+                            result.append('\\\\')
+                            i += 1
+                    else:
+                        # Invalid escape sequence (like \(, \), \[, etc.)
+                        # Double the backslash
+                        result.append('\\\\')
+                        i += 1
+                else:
+                    # Backslash at end of string - double it
+                    result.append('\\\\')
+                    i += 1
+            else:
+                result.append(string_content[i])
+                i += 1
+        
+        return '"' + ''.join(result) + '"'
+    
+    # Match JSON string values: "..." 
+    # Negative lookbehind to avoid already-escaped quotes
+    pattern = r'"((?:[^"\\]|\\.)*)(?<!\\)"'
+    
+    try:
+        fixed = re.sub(pattern, fix_string_backslashes, text)
+        return fixed
+    except Exception as e:
+        print(f"[ESCAPE FIX] Error: {e}, falling back to simple replacement")
+        # Fallback: simple double-backslash replacement (less accurate but safe)
+        return text.replace('\\', '\\\\')
 
 
 def parse_json_robust(text: str, max_attempts: int = 3) -> dict:

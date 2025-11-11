@@ -55,12 +55,13 @@ def record_summary_quality(
             generation_time_seconds=generation_time_seconds,
             warnings=warnings,
             # Comprehensive quality metrics (evrensel)
-            # coverage_score=coverage_score,  # TODO: Needs DB migration - temporarily disabled
-            numeric_density=numeric_density,
-            formula_completeness=formula_completeness,
-            citation_depth=citation_depth,
-            readability_score=readability_score,
-            is_final_ready=1 if is_final_ready else 0
+            # TODO: These fields need DB migration - temporarily disabled
+            # coverage_score=coverage_score,
+            # numeric_density=numeric_density,
+            # formula_completeness=formula_completeness,
+            # citation_depth=citation_depth,
+            # readability_score=readability_score,
+            # is_final_ready=1 if is_final_ready else 0
         )
         
         db.add(quality_record)
