@@ -1343,23 +1343,23 @@ def merge_summaries(
                                 
                                 fixed_line = line
                                 
-                                # Fix bare node names that aren't already in brackets
-                                # Pattern 1: NodeName --> becomes NodeName[NodeName] -->
-                                # Only match nodes that DON'T already have brackets after them
-                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', lambda m: 
-                                    f'{m.group(1)}[{m.group(1)}] {m.group(2)}' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
-                                
-                                # Pattern 2: -->|label| NodeName becomes -->|label| NodeName[NodeName]
-                                # Match node names that appear after | (edge labels)
-                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s*$|\s+(?=[A-Z]))', lambda m:
-                                    f'| {m.group(1)}[{m.group(1)}] ' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
-                                
-                                # Fix 2: Quote ALL edge labels (not just those with parentheses)
-                                # This is critical - Mermaid requires quotes for labels with special chars
-                                # Match: -->|anything_not_already_quoted| and wrap in quotes
-                                # Pattern: -->|label| where label is not already quoted
-                                fixed_line = re.sub(r'-->\|([^|"]+)\|', lambda m:
+                                # Fix 1: Quote ALL edge labels FIRST (before other fixes)
+                                # This is CRITICAL - must quote labels before manipulating nodes
+                                # Match: -->|label| where label is NOT already quoted
+                                fixed_line = re.sub(r'-->\|([^|]+)\|', lambda m:
                                     f'-->|"{m.group(1).strip()}"|' if not (m.group(1).strip().startswith('"') and m.group(1).strip().endswith('"')) else m.group(0), fixed_line)
+                                
+                                # Fix 2: Add brackets to bare node names at START of edge
+                                # Pattern: NodeName --> becomes NodeName[NodeName] -->
+                                # Match word at start of line or after whitespace
+                                fixed_line = re.sub(r'^(\s*)([A-Z][a-zA-Z0-9_]+)(\s+-->)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}[{m.group(2)}]{m.group(3)}' if '[' not in m.group(0) else m.group(0), fixed_line)
+                                
+                                # Fix 3: Add brackets to bare node names at END of edge (after label)
+                                # Pattern: -->|"label"| NodeName becomes -->|"label"| NodeName[NodeName]
+                                # Must handle both quoted and unquoted labels
+                                fixed_line = re.sub(r'(\|"[^"]*"\||\|[^|]*\|)(\s+)([A-Z][a-zA-Z0-9_]+)(\s*$)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}{m.group(3)}[{m.group(3)}]{m.group(4)}' if '[' not in m.group(3) else m.group(0), fixed_line)
                                 
                                 fixed_lines.append(fixed_line)
                             
@@ -1413,16 +1413,17 @@ def merge_summaries(
                                 
                                 fixed_line = line
                                 
-                                # Fix bare node names
-                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', lambda m: 
-                                    f'{m.group(1)}[{m.group(1)}] {m.group(2)}' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
-                                
-                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s*$|\s+(?=[A-Z]))', lambda m:
-                                    f'| {m.group(1)}[{m.group(1)}] ' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
-                                
-                                # Fix 2: Quote ALL edge labels
-                                fixed_line = re.sub(r'-->\|([^|"]+)\|', lambda m:
+                                # Fix 1: Quote ALL edge labels FIRST
+                                fixed_line = re.sub(r'-->\|([^|]+)\|', lambda m:
                                     f'-->|"{m.group(1).strip()}"|' if not (m.group(1).strip().startswith('"') and m.group(1).strip().endswith('"')) else m.group(0), fixed_line)
+                                
+                                # Fix 2: Add brackets to bare node names at START of edge
+                                fixed_line = re.sub(r'^(\s*)([A-Z][a-zA-Z0-9_]+)(\s+-->)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}[{m.group(2)}]{m.group(3)}' if '[' not in m.group(0) else m.group(0), fixed_line)
+                                
+                                # Fix 3: Add brackets to bare node names at END of edge
+                                fixed_line = re.sub(r'(\|"[^"]*"\||\|[^|]*\|)(\s+)([A-Z][a-zA-Z0-9_]+)(\s*$)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}{m.group(3)}[{m.group(3)}]{m.group(4)}' if '[' not in m.group(3) else m.group(0), fixed_line)
                                 
                                 fixed_lines.append(fixed_line)
                             
@@ -1439,6 +1440,28 @@ def merge_summaries(
                                 problem['solution'] = fixed
                             else:
                                 problem['solution'] = solution  # Still update with prefix if added
+            
+            # FIX LATEX FORMULAS: Ensure proper LaTeX wrapping
+            if 'formula_sheet' in result_dict.get('summary', {}):
+                for formula in result_dict['summary']['formula_sheet']:
+                    # Fix expression field
+                    if 'expression' in formula:
+                        expr = formula['expression']
+                        # If it contains \text but not wrapped in \( \), wrap it
+                        if r'\text{' in expr and not (expr.strip().startswith(r'\(') or expr.strip().startswith('$')):
+                            formula['expression'] = f'\\({expr}\\)'
+                            print(f"[FORMULA FIX] Wrapped expression: {formula.get('name', 'Unnamed')}")
+                    
+                    # Fix worked_example field
+                    if 'worked_example' in formula:
+                        example = formula['worked_example']
+                        # Wrap any \text{} or math expressions that aren't already wrapped
+                        if (r'\text{' in example or 'sem_wait' in example or 'sem_post' in example) and not r'\(' in example:
+                            # Wrap individual occurrences
+                            fixed_example = re.sub(r'\\text\{([^}]+)\}\(([^)]+)\)', r'\\(\\text{\1}(\2)\\)', example)
+                            if fixed_example != example:
+                                formula['worked_example'] = fixed_example
+                                print(f"[FORMULA FIX] Wrapped worked_example: {formula.get('name', 'Unnamed')}")
             
             result = json.dumps(result_dict, ensure_ascii=False, indent=2)
             print(f"[COVERAGE] ✅ Coverage added to JSON: {coverage_result['coverage_score']:.1%} score, {len(coverage_result['missing_topics'])} missing topics")
