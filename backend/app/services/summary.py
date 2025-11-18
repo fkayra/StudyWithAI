@@ -1446,8 +1446,10 @@ def merge_summaries(
                         expr = formula['expression']
                         
                         # Fix 1: Replace \text{...} with underscore to \mathtt{...} and escape underscores
-                        expr = re.sub(r'\\text\{([^}]*_[^}]*)\}', 
-                                     lambda m: f'\\mathtt{{{m.group(1).replace("_", "\\_")}}}', expr)
+                        def fix_text_to_mathtt(match):
+                            content = match.group(1).replace("_", "\\_")
+                            return f'\\mathtt{{{content}}}'
+                        expr = re.sub(r'\\text\{([^}]*_[^}]*)\}', fix_text_to_mathtt, expr)
                         
                         # Fix 2: If not wrapped in \( \), wrap it
                         if not (expr.strip().startswith(r'\(') or expr.strip().startswith('$')):
@@ -1462,8 +1464,10 @@ def merge_summaries(
                         example = formula['worked_example']
                         
                         # Fix 1: Replace \text{...} with underscore to \mathtt{...} and escape underscores
-                        fixed_example = re.sub(r'\\text\{([^}]*_[^}]*)\}', 
-                                              lambda m: f'\\mathtt{{{m.group(1).replace("_", "\\_")}}}', example)
+                        def fix_text_to_mathtt(match):
+                            content = match.group(1).replace("_", "\\_")
+                            return f'\\mathtt{{{content}}}'
+                        fixed_example = re.sub(r'\\text\{([^}]*_[^}]*)\}', fix_text_to_mathtt, example)
                         
                         # Fix 2: Wrap math expressions that aren't already wrapped
                         # Look for patterns like "s = 1" or "sem_wait(s)" without \( wrapper
