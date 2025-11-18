@@ -1473,7 +1473,10 @@ def merge_summaries(
                         original = example
                         
                         # Fix 1: Remove broken LaTeX markers (incomplete \( or \))
-                        example = re.sub(r'\\text\{([^}]+)\}\\?\)?', lambda m: f'\\(\\mathtt{{{m.group(1).replace("_", "\\_")}}}\\)', example)
+                        def fix_broken_latex(match):
+                            content = match.group(1).replace("_", "\\_")
+                            return f'\\(\\mathtt{{{content}}}\\)'
+                        example = re.sub(r'\\text\{([^}]+)\}\\?\)?', fix_broken_latex, example)
                         
                         # Fix 2: Replace remaining \text{...} with \mathtt{...}
                         def fix_text_to_mathtt(match):
