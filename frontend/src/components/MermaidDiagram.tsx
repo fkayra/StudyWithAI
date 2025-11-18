@@ -42,20 +42,35 @@ export default function MermaidDiagram({ content, className = '' }: MermaidDiagr
     // Generate unique ID for this diagram
     const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`
     
+    // Pre-process content: handle escaped newlines and cleanup
+    let processedContent = content
+      // Replace literal \n with actual newlines (from JSON parsing)
+      .replace(/\\n/g, '\n')
+      // Remove any extra spaces around arrows
+      .replace(/\s*-->\s*/g, ' --> ')
+      // Ensure proper spacing around edge labels
+      .replace(/-->\s*\|\s*/g, ' -->|')
+      .replace(/\s*\|\s*-->/g, '| ')
+    
+    console.log('[Mermaid] Original content:', content)
+    console.log('[Mermaid] Processed content:', processedContent)
+    
     // Render the diagram
-    mermaid.render(id, content).then(({ svg }) => {
+    mermaid.render(id, processedContent).then(({ svg }) => {
       if (containerRef.current) {
         containerRef.current.innerHTML = svg
         renderedRef.current = true
       }
     }).catch((error) => {
       console.error('Mermaid rendering error:', error)
+      console.error('Failed content:', processedContent)
       if (containerRef.current) {
         containerRef.current.innerHTML = `
-          <div class="text-red-400 text-sm">
+          <div class="text-red-400 text-sm mb-2">
             Failed to render diagram. Showing raw content:
           </div>
-          <pre class="text-slate-300 text-xs mt-2 whitespace-pre-wrap">${content}</pre>
+          <pre class="text-slate-300 text-xs mt-2 whitespace-pre-wrap bg-slate-800 p-3 rounded border border-slate-600">${processedContent}</pre>
+          <div class="text-xs text-slate-500 mt-2">Error: ${error.message || 'Syntax error'}</div>
         `
       }
     })

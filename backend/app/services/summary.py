@@ -253,14 +253,24 @@ IF the material involves Bayesian networks, Markov chains, probabilistic graphic
 → This is NOT optional - it's REQUIRED for the diagram to be usable!
 → VERIFY: Count edges, count probability labels. They MUST match!
 
-📊 CHART/GRAPH TYPES SUPPORTED:
-For data visualization, you can create:
-1. Mermaid diagrams (flowcharts, trees, hierarchies)
-2. Bar charts (use Mermaid bar chart syntax or ASCII table)
-3. Line charts (use ASCII visualization or description with data points)
-4. Comparison tables (use markdown tables)
-5. Statistical summaries (when showing numerical data)
-IMPORTANT: Always label axes, include units, and ensure data accuracy!
+📊 CRITICAL RULE FOR DIAGRAMS/CHARTS:
+⚠️ ONLY include diagrams/charts that ALREADY EXIST in the source material!
+- DO NOT create new diagrams on your own
+- DO NOT invent visualizations that aren't in the source
+- ONLY recreate charts/graphs/diagrams that are explicitly present in the uploaded documents
+- If source has NO visual elements → diagrams array should be EMPTY or have max 1-2 simple flowcharts
+- Exception: You MAY create simple process flowcharts ONLY if the text explicitly describes a process/algorithm step-by-step
+
+ACCEPTABLE diagram types (ONLY if in source):
+1. Charts/graphs from source files (bar, line, scatter, etc.)
+2. Flowcharts explicitly described in text
+3. Hierarchies/trees shown in source
+4. Network diagrams present in source
+
+NEVER create diagrams for:
+- Concepts that are better explained in text
+- Generic examples (Producer/Consumer, Dining Philosophers, etc.) UNLESS they appear as diagrams in source
+- Abstract relationships unless visually shown in source
 
 OUTPUT REQUIREMENTS:
 - Specific and concrete: Include numbers, dates, names, data points
@@ -268,20 +278,15 @@ OUTPUT REQUIREMENTS:
 - Comprehensive: Use available token budget fully (aim for max_output_cap)
 - Don't be unnecessarily brief - depth matters
 - Include pitfalls, when_to_use, limitations where applicable
-- Diagrams & Charts (SELECTIVE - only when truly helpful):
-  • 🎯 PRIORITY 1: If source file contains charts/graphs/figures → Recreate EXACTLY + add interpretation
-    Example: "This chart from the source shows X trend, indicating Y conclusion..."
-  • 🎯 PRIORITY 2: If concept is inherently visual (hierarchies, networks, flows, trees) → Create diagram
-    Example: Bayesian networks, org charts, process flows, data structures
-  • 📊 For numerical data comparisons → Use bar charts or comparison tables
-  • 📈 For trends over time → Use line charts or data point descriptions
-  • ❌ DON'T create diagrams just to hit a count - quality over quantity!
-  • ❌ DON'T create diagrams for concepts better explained with text
-  • For Bayesian/probabilistic networks → MANDATORY: Include edge labels with probability values
-    CORRECT: graph TD; A[Node1] -->|P=0.7| B[Node2]; A -->|P=0.3| C[Node3];
-    VERIFICATION: Count total edges, count probability labels. MUST be equal!
-  • Use LaTeX in diagram labels if needed (e.g., -->|$P(A|B)=0.3$|)
-  • Each diagram MUST have clear description + interpretation/analysis
+- Diagrams & Charts (ONLY FROM SOURCE MATERIAL):
+  • ⚠️ CRITICAL: ONLY include diagrams that EXIST in the source documents!
+  • ❌ DO NOT create generic example diagrams (Producer/Consumer, Dining Philosophers, etc.)
+  • ✅ If source has charts/graphs/figures → Recreate them EXACTLY + add interpretation
+  • ✅ If source describes a process step-by-step → MAY create simple flowchart
+  • ❌ NO source visuals → Keep diagrams array EMPTY or minimal (0-1 diagrams max)
+  • For Bayesian/probabilistic networks (IF IN SOURCE) → Include edge labels with probability values
+    CORRECT: graph TD; A[Node1] -->|"P=0.7"| B[Node2]; A -->|"P=0.3"| C[Node3];
+  • Each diagram MUST have clear description + interpretation
   • Chart accuracy is CRITICAL - verify all numbers match source material!
 - AT LEAST 2-3 pseudocode examples for algorithms/procedures
 - AT LEAST 3-5 practice problems with VISUAL solutions:
@@ -299,12 +304,12 @@ PLANNING (internal, before output):
 1) Identify ALL main themes from all chunks
 2) Create AT LEAST 10-15 sections (scale with content richness)
 3) For each section: AT LEAST 3-5 concepts with DEEP explanations (250-400 words each)
-4) Diagrams (SELECTIVE approach):
-   • PRIORITY 1: Check if source has charts/graphs/figures → Recreate EXACTLY + add interpretation
-   • PRIORITY 2: Identify inherently visual concepts (networks, hierarchies, flows) → Create diagram
-   • Use Mermaid syntax (graph TD, flowchart LR, etc.)
-   • For Bayesian/probabilistic networks → MANDATORY: Include edge labels with probability values
-   • Quality over quantity: 2-3 MEANINGFUL diagrams > 6 generic ones
+4) Diagrams (STRICT SOURCE-ONLY RULE):
+   • ⚠️ ONLY include diagrams that physically exist in the source documents
+   • Recreate source charts/graphs/figures EXACTLY + add interpretation
+   • DO NOT create generic educational examples (Producer/Consumer, etc.) UNLESS they appear as diagrams in source
+   • If source has NO visual elements → diagrams array should be EMPTY (perfectly acceptable!)
+   • Use Mermaid syntax ONLY for diagrams that exist in source
 5) Create 2-3 pseudocode examples (ONLY for algorithmic content)
 6) Create 4-6 practice problems with detailed step-by-step solutions
 7) 🚨 CRITICAL OUTPUT TARGET: Aim for 6,000-10,000 tokens output (MINIMUM 6,000!)
@@ -384,19 +389,14 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
                     4. FOR BAYESIAN/PROBABILISTIC NETWORKS: EVERY edge MUST have probability!
                        ✅ CORRECT: Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
                     
-                    COMPLETE EXAMPLE (Producer/Consumer with Semaphores):
+                    SYNTAX EXAMPLE (NOT for content - just showing proper syntax):
                     graph TD
-                      Producer[Producer] -->|"sem_wait(empty)"| Buffer[Buffer]
-                      Buffer[Buffer] -->|"sem_post(full)"| Consumer[Consumer]
-                      Consumer[Consumer] -->|"sem_wait(full)"| Buffer[Buffer]
-                      Buffer[Buffer] -->|"sem_post(empty)"| Producer[Producer]
+                      NodeA[Node A] -->|"label text"| NodeB[Node B]
+                      NodeB[Node B] -->|"another label"| NodeC[Node C]
                     
-                    COMPLETE EXAMPLE (Dining Philosophers):
-                    graph TD
-                      Philosopher1[Philosopher 1] -->|"sem_wait(fork1)"| Fork1[Fork 1]
-                      Philosopher1[Philosopher 1] -->|"sem_wait(fork2)"| Fork2[Fork 2]
-                      Philosopher1[Philosopher 1] -->|"sem_post(fork1)"| Fork1[Fork 1]
-                      Philosopher1[Philosopher 1] -->|"sem_post(fork2)"| Fork2[Fork 2]
+                    ⚠️ CRITICAL: This is ONLY a syntax example!
+                    DO NOT copy this into your output!
+                    ONLY create diagrams that exist in the source documents!
                     
                     Other Rules:
                     - If from source file → Copy ALL details accurately
@@ -426,23 +426,20 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
                      2. ALL edge labels MUST be quoted: -->|"label"|
                      3. Each edge on SEPARATE LINE (no multiple edges on one line!)
                      
-                     ✅ CORRECT EXAMPLE (Bayesian Network):
-                     graph TD
-                       Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
-                       Cloudy[Cloudy] -->|"P=0.2"| NoRain[No Rain]
-                       Rain[Rain] -->|"P=0.9"| WetGrass[Wet Grass]
+                     SYNTAX EXAMPLES (for reference only - DO NOT use as content):
                      
-                     ❌ WRONG (missing quotes, multiple edges on one line):
+                     ✅ CORRECT SYNTAX:
                      graph TD
-                       Cloudy[Cloudy] -->|P=0.8| Rain[Rain] Rain[Rain] -->|P=0.9| WetGrass[Wet Grass]
+                       NodeA[Node A] -->|"edge label"| NodeB[Node B]
+                       NodeB[Node B] -->|"another label"| NodeC[Node C]
                      
-                     ✅ CORRECT EXAMPLE (Semaphore diagram):
+                     ❌ WRONG SYNTAX (missing quotes, multiple edges on one line):
                      graph TD
-                       Philosopher1[Philosopher 1] -->|"sem_wait(fork1)"| Fork1[Fork 1]
-                       Philosopher1[Philosopher 1] -->|"sem_wait(fork2)"| Fork2[Fork 2]
-                       Philosopher1[Philosopher 1] -->|"sem_post(fork1)"| Fork1[Fork 1]
+                       NodeA -->|label| NodeB NodeB -->|label2| NodeC
                      
-                     For construction problems: Include actual Mermaid diagram, not just text description>",
+                     ⚠️ IMPORTANT: These are SYNTAX examples only!
+                     For practice problems: ONLY include diagrams if the problem explicitly requires constructing one
+                     DO NOT create generic diagrams - focus on explaining the solution in text>",
         "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
         "key_concepts": ["<Concept 1>", "<Concept 2>"]
       }}
@@ -507,12 +504,12 @@ VALIDATION CHECKLIST (before output):
 ✓ AT LEAST 10-15 sections created (scale with content richness)
 ✓ Each section has 3-5+ concepts (major themes: 6-8 concepts)
 ✓ Each concept: 300-500 word explanation (DEEP, not superficial!)
-✓ Diagrams (SELECTIVE - meaningful only):
-  • Priority: Source charts/graphs → Recreate + interpret
-  • Only for inherently visual concepts (networks, hierarchies, flows)
-  • 🚨 IF BAYESIAN/PROBABILISTIC NETWORKS: Check EVERY edge has probability label (-->|P=0.7|)
-  • 🚨 VERIFICATION: Count edges, count probability labels - they MUST match!
-  • Bar charts, line charts, tables for numerical comparisons
+✓ Diagrams (ONLY FROM SOURCE - DO NOT INVENT):
+  • ⚠️ ONLY include if diagrams/charts exist in source documents
+  • Recreate source charts/graphs with interpretation
+  • NO generic examples - only what's actually in the material
+  • 🚨 IF source has Bayesian/probabilistic networks: Include probability labels on ALL edges (-->|"P=0.7"|)
+  • Empty array is ACCEPTABLE if source has no visual elements
 ✓ Pseudocode: 2-3 algorithm examples (ONLY if algorithmic content)
 ✓ Practice Problems: 4-6 with detailed step-by-step solutions
 ✓ 🚨 OUTPUT LENGTH: MINIMUM 6,000 tokens (aim for 9,000-12,000)
