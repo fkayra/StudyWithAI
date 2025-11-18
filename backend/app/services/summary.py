@@ -355,9 +355,9 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
     "formula_sheet": [
       {{
         "name": "<formula / algorithm / method>",
-        "expression": "<LaTeX math - WRAP IN \\\\( \\\\) for inline math. Use \\\\text{{}} for text within math: \\\\(\\\\text{{sem_wait}}(s)\\\\) or \\\\(f(x) = ax^2 + bx + c\\\\)>",
-        "variables": {{"symbol": "meaning (use LaTeX wrapped: \\\\(x_i\\\\) for subscripted variables, \\\\(\\\\text{{sem}}\\\\) for text)"}},
-        "worked_example": "<Wrap ALL math in \\\\( \\\\). Example: \\\\(\\\\text{{sem_wait}}(s)\\\\) decrements \\\\(s\\\\) by 1. If \\\\(s = 1\\\\), then after \\\\(\\\\text{{sem_wait}}(s)\\\\), \\\\(s = 0\\\\).>",
+        "expression": "<LaTeX math - WRAP IN \\\\( \\\\) for inline math. Use \\\\mathtt{{}} for function names: \\\\(\\\\mathtt{{sem\\\\_wait}}(s)\\\\) or \\\\(f(x) = ax^2 + bx + c\\\\)>",
+        "variables": {{"symbol": "meaning (use LaTeX wrapped: \\\\(x_i\\\\) for subscripted variables)"}},
+        "worked_example": "<Wrap ALL math in \\\\( \\\\). Example: If \\\\(s = 1\\\\), after \\\\(\\\\mathtt{{sem\\\\_wait}}(s)\\\\), \\\\(s = 0\\\\). Use \\\\mathtt{{}} for function names and escape underscores with \\\\_>",
         "pseudocode": "<OPTIONAL: if algorithm, put step-by-step procedure here>",
         "notes": "<when it applies, constraints, complexity>"
       }}
@@ -1438,27 +1438,42 @@ def merge_summaries(
                             else:
                                 problem['solution'] = solution  # Still update with prefix if added
             
-            # FIX LATEX FORMULAS: Ensure proper LaTeX wrapping
+            # FIX LATEX FORMULAS: Ensure proper LaTeX wrapping and syntax
             if 'formula_sheet' in result_dict.get('summary', {}):
                 for formula in result_dict['summary']['formula_sheet']:
                     # Fix expression field
                     if 'expression' in formula:
                         expr = formula['expression']
-                        # If it contains \text but not wrapped in \( \), wrap it
-                        if r'\text{' in expr and not (expr.strip().startswith(r'\(') or expr.strip().startswith('$')):
-                            formula['expression'] = f'\\({expr}\\)'
-                            print(f"[FORMULA FIX] Wrapped expression: {formula.get('name', 'Unnamed')}")
+                        
+                        # Fix 1: Replace \text{...} with underscore to \mathtt{...} and escape underscores
+                        expr = re.sub(r'\\text\{([^}]*_[^}]*)\}', 
+                                     lambda m: f'\\mathtt{{{m.group(1).replace("_", "\\_")}}}', expr)
+                        
+                        # Fix 2: If not wrapped in \( \), wrap it
+                        if not (expr.strip().startswith(r'\(') or expr.strip().startswith('$')):
+                            expr = f'\\({expr}\\)'
+                        
+                        if expr != formula['expression']:
+                            formula['expression'] = expr
+                            print(f"[FORMULA FIX] Fixed expression: {formula.get('name', 'Unnamed')}")
                     
                     # Fix worked_example field
                     if 'worked_example' in formula:
                         example = formula['worked_example']
-                        # Wrap any \text{} or math expressions that aren't already wrapped
-                        if (r'\text{' in example or 'sem_wait' in example or 'sem_post' in example) and not r'\(' in example:
-                            # Wrap individual occurrences
-                            fixed_example = re.sub(r'\\text\{([^}]+)\}\(([^)]+)\)', r'\\(\\text{\1}(\2)\\)', example)
-                            if fixed_example != example:
-                                formula['worked_example'] = fixed_example
-                                print(f"[FORMULA FIX] Wrapped worked_example: {formula.get('name', 'Unnamed')}")
+                        
+                        # Fix 1: Replace \text{...} with underscore to \mathtt{...} and escape underscores
+                        fixed_example = re.sub(r'\\text\{([^}]*_[^}]*)\}', 
+                                              lambda m: f'\\mathtt{{{m.group(1).replace("_", "\\_")}}}', example)
+                        
+                        # Fix 2: Wrap math expressions that aren't already wrapped
+                        # Look for patterns like "s = 1" or "sem_wait(s)" without \( wrapper
+                        if not r'\(' in fixed_example:
+                            # Wrap simple math expressions
+                            fixed_example = re.sub(r'\b([a-zA-Z])\s*=\s*(\d+)\b', r'\\(\1 = \2\\)', fixed_example)
+                        
+                        if fixed_example != example:
+                            formula['worked_example'] = fixed_example
+                            print(f"[FORMULA FIX] Fixed worked_example: {formula.get('name', 'Unnamed')}")
             
             result = json.dumps(result_dict, ensure_ascii=False, indent=2)
             print(f"[COVERAGE] ✅ Coverage added to JSON: {coverage_result['coverage_score']:.1%} score, {len(coverage_result['missing_topics'])} missing topics")

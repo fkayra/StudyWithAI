@@ -53,14 +53,22 @@ export default function MathText({ text, className = '' }: MathTextProps) {
       processedText = processedText.replace(/\\\(([\s\S]*?)\\\)/g, (match, latex) => {
         try {
           if (!latex || latex.trim() === '') return match
-          return katex.renderToString(latex.trim(), {
+          
+          // Debug logging
+          console.log('[MathText] Rendering LaTeX:', latex.trim())
+          
+          const rendered = katex.renderToString(latex.trim(), {
             throwOnError: false,
             displayMode: false,
             strict: false,
+            trust: true  // Allow \text{} and other commands
           })
+          
+          console.log('[MathText] Rendered successfully')
+          return rendered
         } catch (e) {
-          console.warn('KaTeX inline math error:', e, 'for:', latex)
-          return match
+          console.error('[MathText] KaTeX inline math error:', e, 'for:', latex)
+          return `<span class="text-red-400" title="${e}">${latex}</span>`
         }
       })
 
