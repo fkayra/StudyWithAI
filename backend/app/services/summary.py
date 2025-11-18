@@ -350,9 +350,9 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
     "formula_sheet": [
       {{
         "name": "<formula / algorithm / method>",
-        "expression": "<LaTeX math - WRAP IN \\\\( \\\\) for inline: \\\\(f(x) = ax^2 + bx + c\\\\) or \\\\(\\\\prod_{{i=1}}^{{n}} P(x_i|parents(X_i))\\\\)>",
-        "variables": {{"symbol": "meaning (use LaTeX wrapped: x_i means \\\\(x_i\\\\))"}},
-        "worked_example": "<Wrap ALL math in \\\\( \\\\): \\\\(P(A,B,C) = P(A) \\\\cdot P(B|A) \\\\cdot P(C|B)\\\\)>",
+        "expression": "<LaTeX math - WRAP IN \\\\( \\\\) for inline math. Use \\\\text{{}} for text within math: \\\\(\\\\text{{sem_wait}}(s)\\\\) or \\\\(f(x) = ax^2 + bx + c\\\\)>",
+        "variables": {{"symbol": "meaning (use LaTeX wrapped: \\\\(x_i\\\\) for subscripted variables, \\\\(\\\\text{{sem}}\\\\) for text)"}},
+        "worked_example": "<Wrap ALL math in \\\\( \\\\). Example: \\\\(\\\\text{{sem_wait}}(s)\\\\) decrements \\\\(s\\\\) by 1. If \\\\(s = 1\\\\), then after \\\\(\\\\text{{sem_wait}}(s)\\\\), \\\\(s = 0\\\\).>",
         "pseudocode": "<OPTIONAL: if algorithm, put step-by-step procedure here>",
         "notes": "<when it applies, constraints, complexity>"
       }}
@@ -363,31 +363,40 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
         "description": "<What this diagram shows AND interpretation if from source file>",
         "content": "<Mermaid syntax (preferred) or ASCII art.
                     
-                    🚨 CRITICAL MERMAID SYNTAX RULES:
+                    🚨 CRITICAL MERMAID SYNTAX RULES (Mermaid v11+):
                     
                     1. EVERY NODE must have brackets: NodeName[NodeName] or NodeName[Label]
-                       WRONG: Producer --> Buffer
-                       CORRECT: Producer[Producer] --> Buffer[Buffer]
+                       ❌ WRONG: Producer --> Buffer
+                       ✅ CORRECT: Producer[Producer] --> Buffer[Buffer]
                     
-                    2. Edge labels with special chars (parentheses, etc.) MUST be quoted:
-                       WRONG: -->|sem_wait(empty)|
-                       CORRECT: -->|"sem_wait(empty)"|
+                    2. ALL edge labels MUST be quoted (always use quotes, even for simple text):
+                       ❌ WRONG: -->|sem_wait(empty)|
+                       ❌ WRONG: -->|P=0.8|
+                       ✅ CORRECT: -->|"sem_wait(empty)"|
+                       ✅ CORRECT: -->|"P=0.8"|
                     
-                    3. EACH edge MUST be on a SEPARATE LINE:
-                       WRONG: A[A] -->|x| B[B] B -->|y| C[C]
-                       CORRECT:
-                       A[A] -->|x| B[B]
-                       B[B] -->|y| C[C]
+                    3. EACH edge MUST be on a SEPARATE LINE (critical for parsing):
+                       ❌ WRONG: A[A] -->|"x"| B[B] B[B] -->|"y"| C[C]
+                       ✅ CORRECT:
+                       A[A] -->|"x"| B[B]
+                       B[B] -->|"y"| C[C]
                     
                     4. FOR BAYESIAN/PROBABILISTIC NETWORKS: EVERY edge MUST have probability!
-                       CORRECT: Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
+                       ✅ CORRECT: Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
                     
-                    COMPLETE EXAMPLE (Producer/Consumer):
+                    COMPLETE EXAMPLE (Producer/Consumer with Semaphores):
                     graph TD
                       Producer[Producer] -->|"sem_wait(empty)"| Buffer[Buffer]
                       Buffer[Buffer] -->|"sem_post(full)"| Consumer[Consumer]
                       Consumer[Consumer] -->|"sem_wait(full)"| Buffer[Buffer]
                       Buffer[Buffer] -->|"sem_post(empty)"| Producer[Producer]
+                    
+                    COMPLETE EXAMPLE (Dining Philosophers):
+                    graph TD
+                      Philosopher1[Philosopher 1] -->|"sem_wait(fork1)"| Fork1[Fork 1]
+                      Philosopher1[Philosopher 1] -->|"sem_wait(fork2)"| Fork2[Fork 2]
+                      Philosopher1[Philosopher 1] -->|"sem_post(fork1)"| Fork1[Fork 1]
+                      Philosopher1[Philosopher 1] -->|"sem_post(fork2)"| Fork2[Fork 2]
                     
                     Other Rules:
                     - If from source file → Copy ALL details accurately
@@ -410,26 +419,30 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
         "difficulty": "easy|medium|hard",
         "solution": "<Complete solution WITH VISUALS if applicable.
                      
-                     🚨 IF PROBLEM ASKS TO CONSTRUCT BAYESIAN/PROBABILISTIC NETWORK:
-                     Solution MUST include the diagram WITH probability values on edges!
+                     🚨 CRITICAL MERMAID SYNTAX FOR DIAGRAMS IN SOLUTIONS:
                      
-                     CORRECT FORMAT (MUST USE NEWLINES):
+                     RULES (Follow EXACTLY):
+                     1. ALL nodes MUST have brackets: NodeName[NodeName]
+                     2. ALL edge labels MUST be quoted: -->|"label"|
+                     3. Each edge on SEPARATE LINE (no multiple edges on one line!)
+                     
+                     ✅ CORRECT EXAMPLE (Bayesian Network):
                      graph TD
-                       A[Cloudy] -->|P=0.8| B[Rain]
-                       A -->|P=0.2| C[No Rain]
-                       B -->|P=0.9| D[Wet Grass]
+                       Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
+                       Cloudy[Cloudy] -->|"P=0.2"| NoRain[No Rain]
+                       Rain[Rain] -->|"P=0.9"| WetGrass[Wet Grass]
                      
-                     CRITICAL: Each edge MUST be on a NEW LINE!
-                     WRONG: C[Cloudy] -->|P=0.8| R[Rain] R -->|P=0.9| W[Wet Grass]
-                     ❌ All on one line = INVALID!
-                     
-                     CORRECT:
+                     ❌ WRONG (missing quotes, multiple edges on one line):
                      graph TD
-                       C[Cloudy] -->|P=0.8| R[Rain]
-                       R -->|P=0.9| W[Wet Grass]
-                     ✅ Each edge on separate line!
+                       Cloudy[Cloudy] -->|P=0.8| Rain[Rain] Rain[Rain] -->|P=0.9| WetGrass[Wet Grass]
                      
-                     For other construction problems: include actual diagram in Mermaid or ASCII art, not just instructions>",
+                     ✅ CORRECT EXAMPLE (Semaphore diagram):
+                     graph TD
+                       Philosopher1[Philosopher 1] -->|"sem_wait(fork1)"| Fork1[Fork 1]
+                       Philosopher1[Philosopher 1] -->|"sem_wait(fork2)"| Fork2[Fork 2]
+                       Philosopher1[Philosopher 1] -->|"sem_post(fork1)"| Fork1[Fork 1]
+                     
+                     For construction problems: Include actual Mermaid diagram, not just text description>",
         "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
         "key_concepts": ["<Concept 1>", "<Concept 2>"]
       }}
@@ -1313,46 +1326,56 @@ def merge_summaries(
                         if content.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
                             fixed = content
                             
-                            # Fix 1: Add brackets to bare node names (Producer → Producer[Producer])
-                            # Match: word followed by --> (but not already in brackets)
-                            # This regex finds node IDs that aren't already bracketed
+                            # Fix 1: Ensure all nodes have brackets
                             lines = fixed.split('\n')
                             fixed_lines = []
+                            
                             for line in lines:
                                 # Skip the graph/flowchart declaration line
                                 if line.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
                                     fixed_lines.append(line)
                                     continue
                                 
-                                # Fix bare node names: Producer -->|label| Buffer becomes Producer[Producer] -->|label| Buffer[Buffer]
-                                # Pattern: word at start or after whitespace/newline that's not in brackets
+                                # Skip empty lines
+                                if not line.strip():
+                                    fixed_lines.append(line)
+                                    continue
+                                
                                 fixed_line = line
                                 
-                                # Find all node names (words that appear before --> or at the end after |)
-                                # Replace: NodeName -->  with  NodeName[NodeName] -->
-                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', r'\1[\1] \2', fixed_line)
+                                # Fix bare node names that aren't already in brackets
+                                # Pattern 1: NodeName --> becomes NodeName[NodeName] -->
+                                # Only match nodes that DON'T already have brackets after them
+                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', lambda m: 
+                                    f'{m.group(1)}[{m.group(1)}] {m.group(2)}' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
                                 
-                                # Replace: | NodeName  with  | NodeName[NodeName]
-                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s|$)', r'| \1[\1] ', fixed_line)
+                                # Pattern 2: -->|label| NodeName becomes -->|label| NodeName[NodeName]
+                                # Match node names that appear after | (edge labels)
+                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s*$|\s+(?=[A-Z]))', lambda m:
+                                    f'| {m.group(1)}[{m.group(1)}] ' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
                                 
-                                # Fix 2: Quote edge labels that contain parentheses
-                                # -->|label(x)| becomes -->|"label(x)"|
-                                fixed_line = re.sub(r'-->\|([^|"]+\([^)]*\)[^|"]*)\|', r'-->|"\1"|', fixed_line)
+                                # Fix 2: Quote ALL edge labels (not just those with parentheses)
+                                # This is critical - Mermaid requires quotes for labels with special chars
+                                # Match: -->|anything_not_already_quoted| and wrap in quotes
+                                # Pattern: -->|label| where label is not already quoted
+                                fixed_line = re.sub(r'-->\|([^|"]+)\|', lambda m:
+                                    f'-->|"{m.group(1).strip()}"|' if not (m.group(1).strip().startswith('"') and m.group(1).strip().endswith('"')) else m.group(0), fixed_line)
                                 
                                 fixed_lines.append(fixed_line)
                             
                             fixed = '\n'.join(fixed_lines)
                             
-                            # Fix 3: Add newlines between edges if they're on the same line
-                            # Pattern 1: "]" followed by space(s) and capital letter with "[" = new node
-                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', fixed)
-                            # Pattern 2: After arrow with label, if next char is capital = new edge
-                            fixed = re.sub(r'(\|)\s+([A-Z]\[)', r'\1\n  \2', fixed)
+                            # Fix 3: Ensure each edge is on its own line (critical for parsing)
+                            # ONLY split when there are MULTIPLE edges on the same line
+                            # Pattern: node] -->|label| node] ANOTHER_EDGE -->
+                            # This means: if we find a complete edge followed by another edge, split them
+                            # Match complete edge (source[source] -->|label| target[target]) followed by another source node
+                            fixed = re.sub(r'(\[[^\]]+\])\s+([A-Z]\w*\[[^\]]+\]\s+-->)', r'\1\n  \2', fixed)
                             
                             if fixed != content:
                                 print(f"[DIAGRAM FIX] Fixed Mermaid syntax in diagram: {diagram.get('title', 'Untitled')}")
-                                print(f"  BEFORE: {content[:150]}...")
-                                print(f"  AFTER: {fixed[:150]}...")
+                                print(f"  BEFORE:\n{content}")
+                                print(f"  AFTER:\n{fixed}")
                                 diagram['content'] = fixed
             
             # Also fix practice problem solutions
@@ -1375,33 +1398,44 @@ def merge_summaries(
                             # Apply same fixes as diagrams
                             fixed = solution
                             
-                            # Fix 1: Add brackets to bare node names
+                            # Fix 1: Ensure all nodes have brackets
                             lines = fixed.split('\n')
                             fixed_lines = []
+                            
                             for line in lines:
                                 if line.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
                                     fixed_lines.append(line)
                                     continue
                                 
+                                if not line.strip():
+                                    fixed_lines.append(line)
+                                    continue
+                                
                                 fixed_line = line
-                                # Replace: NodeName -->  with  NodeName[NodeName] -->
-                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', r'\1[\1] \2', fixed_line)
-                                # Replace: | NodeName  with  | NodeName[NodeName]
-                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s|$)', r'| \1[\1] ', fixed_line)
-                                # Fix 2: Quote edge labels with parentheses
-                                fixed_line = re.sub(r'-->\|([^|"]+\([^)]*\)[^|"]*)\|', r'-->|"\1"|', fixed_line)
+                                
+                                # Fix bare node names
+                                fixed_line = re.sub(r'\b([A-Z][a-zA-Z0-9_]*)\s+(-->)', lambda m: 
+                                    f'{m.group(1)}[{m.group(1)}] {m.group(2)}' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
+                                
+                                fixed_line = re.sub(r'\|\s+([A-Z][a-zA-Z0-9_]*)(?:\s*$|\s+(?=[A-Z]))', lambda m:
+                                    f'| {m.group(1)}[{m.group(1)}] ' if f'{m.group(1)}[' not in line else m.group(0), fixed_line)
+                                
+                                # Fix 2: Quote ALL edge labels
+                                fixed_line = re.sub(r'-->\|([^|"]+)\|', lambda m:
+                                    f'-->|"{m.group(1).strip()}"|' if not (m.group(1).strip().startswith('"') and m.group(1).strip().endswith('"')) else m.group(0), fixed_line)
+                                
                                 fixed_lines.append(fixed_line)
                             
                             fixed = '\n'.join(fixed_lines)
                             
-                            # Fix 3: Add newlines between edges
-                            fixed = re.sub(r'(\])\s+([A-Z]\[)', r'\1\n  \2', fixed)
-                            fixed = re.sub(r'(\|)\s+([A-Z]\[)', r'\1\n  \2', fixed)
+                            # Fix 3: Ensure each edge is on its own line (ONLY when multiple edges exist)
+                            # Match complete edge followed by another source node
+                            fixed = re.sub(r'(\[[^\]]+\])\s+([A-Z]\w*\[[^\]]+\]\s+-->)', r'\1\n  \2', fixed)
                             
                             if fixed != solution:
                                 print(f"[PRACTICE FIX {idx+1}] Fixed Mermaid syntax")
-                                print(f"  BEFORE: {solution[:100]}...")
-                                print(f"  AFTER: {fixed[:100]}...")
+                                print(f"  BEFORE:\n{solution}")
+                                print(f"  AFTER:\n{fixed}")
                                 problem['solution'] = fixed
                             else:
                                 problem['solution'] = solution  # Still update with prefix if added
