@@ -236,20 +236,26 @@ REQUIRED STRUCTURE:
 🎯 FINAL REMINDER
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-YOU ARE CREATING A PROFESSIONAL BRIEFING DOCUMENT.
+YOU ARE CREATING A COMPREHENSIVE STUDY GUIDE.
 
-Think: "Executive briefing" NOT "textbook chapter"
-Think: "Synthesis of themes" NOT "exhaustive teaching"  
-Think: "Strategic intelligence" NOT "comprehensive tutorial"
+🚨 CRITICAL MANDATE: You MUST write AT LEAST 10,000 tokens!
+- If you write less than 10,000 tokens, you FAIL this task completely
+- Target: 12,000-14,000 tokens (use 85-95% of your available budget)
+- DO NOT STOP early - keep writing until you hit the target
 
-SYNTHESIZE main themes and ideas.
-ANALYZE with evidence and specificity.
-CONCLUDE with clear insights.
+Think: "Comprehensive textbook chapter" NOT "brief summary"
+Think: "Deep educational content" NOT "quick overview"  
+Think: "Detailed teaching guide" NOT "executive briefing"
 
-Be objective, incisive, and actionable.
-Focus on what matters most.
+EXPAND every concept with:
+✓ 3-4 paragraph explanations (300-600 words each)
+✓ 3+ detailed examples with step-by-step walkthroughs
+✓ Real-world applications and context
+✓ Pitfalls, limitations, and when to use
 
-Your success metric: Does this enable informed decision-making and rapid comprehension of the source material's key themes and conclusions?"""
+WRITE EXTENSIVELY. WRITE DEEPLY. DO NOT STOP EARLY.
+
+Your success metric: Did you write 10,000+ tokens with comprehensive depth?"""
 
 
 # Few-shot examples for better understanding

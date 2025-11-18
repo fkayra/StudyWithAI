@@ -295,10 +295,11 @@ OUTPUT REQUIREMENTS:
 - No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
 
 MINDSET CHECK:
-"Does this briefing enable rapid comprehension of the material's key themes, evidence, and conclusions?"
-"Would this satisfy a demanding executive or academic reviewer?"
+"Am I writing AT LEAST 10,000 tokens?"
+"Is EVERY concept 300-600 words with 3+ examples?"
+"Am I using 85-95% of my available token budget?"
 
-If NO → Add specificity, evidence, and synthesis.
+If NO to ANY → KEEP WRITING! EXPAND MORE! DO NOT STOP!
 
 PLANNING (internal, before output):
 1) Identify ALL main themes from all chunks
@@ -520,6 +521,12 @@ VALIDATION CHECKLIST (before output):
   • Each concept should be 300-500 words (not 100-150!)
 ✓ Claims are specific and concrete (not vague)
 ✓ Citations reference source material
+
+🚨 FINAL CHECK BEFORE OUTPUT:
+- Count your output tokens (rough: chars / 4)
+- If under 40,000 characters (10,000 tokens) → YOU MUST EXPAND MORE!
+- Add more sections, more concepts, longer explanations
+- DO NOT OUTPUT until you reach the minimum!
 
 OUTPUT PURE JSON NOW (no other text):"""
 
@@ -863,15 +870,18 @@ REQUIREMENTS (APPLY GENERALLY):
    - Practice Problems: Must have at least 4-6 problems with full solutions and step-by-step explanations.
 
 4) Depth requirements (CRITICAL - MUST FOLLOW):
-   - EXPAND all explanations to 300-500 words per concept (this is NON-NEGOTIABLE!)
+   - 🚨 YOUR OUTPUT MUST BE 10,000+ TOKENS - THIS IS NON-NEGOTIABLE!
+   - EXPAND all explanations to 400-700 words per concept (write LONG paragraphs!)
    - Each concept needs:
-     * Clear definition (2-3 sentences)
-     * Detailed explanation (3-4 paragraphs)
-     * Multiple examples (2-3 examples minimum)
-     * Practical applications or context
-   - Add more sections if needed (aim for 12-20 sections total)
-   - Add more concepts per section (aim for 4-6 concepts per section)
-   - Don't summarize - EXPAND with depth and detail!
+     * Clear definition (3-4 sentences)
+     * Detailed explanation (4-5 LONG paragraphs - not short ones!)
+     * Multiple examples (3-4 examples MINIMUM with detailed walkthroughs)
+     * Practical applications, real-world context, use cases
+     * Common pitfalls, limitations, when to use/avoid
+   - Add MANY more sections (aim for 15-25 sections total if needed)
+   - Add MANY more concepts per section (aim for 5-8 concepts per section)
+   - Don't summarize - WRITE EXTENSIVELY like a textbook!
+   - KEEP WRITING until you reach 10,000+ tokens!
 
 5) Citations requirement:
    - Each top-level section must include at least one citation with section_or_heading and page_range based on the source.
@@ -1017,7 +1027,7 @@ def reduce_two_stage(
         repaired = call_openai(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=repair_user,
-            max_output_tokens=min(out_cap, 8000),
+            max_output_tokens=out_cap,  # Use FULL budget for repair - no limiting!
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",
