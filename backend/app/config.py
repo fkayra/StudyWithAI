@@ -72,7 +72,7 @@ MERGE_OUTPUT_BUDGET = (4000, 18000)  # Increased upper limit: More comprehensive
 
 # OpenAI configuration
 OPENAI_MODEL = "gpt-4o"  # Best quality model (was gpt-4o-mini)
-TEMPERATURE = 0.0
+TEMPERATURE = 0.3  # Increased from 0.0: Encourages longer, more varied outputs
 TOP_P = 1.0
 
 # Ensure we request enough tokens to complete JSON
