@@ -71,12 +71,13 @@ EVIDENCE STANDARD:
 ✓ For quantitative content: Include key formulas, methodologies, results
 ✓ For qualitative content: Include specific cases, events, quotes, dates
 
-DEPTH & COMPREHENSIVENESS (STRICT MINIMUMS):
-✓ MINIMUM 10-15 sections (scale with content richness)
-✓ Each concept: MINIMUM 250-400 words (be thorough, not brief!)
-✓ EVERY concept must have: definition + detailed explanation + 2-3 examples + context
-✓ Each section: MINIMUM 3-5 concepts (major themes need 6-8 concepts)
-✓ IMPORTANT: If your output is under 8,000 tokens, you're missing depth - EXPAND MORE!
+DEPTH & COMPREHENSIVENESS (STRICT MINIMUMS - NON-NEGOTIABLE):
+✓ MINIMUM 12-18 sections (MORE is always better - don't stop early!)
+✓ Each concept: MINIMUM 350-600 words (DEEP explanations with multiple paragraphs!)
+✓ EVERY concept must have: definition + 3-4 paragraph explanation + 3+ detailed examples + real-world context
+✓ Each section: MINIMUM 4-6 concepts (major themes need 7-10 concepts)
+✓ 🚨 CRITICAL: If your output is under 10,000 tokens, you're FAILING - EXPAND MUCH MORE!
+✓ Target: 12,000-14,000 tokens for comprehensive study guide (use 85-95% of budget)
 
 📊 DIAGRAMS (Selective & Meaningful):
 ✓ ONLY include diagrams that ACTUALLY help understanding
@@ -91,13 +92,14 @@ DEPTH & COMPREHENSIVENESS (STRICT MINIMUMS):
 ✓ Practice Problems: 4-6 problems with step-by-step solutions
 
 🎯 TARGET OUTPUT LENGTH (CRITICAL - MUST COMPLY):
-✓ MINIMUM 8,000 tokens output (less = UNACCEPTABLE)
-✓ TARGET: 9,000-11,000 tokens (use 80-90% of 12k budget)
-✓ Each concept explanation: AT LEAST 200-350 words (not 50-100!)
-✓ EXPAND everything - more examples, more details, more explanations
-✓ If you're under 8,000 tokens, you're being TOO BRIEF - add more depth!
-✓ DON'T stop at surface level - GO DEEP into each topic
-✓ This is a STUDY GUIDE, not a brief overview - act accordingly!
+✓ MINIMUM 10,000 tokens output (less = UNACCEPTABLE FAILURE)
+✓ TARGET: 12,000-14,000 tokens (use 85-95% of available budget)
+✓ Each concept explanation: AT LEAST 350-600 words (not 100-200!)
+✓ EXPAND everything - 3+ detailed examples per concept, comprehensive explanations
+✓ If you're under 10,000 tokens, you're being TOO BRIEF - DOUBLE your depth!
+✓ DON'T stop at surface level - GO DEEP into EVERY topic with MULTIPLE paragraphs
+✓ This is a COMPREHENSIVE TEXTBOOK CHAPTER, not a quick summary - write accordingly!
+✓ Each section should be 800-1200 tokens (substantial content, not brief summaries)
 
 EFFICIENCY (Token Optimization):
 ✓ Include only fields that have content (omit empty arrays/objects)

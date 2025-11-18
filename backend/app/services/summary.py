@@ -312,9 +312,10 @@ PLANNING (internal, before output):
    • Use Mermaid syntax ONLY for diagrams that exist in source
 5) Create 2-3 pseudocode examples (ONLY for algorithmic content)
 6) Create 4-6 practice problems with detailed step-by-step solutions
-7) 🚨 CRITICAL OUTPUT TARGET: Aim for 6,000-10,000 tokens output (MINIMUM 6,000!)
-   • If you're under 6,000 tokens, you're being TOO BRIEF - FAIL!
-   • Target: Use 70-90% of available output budget (aim for 9,000-12,000 tokens)
+7) 🚨 CRITICAL OUTPUT TARGET: Aim for 12,000-14,000 tokens output (MINIMUM 10,000!)
+   • If you're under 10,000 tokens, you're being TOO BRIEF - MASSIVE FAIL!
+   • Target: Use 85-95% of available output budget (aim for 12,000-16,000 tokens)
+   • Write LONG, DETAILED explanations - this is a TEXTBOOK, not a summary!
    • EXPAND each concept to 300-500 words (not 100-150!)
    • Add more examples, more details, more worked solutions
    • Don't stop at surface level - go DEEP into each concept
@@ -450,23 +451,24 @@ OUTPUT EXACTLY THIS JSON SCHEMA:
   ]
 }}
 
-DEPTH & COMPREHENSIVENESS REQUIREMENTS:
-✓ AT LEAST 6 sections (aim for 10-15 for rich material)
-✓ AT LEAST 3-5 concepts per section (major sections: 6-8 concepts)
-✓ Each concept explanation: 300-500 words (not 100-150!)
-✓ Include examples where applicable (2-3 examples per concept)
-✓ Include pitfalls, when_to_use, limitations where you have information
-✓ Diagrams: AT LEAST 2-4 visual representations:
+DEPTH & COMPREHENSIVENESS REQUIREMENTS (CRITICAL):
+✓ AT LEAST 12-18 sections (don't stop early - cover EVERYTHING)
+✓ AT LEAST 4-6 concepts per section (major sections: 7-10 concepts)
+✓ Each concept explanation: 350-600 words (DEEP, multi-paragraph analysis!)
+✓ Include 3+ examples per concept with detailed walkthroughs
+✓ Include pitfalls, when_to_use, limitations, real-world applications
+✓ Diagrams (ONLY from source material):
   • If source has charts/graphs → Include them with interpretation
   • Create new diagrams for complex concepts (Mermaid syntax preferred)
   • 🚨 FOR BAYESIAN/PROBABILISTIC NETWORKS → EVERY edge MUST have probability label!
   • Bar charts, line charts, comparison tables for numerical data
 ✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
-✓ Practice Problems: AT LEAST 4-6 with VISUAL solutions (if problem asks to construct/draw, solution must show the actual diagram)
-✓ 🚨 OUTPUT TARGET: Use 70-90% of available token budget
+✓ Practice Problems: AT LEAST 5-8 with DETAILED step-by-step solutions
+✓ 🚨 OUTPUT TARGET: Use 85-95% of available token budget (CRITICAL!)
   • Available: 14,000-18,000 tokens (depending on plan)
-  • Target output: 6,000-12,000 tokens
-  • If under 6,000 tokens → You're TOO BRIEF → EXPAND MORE!
+  • Target output: 12,000-16,000 tokens (aim HIGH!)
+  • If under 10,000 tokens → You're FAILING → EXPAND MASSIVELY!
+  • Each section should be 800-1200 tokens (not 200-400!)
 ✓ Don't be unnecessarily brief - fill the space with quality content
 
 TOKEN OPTIMIZATION RULES (CRITICAL):
@@ -805,11 +807,16 @@ def validate_reduce_output(result: dict) -> list:
     result_json = json.dumps(result, ensure_ascii=False)
     estimated_tokens = len(result_json) // 4  # Rough estimate: 4 chars per token
     
-    # Adjusted minimum: 6000 tokens for comprehensiveness (was 8000 which was too strict)
-    MIN_OUTPUT_TOKENS = 6000
+    # Strict minimum: 10000 tokens for comprehensive study guide
+    MIN_OUTPUT_TOKENS = 10000
+    IDEAL_OUTPUT_TOKENS = 12000
+    
     if estimated_tokens < MIN_OUTPUT_TOKENS:
         shortage = MIN_OUTPUT_TOKENS - estimated_tokens
-        issues.append(f"⚠️ CRITICAL: Output TOO BRIEF! Only {estimated_tokens} tokens (need MINIMUM {MIN_OUTPUT_TOKENS}). You're {shortage} tokens short. EXPAND all concepts to 250-400 words each, add more examples, more details, more explanations. This should be a COMPREHENSIVE study guide, not a brief summary!")
+        issues.append(f"⚠️ CRITICAL: Output TOO BRIEF! Only {estimated_tokens} tokens (need MINIMUM {MIN_OUTPUT_TOKENS}). You're {shortage} tokens short. EXPAND all concepts to 350-600 words each, add 3+ examples per concept, write 3-4 paragraph explanations. This should be a COMPREHENSIVE TEXTBOOK CHAPTER, not a brief summary!")
+    elif estimated_tokens < IDEAL_OUTPUT_TOKENS:
+        shortage = IDEAL_OUTPUT_TOKENS - estimated_tokens
+        issues.append(f"⚠️ OUTPUT TOO SHORT: Only {estimated_tokens} tokens (ideal is {IDEAL_OUTPUT_TOKENS}). You're {shortage} tokens short of ideal depth. Add more examples, longer explanations, and more detailed walkthroughs.")
     
     return issues
 
@@ -876,8 +883,9 @@ REQUIREMENTS (APPLY GENERALLY):
 Issues to fix:
 - {issues_text}
 
-⚠️ BEFORE YOU OUTPUT: Check that your response will be AT LEAST 24,000 characters (6,000 tokens).
+⚠️ BEFORE YOU OUTPUT: Check that your response will be AT LEAST 40,000 characters (10,000 tokens).
 If not, EXPAND MORE - add more content, more details, more examples, more sections!
+IDEAL: 48,000-56,000 characters (12,000-14,000 tokens) for comprehensive coverage.
 
 CURRENT JSON:
 {json.dumps(result, ensure_ascii=False)}"""
@@ -1445,11 +1453,11 @@ def merge_summaries(
                     if 'expression' in formula:
                         expr = formula['expression']
                         
-                        # Fix 1: Replace \text{...} with underscore to \mathtt{...} and escape underscores
+                        # Fix 1: Replace ALL \text{...} with \mathtt{...} and escape underscores
                         def fix_text_to_mathtt(match):
                             content = match.group(1).replace("_", "\\_")
                             return f'\\mathtt{{{content}}}'
-                        expr = re.sub(r'\\text\{([^}]*_[^}]*)\}', fix_text_to_mathtt, expr)
+                        expr = re.sub(r'\\text\{([^}]+)\}', fix_text_to_mathtt, expr)
                         
                         # Fix 2: If not wrapped in \( \), wrap it
                         if not (expr.strip().startswith(r'\(') or expr.strip().startswith('$')):
@@ -1462,22 +1470,26 @@ def merge_summaries(
                     # Fix worked_example field
                     if 'worked_example' in formula:
                         example = formula['worked_example']
+                        original = example
                         
-                        # Fix 1: Replace \text{...} with underscore to \mathtt{...} and escape underscores
+                        # Fix 1: Remove broken LaTeX markers (incomplete \( or \))
+                        example = re.sub(r'\\text\{([^}]+)\}\\?\)?', lambda m: f'\\(\\mathtt{{{m.group(1).replace("_", "\\_")}}}\\)', example)
+                        
+                        # Fix 2: Replace remaining \text{...} with \mathtt{...}
                         def fix_text_to_mathtt(match):
                             content = match.group(1).replace("_", "\\_")
                             return f'\\mathtt{{{content}}}'
-                        fixed_example = re.sub(r'\\text\{([^}]*_[^}]*)\}', fix_text_to_mathtt, example)
+                        example = re.sub(r'\\text\{([^}]+)\}', fix_text_to_mathtt, example)
                         
-                        # Fix 2: Wrap math expressions that aren't already wrapped
-                        # Look for patterns like "s = 1" or "sem_wait(s)" without \( wrapper
-                        if not r'\(' in fixed_example:
-                            # Wrap simple math expressions
-                            fixed_example = re.sub(r'\b([a-zA-Z])\s*=\s*(\d+)\b', r'\\(\1 = \2\\)', fixed_example)
+                        # Fix 3: Clean up any orphaned backslashes or incomplete wrappers
+                        example = re.sub(r'\\text\{', r'\\mathtt{', example)
+                        example = re.sub(r'\\\)?\s*blocks', r' blocks', example)  # Fix broken wrapper at end
                         
-                        if fixed_example != example:
-                            formula['worked_example'] = fixed_example
+                        if example != original:
+                            formula['worked_example'] = example
                             print(f"[FORMULA FIX] Fixed worked_example: {formula.get('name', 'Unnamed')}")
+                            print(f"  BEFORE: {original[:100]}")
+                            print(f"  AFTER: {example[:100]}")
             
             result = json.dumps(result_dict, ensure_ascii=False, indent=2)
             print(f"[COVERAGE] ✅ Coverage added to JSON: {coverage_result['coverage_score']:.1%} score, {len(coverage_result['missing_topics'])} missing topics")
