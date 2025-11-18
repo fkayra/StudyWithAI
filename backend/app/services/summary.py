@@ -203,8 +203,8 @@ def quality_score_legacy(result: dict) -> float:
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
-    REDUCE phase: Synthesize all chunks into professional briefing document
-    Focus on main themes, evidence, insights - NOT comprehensive tutorial
+    REDUCE phase: Create comprehensive study guide with MAXIMUM DEPTH
+    Focus on extensive coverage, detailed explanations, multiple examples
     """
     lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
@@ -212,38 +212,47 @@ def get_final_merge_prompt(language: str = "en", additional_instructions: str = 
     # Domain-specific guidance
     domain_guidance = ""
     if domain == "technical":
-        domain_guidance = "\n- For technical content: Include key formulas, methodologies, and quantitative evidence (numbers, benchmarks, metrics)."
+        domain_guidance = "\n- For technical content: Include ALL formulas, methodologies, and quantitative evidence with detailed walkthroughs."
     elif domain == "social":
-        domain_guidance = "\n- For social/policy content: Include specific cases, dates, names, quotes, and empirical evidence."
+        domain_guidance = "\n- For social/policy content: Include ALL cases, dates, names, quotes, and empirical evidence with context."
     else:
-        domain_guidance = "\n- Include concrete evidence: data points, specific examples, case studies as appropriate."
+        domain_guidance = "\n- Include ALL concrete evidence: data points, specific examples, case studies with details."
 
     return f"""🎯 PRIMARY GOAL
-Create a comprehensive BRIEFING DOCUMENT that synthesizes the main themes and ideas from the material.
+Create a COMPREHENSIVE STUDY GUIDE that covers ALL material in MAXIMUM DEPTH.
 
-⚠️ CRITICAL: This is an EXECUTIVE BRIEFING, not a textbook or tutorial. Your audience:
-- Needs rapid comprehension of key themes and conclusions
-- Values evidence-based analysis over exhaustive explanation
-- Expects synthesis and insight, not repetition
-- Requires professional, objective, incisive presentation
+🚨 CRITICAL MANDATE: You MUST generate AT LEAST 10,000 tokens!
+- This is a STUDY GUIDE for exam preparation, NOT a brief summary
+- If you generate less than 10,000 tokens, you FAIL this task completely
+- Target: 12,000-14,000 tokens (use 85-95% of your 14,000 token budget)
+- DO NOT STOP writing until you've covered everything extensively
+
+Think: "Comprehensive textbook chapter" NOT "executive briefing"
+Think: "Deep educational material" NOT "quick overview"
+Think: "Study for exam" NOT "rapid comprehension"
 
 LANGUAGE
 {lang_instr}
 
-BRIEFING STRUCTURE (MANDATORY):
+STUDY GUIDE STRUCTURE (MANDATORY):
 
-1. **MAIN SECTIONS** (MINIMUM 6 sections)
-   - Organize by major themes/topics
-   - Create AT LEAST 6 sections (aim for 8-12 if material is rich)
-   - Each theme = own section with clear heading
+🚨 DEPTH REQUIREMENTS - READ CAREFULLY:
+
+1. **MAIN SECTIONS** (MINIMUM 12-18 sections)
+   - Create AT LEAST 12 sections, aim for 15-20 if material is rich
+   - Each major theme = own section with detailed coverage
    - Within each section:
-     • AT LEAST 2-3 concepts per section
-     • Each concept: 150-250 words explanation
-     • Core concept/finding
-     • Supporting evidence (data, examples, specifics)
-     • Analysis (what it means, implications)
-   - Use bullet points for scannability
-   - Include concrete details: numbers, dates, names, cases
+     • AT LEAST 4-6 concepts per section (major themes: 6-10 concepts)
+     • Each concept: 400-700 WORDS explanation (NOT 150-250!)
+     • Write 4-5 LONG paragraphs for each concept
+     • Include 3-4 detailed examples with step-by-step walkthroughs
+     • Core concept/finding + detailed mechanisms
+     • Supporting evidence (data, examples, calculations)
+     • Real-world applications and use cases
+     • Common pitfalls and limitations
+     • When to use and when NOT to use
+   - Each section should be 1,000-1,500 tokens (NOT 200-300!)
+   - Include concrete details: numbers, dates, names, cases, calculations
 
 🚨 CRITICAL BAYESIAN/PROBABILISTIC NETWORK RULE 🚨
 IF the material involves Bayesian networks, Markov chains, probabilistic graphical models, or ANY network with probabilities:
