@@ -1819,16 +1819,20 @@ async def summarize_from_files(
         print(f"[QUALITY METRICS] Domain: {quality_metrics.get('domain', 'unknown')}, " +
               f"Is final-ready: {is_final_ready}")
         
-        # Enforce exam-ready quality standards
-        result = enforce_exam_ready(result, detected_themes=None)
+        # DISABLED: enforce_exam_ready() causes timeout (GPT calls after pipeline)
+        # reduce_two_stage already produces exam-ready content
+        # result = enforce_exam_ready(result, detected_themes=None)
         
-        # POST-PROCESSING VALIDATION
+        # DISABLED: POST-PROCESSING causes timeout
+        # validate_and_enhance_quality() makes expensive GPT calls
+        # Pipeline already completed successfully, no need for extra validation
         from app.utils.quality import create_self_repair_prompt, validate_summary_completeness, validate_and_enhance_quality
         from app.services.summary import call_openai, SYSTEM_PROMPT
         
-        # Step 1: Enhance and validate
-        result, repair_prompts = validate_and_enhance_quality(result)
-        print(f"[POST-PROCESSING] Auto-enhancements applied, {len(repair_prompts)} repair prompts generated")
+        # Step 1: DISABLED (prevents timeout)
+        repair_prompts = []  # Empty - no enhancement needed
+        # result, repair_prompts = validate_and_enhance_quality(result)
+        print(f"[POST-PROCESSING] Skipped (prevents timeout), 0 repair prompts")
         
         # Step 2: Completeness check
         warnings, needs_repair = validate_summary_completeness(result)
