@@ -22,7 +22,22 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Import enhanced deep prompts for maximum quality
 from app.services.summary_prompts import SYSTEM_PROMPT_DEEP, FEW_SHOT_EXAMPLES
 
-# Use the deep prompt system-wide
+# CRITICAL FIX: Different prompts for different stages
+# - Outline stage needs SHORT, JSON-focused prompt
+# - Fill stage needs MODERATE, structure-focused prompt  
+# - Final merge needs DEEP, comprehensive prompt
+
+OUTLINE_SYSTEM_PROMPT = """You are a study guide outline generator.
+Your ONLY task: Generate a clean JSON outline with sections and concept placeholders.
+Output ONLY valid JSON. No markdown, no explanations, no code blocks.
+Keep it concise - just the structure."""
+
+FILL_SYSTEM_PROMPT = """You are an educational content writer.
+Your task: Fill the provided outline with detailed educational content.
+Follow the outline structure EXACTLY. Output ONLY valid JSON.
+No markdown, no code blocks, just pure JSON."""
+
+# Deep prompt only for single-pass summaries (not two-stage reduce)
 SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP
 
 
@@ -802,7 +817,7 @@ def reduce_two_stage(
     )
     
     outline_json = call_openai(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused prompt
         user_prompt=outline_user,
         max_output_tokens=min(4000, int(out_cap * 0.30)),  # Increased: 1200→4000, 15%→30%
         temperature=0,
@@ -828,7 +843,7 @@ def reduce_two_stage(
             f"(expected ~{target_min}–{target_soft_max}, but exceeding is allowed if needed)."
         )
         outline_json = call_openai(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused
             user_prompt=outline_user,
             max_output_tokens=4000,  # Increased from 1200
             temperature=0,
@@ -848,7 +863,7 @@ def reduce_two_stage(
             + ". Add them as sections or concise sub-concepts."
         )
         outline_json = call_openai(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused
             user_prompt=outline_user,
             max_output_tokens=4000,  # Increased from 1200
             temperature=0,
@@ -870,7 +885,7 @@ def reduce_two_stage(
     )
     
     filled_json = call_openai(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=FILL_SYSTEM_PROMPT,  # MODERATE, structure-focused prompt
         user_prompt=fill_user,
         max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
         temperature=0,
@@ -887,7 +902,7 @@ def reduce_two_stage(
         print(f"[REDUCE] Quality issues detected: {issues}")
         repair_user = build_self_repair_prompt(result, issues, language)
         repaired = call_openai(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=FILL_SYSTEM_PROMPT,  # Same as fill - repairing JSON structure
             user_prompt=repair_user,
             max_output_tokens=out_cap,  # Use FULL budget for repair - no limiting!
             temperature=0,
