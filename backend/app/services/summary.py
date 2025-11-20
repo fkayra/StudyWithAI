@@ -951,7 +951,9 @@ def call_openai(
         
         print(f"[OPENAI REQUEST] Attempt {attempt}, Model: {OPENAI_MODEL}, max_tokens: {current_max_tokens}")
         
-        response = requests.post(url, headers=headers, json=payload, timeout=180)
+        # Increased timeout: 180s → 600s (10 min)
+        # GPT-4o with large JSON outputs (10k-14k tokens) often exceeds 3 minutes
+        response = requests.post(url, headers=headers, json=payload, timeout=600)
         
         if response.status_code != 200:
             error_detail = response.text[:500]

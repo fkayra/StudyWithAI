@@ -7,30 +7,36 @@ from app.config import CHUNK_OUTPUT_BASE, CHUNK_OUTPUT_FORMULA_BOOST, CHUNK_OUTP
 def calculate_chunk_budget(chunk_text: str) -> int:
     """
     Calculate appropriate output budget for a chunk based on content density
+    Deep mode requires LARGE budgets (~1800-2500 tokens) for complete JSON structure
     
     Heuristics:
-    - Base: 400 tokens for regular text
-    - +150 if chunk contains formulas/equations
-    - +200 if chunk contains theorems/proofs/algorithms
+    - Base: CHUNK_OUTPUT_BASE (1800) from config
+    - +400 if chunk contains formulas/equations
+    - +400 if chunk contains theorems/proofs/algorithms
     
-    Returns: Recommended max_output_tokens for this chunk
+    OLD BUG: min(budget, 800) was KILLING the entire deep pipeline!
+    - Caused JSON truncation → "Unterminated string" errors
+    - reduce_two_stage would fail → fallback to single-pass
+    - Output: 1k token garbage instead of 10k+ exam-ready content
+    
+    Returns: Recommended max_output_tokens for this chunk (1800-2600)
     """
     text_lower = chunk_text.lower()
     
-    budget = CHUNK_OUTPUT_BASE
+    budget = CHUNK_OUTPUT_BASE  # Now 1800 from config.py
     
     # Check for formula indicators
     formula_indicators = ["equation", "formula", "=", "∫", "∑", "∂", "calculate", "solve"]
     if any(indicator in text_lower for indicator in formula_indicators):
-        budget += CHUNK_OUTPUT_FORMULA_BOOST
+        budget += CHUNK_OUTPUT_FORMULA_BOOST  # +400
     
     # Check for theorem/proof indicators
     theorem_indicators = ["theorem", "proof", "lemma", "proposition", "algorithm", "procedure"]
     if any(indicator in text_lower for indicator in theorem_indicators):
-        budget += CHUNK_OUTPUT_THEOREM_BOOST
+        budget += CHUNK_OUTPUT_THEOREM_BOOST  # +400
     
-    # Cap at reasonable maximum
-    budget = min(budget, 800)
+    # Cap at safe maximum (allows complete JSON, prevents excessive token usage)
+    budget = min(budget, 2500)  # Was 800 → FIXED to 2500
     
     return budget
 
