@@ -22,22 +22,32 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Import enhanced deep prompts for maximum quality
 from app.services.summary_prompts import SYSTEM_PROMPT_DEEP, FEW_SHOT_EXAMPLES
 
-# CRITICAL FIX: Different prompts for different stages
-# - Outline stage needs SHORT, JSON-focused prompt
-# - Fill stage needs MODERATE, structure-focused prompt  
-# - Final merge needs DEEP, comprehensive prompt
+# CRITICAL FIX: Stage-specific system prompts to prevent JSON corruption
+# MAP/OUTLINE need ultra-minimal prompts, FILL needs deep prompt
 
-OUTLINE_SYSTEM_PROMPT = """You are a study guide outline generator.
-Your ONLY task: Generate a clean JSON outline with sections and concept placeholders.
-Output ONLY valid JSON. No markdown, no explanations, no code blocks.
-Keep it concise - just the structure."""
+MAP_SYSTEM_PROMPT = """You extract key information as structured JSON.
+Rules:
+- Output ONLY valid JSON (no markdown, no prose, no explanations)
+- Never write paragraphs or explanations outside JSON
+- Keep output under 2000 tokens
+- ALWAYS include: concepts, formulas, theorems, examples arrays"""
+
+OUTLINE_SYSTEM_PROMPT = """You generate JSON outlines for study guides.
+Rules:
+- Output ONLY valid JSON (no markdown, no code blocks)
+- Create 6-12 sections with concept term lists
+- Keep concise - just structure, no content yet
+- Never write explanations or examples"""
 
 FILL_SYSTEM_PROMPT = """You are an educational content writer.
-Your task: Fill the provided outline with detailed educational content.
-Follow the outline structure EXACTLY. Output ONLY valid JSON.
-No markdown, no code blocks, just pure JSON."""
+Task: Fill the provided outline with comprehensive study content.
+Rules:
+- Follow outline structure EXACTLY
+- Output ONLY valid JSON (no markdown, no code blocks)
+- Write detailed explanations (300-600 words per concept)
+- Include examples, formulas, practice problems"""
 
-# Deep prompt only for single-pass summaries (not two-stage reduce)
+# Deep prompt only for single-pass summaries (not used in two-stage reduce)
 SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP
 
 
@@ -835,43 +845,41 @@ def reduce_two_stage(
     )
     print(f"[REDUCE] Outline targets: min={target_min}, soft_max={target_soft_max}, themes={approx_themes}")
     
-    # === SELF-REPAIR: Expand if outline too shallow ===
-    if len(outline.get("sections", [])) < target_min:
-        print(f"[REDUCE] Outline too shallow ({len(outline.get('sections', []))} < {target_min}), expanding...")
-        outline_user += (
-            f"\n\n[REPAIR] Expand sections to ensure full theme coverage "
-            f"(expected ~{target_min}–{target_soft_max}, but exceeding is allowed if needed)."
-        )
-        outline_json = call_openai(
-            system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused
-            user_prompt=outline_user,
-            max_output_tokens=4000,  # Increased from 1200
-            temperature=0,
-            user_id=user_id,
-            endpoint="/summarize",
-            db=db
-        )
-        outline = parse_json_robust(outline_json)
+    # === SELF-REPAIR: Max 1 repair attempt to prevent loop ===
+    outline_needs_repair = False
+    repair_reason = []
     
-    # === SELF-REPAIR: Check coverage gaps ===
+    # Check 1: Too shallow?
+    if len(outline.get("sections", [])) < target_min:
+        outline_needs_repair = True
+        repair_reason.append(f"too shallow ({len(outline.get('sections', []))} < {target_min})")
+    
+    # Check 2: Coverage gaps?
     missing = coverage_gaps(outline, aggregated_knowledge)
     if missing:
-        print(f"[REDUCE] Coverage gaps detected: {missing}")
+        outline_needs_repair = True
+        repair_reason.append(f"missing themes: {', '.join(missing[:3])}")
+    
+    # Single repair attempt (prevents loop)
+    if outline_needs_repair:
+        print(f"[REDUCE] Outline repair needed: {'; '.join(repair_reason)}")
         outline_user += (
-            "\n\n[REPAIR] Missing key themes: "
-            + ", ".join(missing)
-            + ". Add them as sections or concise sub-concepts."
+            f"\n\n[REPAIR] Fix these issues: {'; '.join(repair_reason)}. "
+            f"Expected ~{target_min}–{target_soft_max} sections."
         )
         outline_json = call_openai(
             system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused
             user_prompt=outline_user,
-            max_output_tokens=4000,  # Increased from 1200
+            max_output_tokens=4000,
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",
             db=db
         )
         outline = parse_json_robust(outline_json)
+        print(f"[REDUCE] Outline repaired: {len(outline.get('sections', []))} sections")
+    else:
+        print(f"[REDUCE] Outline OK: {len(outline.get('sections', []))} sections")
     
     # === STAGE 2: Fill Outline ===
     print("[REDUCE] Stage 2: Filling outline with content...")
@@ -1062,7 +1070,7 @@ def summarize_chunk(
     user_prompt += f"\n\nTEXT TO EXTRACT FROM:\n{chunk_text}"
     
     return call_openai(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=MAP_SYSTEM_PROMPT,  # Ultra-minimal for guaranteed JSON
         user_prompt=user_prompt,
         max_output_tokens=out_budget,
         user_id=user_id,
@@ -1169,35 +1177,13 @@ def merge_summaries(
             coverage_result = validate_coverage(original_text, result, min_coverage=0.85)
             print(generate_coverage_report(coverage_result))
             
-            # If coverage is insufficient, add missing topics and regenerate
+            # CRITICAL FIX: NO REGENERATION! Prevents infinite loop
+            # Coverage validator was causing timeout by recursively calling reduce_two_stage
+            # If coverage insufficient, just log and continue with what we have
             if not coverage_result['passed'] and coverage_result['missing_topics']:
                 print(f"[COVERAGE] ⚠️  Coverage insufficient ({coverage_result['coverage_score']:.1%})")
-                print(f"[COVERAGE] Adding {len(coverage_result['missing_topics'])} missing topics...")
-                
-                # Create enhanced instructions with missing topics
-                missing_topics_str = ", ".join(coverage_result['missing_topics'][:10])
-                coverage_instructions = f"\n\n⚠️  CRITICAL: The following topics MUST be included but are currently missing: {missing_topics_str}"
-                if len(coverage_result['missing_topics']) > 10:
-                    coverage_instructions += f" (and {len(coverage_result['missing_topics']) - 10} more)"
-                coverage_instructions += "\n\nAdd these topics as new sections or integrate them into existing relevant sections. DO NOT skip any of them."
-                
-                # Regenerate with coverage fix (one retry only)
-                enhanced_instructions = (additional_instructions or "") + coverage_instructions
-                print("[COVERAGE] Regenerating with missing topics...")
-                result = reduce_two_stage(
-                    aggregated_knowledge=aggregated_knowledge,
-                    language=language,
-                    domain=domain,
-                    out_cap=out_budget,
-                    additional_instructions=enhanced_instructions,
-                    user_id=user_id,
-                    db=db
-                )
-                print("[COVERAGE] ✓ Regeneration complete")
-                
-                # Re-validate after regeneration
-                coverage_result = validate_coverage(original_text, result, min_coverage=0.85)
-                print(f"[COVERAGE] Post-regen coverage: {coverage_result['coverage_score']:.1%}")
+                print(f"[COVERAGE] Missing {len(coverage_result['missing_topics'])} topics (accepting current output)")
+                # NO REGENERATION - prevents loop
             else:
                 print(f"[COVERAGE] ✅ Coverage validated ({coverage_result['coverage_score']:.1%})")
             
