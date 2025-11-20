@@ -203,339 +203,183 @@ def quality_score_legacy(result: dict) -> float:
 
 def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
     """
-    REDUCE phase: Create comprehensive study guide with MAXIMUM DEPTH
-    Focus on extensive coverage, detailed explanations, multiple examples
+    REDUCE phase: Synthesize all chunks into EXAM-READY STUDY NOTES.
+    Student should be able to prepare for an exam using only this output.
     """
     lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
 
-    # Domain-specific guidance
     domain_guidance = ""
     if domain == "technical":
-        domain_guidance = "\n- For technical content: Include ALL formulas, methodologies, and quantitative evidence with detailed walkthroughs."
+        domain_guidance = "\n- For technical content: include ALL major definitions, theorems, formulas and algorithms with worked examples."
     elif domain == "social":
-        domain_guidance = "\n- For social/policy content: Include ALL cases, dates, names, quotes, and empirical evidence with context."
+        domain_guidance = "\n- For social/policy content: include key theories, schools of thought, important names, dates, cases and empirical evidence."
+    elif domain == "procedural":
+        domain_guidance = "\n- For procedural content: include clear step-by-step procedures, workflows, edge cases and common pitfalls."
     else:
-        domain_guidance = "\n- Include ALL concrete evidence: data points, specific examples, case studies with details."
+        domain_guidance = "\n- Always include concrete examples, real contexts and practical applications."
 
     return f"""🎯 PRIMARY GOAL
-Create a COMPREHENSIVE STUDY GUIDE that covers ALL material in MAXIMUM DEPTH.
+Create a FULL, EXAM-READY STUDY GUIDE from the material.
 
-🚨 CRITICAL MANDATE: You MUST generate AT LEAST 10,000 tokens!
-- This is a STUDY GUIDE for exam preparation, NOT a brief summary
-- If you generate less than 10,000 tokens, you FAIL this task completely
-- Target: 12,000-14,000 tokens (use 85-95% of your 14,000 token budget)
-- DO NOT STOP writing until you've covered everything extensively
-
-Think: "Comprehensive textbook chapter" NOT "executive briefing"
-Think: "Deep educational material" NOT "quick overview"
-Think: "Study for exam" NOT "rapid comprehension"
+The reader should be able to:
+- Learn (or refresh) the entire topic from scratch
+- Understand all key ideas, not just headlines
+- See worked examples and practice problems
+- Sit an exam using only these notes
 
 LANGUAGE
 {lang_instr}
 
-STUDY GUIDE STRUCTURE (MANDATORY):
+OVERALL STYLE:
+- Think like a professor writing complete lecture notes.
+- PRIORITIZE DEPTH and COVERAGE over brevity.
+- It is OK if the output is long, as long as it is dense and useful.
+- Avoid repetition of identical sentences, but DO explain ideas from multiple angles.
 
-🚨 DEPTH REQUIREMENTS - READ CAREFULLY:
+STRUCTURE (REQUIRED):
 
-1. **MAIN SECTIONS** (MINIMUM 12-18 sections)
-   - Create AT LEAST 12 sections, aim for 15-20 if material is rich
-   - Each major theme = own section with detailed coverage
-   - Within each section:
-     • AT LEAST 4-6 concepts per section (major themes: 6-10 concepts)
-     • Each concept: 400-700 WORDS explanation (NOT 150-250!)
-     • Write 4-5 LONG paragraphs for each concept
-     • Include 3-4 detailed examples with step-by-step walkthroughs
-     • Core concept/finding + detailed mechanisms
-     • Supporting evidence (data, examples, calculations)
-     • Real-world applications and use cases
-     • Common pitfalls and limitations
-     • When to use and when NOT to use
-   - Each section should be 1,000-1,500 tokens (NOT 200-300!)
-   - Include concrete details: numbers, dates, names, cases, calculations
+1. **OVERVIEW**
+   - 2–4 sentences summarizing what the whole material is about.
+   - Mention the main themes / chapters.
 
-🚨 CRITICAL BAYESIAN/PROBABILISTIC NETWORK RULE 🚨
-IF the material involves Bayesian networks, Markov chains, probabilistic graphical models, or ANY network with probabilities:
-→ EVERY edge in diagram MUST have probability/weight label
-→ Example CORRECT: A[Rain] -->|P=0.8| B[Wet]
-→ Example WRONG: A[Rain] --> B[Wet]  ❌ MISSING PROBABILITY!
-→ This is NOT optional - it's REQUIRED for the diagram to be usable!
-→ VERIFY: Count edges, count probability labels. They MUST match!
+2. **LEARNING OBJECTIVES**
+   - 4–8 clear objectives, starting with verbs:
+     • "Define...", "Explain...", "Compare...", "Apply...", "Prove...", "Solve..."
 
-📊 CRITICAL RULE FOR DIAGRAMS/CHARTS:
-⚠️ ONLY include diagrams/charts that ALREADY EXIST in the source material!
-- DO NOT create new diagrams on your own
-- DO NOT invent visualizations that aren't in the source
-- ONLY recreate charts/graphs/diagrams that are explicitly present in the uploaded documents
-- If source has NO visual elements → diagrams array should be EMPTY or have max 1-2 simple flowcharts
-- Exception: You MAY create simple process flowcharts ONLY if the text explicitly describes a process/algorithm step-by-step
+3. **MAIN SECTIONS**
+   - Organize by major themes/topics of the material.
+   - Create as many sections as needed to cover EVERYTHING (no fixed number).
+   - Each section MUST contain:
+     • A clear heading
+     • 3–6 key concepts
+     • For each concept:
+       - A precise definition
+       - 2–4 dense paragraphs of explanation
+       - At least ONE concrete example
+       - Key points / bullet summary at the end
+   - Emphasize:
+     • When the concept is used
+     • Why it matters
+     • How it connects to other concepts in this document
 
-ACCEPTABLE diagram types (ONLY if in source):
-1. Charts/graphs from source files (bar, line, scatter, etc.)
-2. Flowcharts explicitly described in text
-3. Hierarchies/trees shown in source
-4. Network diagrams present in source
+4. **FORMULAS / ALGORITHMS (if present in material)**
+   - For each important formula/algorithm:
+     • name
+     • expression in LaTeX
+     • variables with meanings
+     • one worked example with real numbers
+     • notes on validity, limitations, complexity
 
-NEVER create diagrams for:
-- Concepts that are better explained in text
-- Generic examples (Producer/Consumer, Dining Philosophers, etc.) UNLESS they appear as diagrams in source
-- Abstract relationships unless visually shown in source
+5. **DIAGRAMS (ONLY if they help understanding)**
+   - Use Mermaid or clear ASCII art ONLY for structures that are naturally visual:
+     • trees, graphs, pipelines, process flows, hierarchies
+   - Do NOT invent random diagrams if text explanation is clearer.
+   - For each diagram: title, short description, and the diagram content.
 
-OUTPUT REQUIREMENTS:
-- Specific and concrete: Include numbers, dates, names, data points
-- Evidence-based: Ground claims in source material
-- Comprehensive: Use available token budget fully (aim for max_output_cap)
-- Don't be unnecessarily brief - depth matters
-- Include pitfalls, when_to_use, limitations where applicable
-- Diagrams & Charts (ONLY FROM SOURCE MATERIAL):
-  • ⚠️ CRITICAL: ONLY include diagrams that EXIST in the source documents!
-  • ❌ DO NOT create generic example diagrams (Producer/Consumer, Dining Philosophers, etc.)
-  • ✅ If source has charts/graphs/figures → Recreate them EXACTLY + add interpretation
-  • ✅ If source describes a process step-by-step → MAY create simple flowchart
-  • ❌ NO source visuals → Keep diagrams array EMPTY or minimal (0-1 diagrams max)
-  • For Bayesian/probabilistic networks (IF IN SOURCE) → Include edge labels with probability values
-    CORRECT: graph TD; A[Node1] -->|"P=0.7"| B[Node2]; A -->|"P=0.3"| C[Node3];
-  • Each diagram MUST have clear description + interpretation
-  • Chart accuracy is CRITICAL - verify all numbers match source material!
-- AT LEAST 2-3 pseudocode examples for algorithms/procedures
-- AT LEAST 3-5 practice problems with VISUAL solutions:
-  • If problem asks to "construct" or "draw" → solution MUST include actual diagram
-  • If constructing Bayesian/probabilistic network → MUST include probability values on edges
-- No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
+6. **PSEUDOCODE (when relevant)**
+   - 2–4 key algorithms or procedures in simple pseudocode.
+   - Each: name, code, explanation, small example trace.
 
-MINDSET CHECK:
-"Am I writing AT LEAST 10,000 tokens?"
-"Is EVERY concept 300-600 words with 3+ examples?"
-"Am I using 85-95% of my available token budget?"
+7. **PRACTICE PROBLEMS**
+   - 5–10 problems of mixed difficulty (easy/medium/hard).
+   - For each:
+     • full problem statement
+     • difficulty
+     • step-by-step solution
+     • highlight key concepts used.
 
-If NO to ANY → KEEP WRITING! EXPAND MORE! DO NOT STOP!
+COVERAGE RULES:
+- EVERY major topic from the material must appear in at least one section.
+- Minor topics can be grouped under "Additional notes" subsections.
+- If something appears many times in the source, summarize it once but deeply.
+- Do NOT skip important topics just to be brief.
 
-PLANNING (internal, before output):
-1) Identify ALL main themes from all chunks
-2) Create AT LEAST 10-15 sections (scale with content richness)
-3) For each section: AT LEAST 3-5 concepts with DEEP explanations (250-400 words each)
-4) Diagrams (STRICT SOURCE-ONLY RULE):
-   • ⚠️ ONLY include diagrams that physically exist in the source documents
-   • Recreate source charts/graphs/figures EXACTLY + add interpretation
-   • DO NOT create generic educational examples (Producer/Consumer, etc.) UNLESS they appear as diagrams in source
-   • If source has NO visual elements → diagrams array should be EMPTY (perfectly acceptable!)
-   • Use Mermaid syntax ONLY for diagrams that exist in source
-5) Create 2-3 pseudocode examples (ONLY for algorithmic content)
-6) Create 4-6 practice problems with detailed step-by-step solutions
-7) 🚨 CRITICAL OUTPUT TARGET: Aim for 12,000-14,000 tokens output (MINIMUM 10,000!)
-   • If you're under 10,000 tokens, you're being TOO BRIEF - MASSIVE FAIL!
-   • Target: Use 85-95% of available output budget (aim for 12,000-16,000 tokens)
-   • Write LONG, DETAILED explanations - this is a TEXTBOOK, not a summary!
-   • EXPAND each concept to 300-500 words (not 100-150!)
-   • Add more examples, more details, more worked solutions
-   • Don't stop at surface level - go DEEP into each concept
-8) Include pitfalls, when_to_use, limitations, real-world applications
-9) Each concept should feel like a complete mini-lesson
+TOKEN / LENGTH GUIDANCE:
+- Use as MUCH of the available output budget as needed.
+- Aim to fill roughly 70–90% of the allowed max tokens.
+- Do NOT deliberately stop early if there are still uncovered topics or missing examples.
 
-OUTPUT EXACTLY THIS JSON SCHEMA:
+OUTPUT FORMAT:
+Return EXACTLY this JSON structure:
+
 {{
   "summary": {{
     "title": "Study Notes: <topic>",
-    "overview": "<2-4 sentences on scope and key topics covered>",
+    "overview": "<2–4 sentence high-level overview>",
     "learning_objectives": [
-      "Learning outcome 1",
-      "Learning outcome 2"
+      "Objective 1",
+      "Objective 2"
     ],
     "sections": [
       {{
-        "heading": "<Major Theme/Topic>",
+        "heading": "<Section heading>",
         "concepts": [
           {{
-            "term": "<Key concept/finding>",
-            "definition": "<Concise definition or statement>",
-            "explanation": "<Analysis with evidence: what it means, why it matters, implications. Include specific data, examples, cases. 2-3 focused paragraphs>",
-            "key_points": ["<Bullet 1>", "<Bullet 2>"]
-            
-            // OPTIONAL FIELDS - Only include if you have content:
-            // "example": "<Specific case study>",  ← Include if you have example
-            // "pitfalls": ["<Common mistake>"],    ← Include if you have pitfalls
-            // "when_to_use": ["<Condition>"],      ← Include if you have usage info
-            // "limitations": ["<Constraint>"]      ← Include if you have limitations
-            
-            // NEVER write empty arrays like "when_to_use": []
-            // Just don't include the field at all!
+            "term": "<Key concept>",
+            "definition": "<Short, precise definition>",
+            "explanation": "<2–4 paragraphs of detailed explanation>",
+            "example": "<Concrete example (numeric or real-world)>",
+            "key_points": ["<Bullet summary>", "<Bullet summary>"]
+            // Optional fields:
+            // "pitfalls": [...],
+            // "when_to_use": [...],
+            // "limitations": [...]
           }}
         ]
       }}
     ],
     "formula_sheet": [
       {{
-        "name": "<formula / algorithm / method>",
-        "expression": "<LaTeX math - WRAP IN \\\\( \\\\) for inline math. Use \\\\mathtt{{}} for function names: \\\\(\\\\mathtt{{sem\\\\_wait}}(s)\\\\) or \\\\(f(x) = ax^2 + bx + c\\\\)>",
-        "variables": {{"symbol": "meaning (use LaTeX wrapped: \\\\(x_i\\\\) for subscripted variables)"}},
-        "worked_example": "<Wrap ALL math in \\\\( \\\\). Example: If \\\\(s = 1\\\\), after \\\\(\\\\mathtt{{sem\\\\_wait}}(s)\\\\), \\\\(s = 0\\\\). Use \\\\mathtt{{}} for function names and escape underscores with \\\\_>",
-        "pseudocode": "<OPTIONAL: if algorithm, put step-by-step procedure here>",
-        "notes": "<when it applies, constraints, complexity>"
+        "name": "<Formula or algorithm>",
+        "expression": "<LaTeX expression, wrapped in \\( \\)>",
+        "variables": {{ "x": "meaning of x" }},
+        "worked_example": "<Step-by-step numeric example>",
+        "pseudocode": "<Optional pseudocode if algorithmic>",
+        "notes": "<Constraints, complexity, usage hints>"
       }}
     ],
     "diagrams": [
       {{
         "title": "<Diagram title>",
-        "description": "<What this diagram shows AND interpretation if from source file>",
-        "content": "<Mermaid syntax (preferred) or ASCII art.
-                    
-                    🚨 CRITICAL MERMAID SYNTAX RULES (Mermaid v11+):
-                    
-                    1. EVERY NODE must have brackets: NodeName[NodeName] or NodeName[Label]
-                       ❌ WRONG: Producer --> Buffer
-                       ✅ CORRECT: Producer[Producer] --> Buffer[Buffer]
-                    
-                    2. ALL edge labels MUST be quoted (always use quotes, even for simple text):
-                       ❌ WRONG: -->|sem_wait(empty)|
-                       ❌ WRONG: -->|P=0.8|
-                       ✅ CORRECT: -->|"sem_wait(empty)"|
-                       ✅ CORRECT: -->|"P=0.8"|
-                    
-                    3. EACH edge MUST be on a SEPARATE LINE (critical for parsing):
-                       ❌ WRONG: A[A] -->|"x"| B[B] B[B] -->|"y"| C[C]
-                       ✅ CORRECT:
-                       A[A] -->|"x"| B[B]
-                       B[B] -->|"y"| C[C]
-                    
-                    4. FOR BAYESIAN/PROBABILISTIC NETWORKS: EVERY edge MUST have probability!
-                       ✅ CORRECT: Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
-                    
-                    SYNTAX EXAMPLE (NOT for content - just showing proper syntax):
-                    graph TD
-                      NodeA[Node A] -->|"label text"| NodeB[Node B]
-                      NodeB[Node B] -->|"another label"| NodeC[Node C]
-                    
-                    ⚠️ CRITICAL: This is ONLY a syntax example!
-                    DO NOT copy this into your output!
-                    ONLY create diagrams that exist in the source documents!
-                    
-                    Other Rules:
-                    - If from source file → Copy ALL details accurately
-                    - For charts from source → Preserve all data points and values>",
-        "type": "tree|flowchart|graph|hierarchy|chart_from_source|bayesian_network",
-        "source": "<OPTIONAL: 'original_file' if recreating a chart/graph from source, omit if new diagram>"
+        "description": "<What it shows and why it matters>",
+        "content": "<Mermaid or ASCII>",
+        "type": "tree|flowchart|graph|hierarchy|other"
       }}
     ],
     "pseudocode": [
       {{
-        "name": "<Algorithm/Procedure name>",
-        "code": "<Step-by-step pseudocode with proper indentation>",
-        "explanation": "<What it does, when to use, complexity>",
-        "example_trace": "<Optional: trace through with example input>"
+        "name": "<Algorithm name>",
+        "code": "<Pseudocode>",
+        "explanation": "<What it does, when to use>",
+        "example_trace": "<Example input → output trace>"
       }}
     ],
     "practice_problems": [
       {{
-        "problem": "<Full problem statement>",
+        "problem": "<Full statement>",
         "difficulty": "easy|medium|hard",
-        "solution": "<Complete solution WITH VISUALS if applicable.
-                     
-                     🚨 CRITICAL MERMAID SYNTAX FOR DIAGRAMS IN SOLUTIONS:
-                     
-                     RULES (Follow EXACTLY):
-                     1. ALL nodes MUST have brackets: NodeName[NodeName]
-                     2. ALL edge labels MUST be quoted: -->|"label"|
-                     3. Each edge on SEPARATE LINE (no multiple edges on one line!)
-                     
-                     SYNTAX EXAMPLES (for reference only - DO NOT use as content):
-                     
-                     ✅ CORRECT SYNTAX:
-                     graph TD
-                       NodeA[Node A] -->|"edge label"| NodeB[Node B]
-                       NodeB[Node B] -->|"another label"| NodeC[Node C]
-                     
-                     ❌ WRONG SYNTAX (missing quotes, multiple edges on one line):
-                     graph TD
-                       NodeA -->|label| NodeB NodeB -->|label2| NodeC
-                     
-                     ⚠️ IMPORTANT: These are SYNTAX examples only!
-                     For practice problems: ONLY include diagrams if the problem explicitly requires constructing one
-                     DO NOT create generic diagrams - focus on explaining the solution in text>",
-        "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
-        "key_concepts": ["<Concept 1>", "<Concept 2>"]
+        "solution": "<Detailed step-by-step solution>",
+        "steps": ["<Step 1>", "<Step 2>"],
+        "key_concepts": ["<Concept>", "<Concept>"]
       }}
     ]
   }},
   "citations": [
-    {{"file_id": "source", "section_or_heading": "<specific section/chapter>", "page_range": "<page numbers if available>", "evidence": "<max 200 chars snippet>"}}
+    {{
+      "file_id": "source",
+      "section_or_heading": "<where in the source>",
+      "page_range": "<pages if known>",
+      "evidence": "<short snippet from source>"
+    }}
   ]
 }}
 
-DEPTH & COMPREHENSIVENESS REQUIREMENTS (CRITICAL):
-✓ AT LEAST 12-18 sections (don't stop early - cover EVERYTHING)
-✓ AT LEAST 4-6 concepts per section (major sections: 7-10 concepts)
-✓ Each concept explanation: 350-600 words (DEEP, multi-paragraph analysis!)
-✓ Include 3+ examples per concept with detailed walkthroughs
-✓ Include pitfalls, when_to_use, limitations, real-world applications
-✓ Diagrams (ONLY from source material):
-  • If source has charts/graphs → Include them with interpretation
-  • Create new diagrams for complex concepts (Mermaid syntax preferred)
-  • 🚨 FOR BAYESIAN/PROBABILISTIC NETWORKS → EVERY edge MUST have probability label!
-  • Bar charts, line charts, comparison tables for numerical data
-✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
-✓ Practice Problems: AT LEAST 5-8 with DETAILED step-by-step solutions
-✓ 🚨 OUTPUT TARGET: Use 85-95% of available token budget (CRITICAL!)
-  • Available: 14,000-18,000 tokens (depending on plan)
-  • Target output: 12,000-16,000 tokens (aim HIGH!)
-  • If under 10,000 tokens → You're FAILING → EXPAND MASSIVELY!
-  • Each section should be 800-1200 tokens (not 200-400!)
-✓ Don't be unnecessarily brief - fill the space with quality content
+{domain_guidance}{additional}
 
-TOKEN OPTIMIZATION RULES (CRITICAL):
-⚠️ NEVER include empty arrays! Omit the field entirely:
-  
-  ❌ BAD: "when_to_use": []        ← Wastes tokens!
-  ✅ GOOD: (don't include the field at all)
-  
-  ❌ BAD: "limitations": []        ← Wastes tokens!
-  ✅ GOOD: (don't include the field at all)
-  
-  ❌ BAD: "pitfalls": []           ← Wastes tokens!
-  ✅ GOOD: (don't include the field at all)
-
-OMIT these fields if empty:
-  - "example" → omit if no example
-  - "pitfalls" → omit if no pitfalls
-  - "when_to_use" → omit if no usage conditions  
-  - "limitations" → omit if no limitations
-  - "formula_sheet" → omit if no formulas
-  
-But if you CAN add content, DO IT! Use the available tokens.
-
-QUALITY & COMPLETENESS RULES:
-- All major themes covered in dedicated sections (AT LEAST 6)
-- Evidence-based: Include specific data, numbers, dates, names, cases
-- Formula_sheet (if any in material): Include ALL formulas with:
-  ✓ expression = MATH NOTATION
-  ✓ variables = symbol meanings
-  ✓ worked_example with calculations
-  ✓ pseudocode for algorithms
-- Validate JSON (no trailing commas, balanced braces)
-
-VALIDATION CHECKLIST (before output):
-✓ AT LEAST 10-15 sections created (scale with content richness)
-✓ Each section has 3-5+ concepts (major themes: 6-8 concepts)
-✓ Each concept: 300-500 word explanation (DEEP, not superficial!)
-✓ Diagrams (ONLY FROM SOURCE - DO NOT INVENT):
-  • ⚠️ ONLY include if diagrams/charts exist in source documents
-  • Recreate source charts/graphs with interpretation
-  • NO generic examples - only what's actually in the material
-  • 🚨 IF source has Bayesian/probabilistic networks: Include probability labels on ALL edges (-->|"P=0.7"|)
-  • Empty array is ACCEPTABLE if source has no visual elements
-✓ Pseudocode: 2-3 algorithm examples (ONLY if algorithmic content)
-✓ Practice Problems: 4-6 with detailed step-by-step solutions
-✓ 🚨 OUTPUT LENGTH: MINIMUM 6,000 tokens (aim for 9,000-12,000)
-  • If under 6,000 → You're TOO BRIEF → EXPAND concepts
-  • Target: 70-90% of available output budget
-  • Each concept should be 300-500 words (not 100-150!)
-✓ Claims are specific and concrete (not vague)
-✓ Citations reference source material
-
-🚨 FINAL CHECK BEFORE OUTPUT:
-- Count your output tokens (rough: chars / 4)
-- If under 40,000 characters (10,000 tokens) → YOU MUST EXPAND MORE!
-- Add more sections, more concepts, longer explanations
-- DO NOT OUTPUT until you reach the minimum!
+Before you answer, think about:
+- "Can a student reasonably prepare for an exam using ONLY this output?"
+If not, ADD more explanations, examples and practice problems BEFORE finishing.
 
 OUTPUT PURE JSON NOW (no other text):"""
 
@@ -699,10 +543,13 @@ def coverage_gaps(outline: dict, aggregated_knowledge: dict) -> list:
     return [h for h in source_tops if h and all(h.lower() not in p.lower() for p in planned)]
 
 
-def validate_reduce_output(result: dict) -> list:
+def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
     """
-    Universal validation for any domain/subject.
-    Checks examples, formulas, glossary, citations with domain-agnostic rules.
+    Validate the merged summary with SOFT, PLAN-ADAPTIVE checks.
+    This no longer enforces an impossible fixed 10000-token minimum.
+    Instead:
+      - Minimum tokens = max(2500, out_cap * 0.6), capped at 9000.
+      - If below target → trigger expansion via self-repair.
     Returns list of issue strings (empty if all good)
     """
     import re
@@ -818,21 +665,27 @@ def validate_reduce_output(result: dict) -> list:
     if len(practice_problems) < 4:
         issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥4")
     
-    # Check output length (STRICT - this is critical!)
+    # ---- LENGTH CHECK (ADAPTIVE, PLAN-BASED) ----
     import json
     result_json = json.dumps(result, ensure_ascii=False)
-    estimated_tokens = len(result_json) // 4  # Rough estimate: 4 chars per token
-    
-    # Strict minimum: 10000 tokens for comprehensive study guide
-    MIN_OUTPUT_TOKENS = 10000
-    IDEAL_OUTPUT_TOKENS = 12000
-    
-    if estimated_tokens < MIN_OUTPUT_TOKENS:
-        shortage = MIN_OUTPUT_TOKENS - estimated_tokens
-        issues.append(f"⚠️ CRITICAL: Output TOO BRIEF! Only {estimated_tokens} tokens (need MINIMUM {MIN_OUTPUT_TOKENS}). You're {shortage} tokens short. EXPAND all concepts to 350-600 words each, add 3+ examples per concept, write 3-4 paragraph explanations. This should be a COMPREHENSIVE TEXTBOOK CHAPTER, not a brief summary!")
-    elif estimated_tokens < IDEAL_OUTPUT_TOKENS:
-        shortage = IDEAL_OUTPUT_TOKENS - estimated_tokens
-        issues.append(f"⚠️ OUTPUT TOO SHORT: Only {estimated_tokens} tokens (ideal is {IDEAL_OUTPUT_TOKENS}). You're {shortage} tokens short of ideal depth. Add more examples, longer explanations, and more detailed walkthroughs.")
+    estimated_tokens = len(result_json) // 4  # ≈ 4 chars per token
+
+    if out_cap is not None:
+        # Adaptive minimum:
+        # - At least 60% of available token budget
+        # - At least 2500 minimum
+        # - No more than 9000 to avoid pathological inflation
+        target_min = max(2500, int(out_cap * 0.60))
+        target_min = min(target_min, 9000)
+    else:
+        target_min = 2500  # safe soft default
+
+    if estimated_tokens < target_min:
+        shortage = target_min - estimated_tokens
+        issues.append(
+            f"⚠️ Output may be too brief: ~{estimated_tokens} tokens vs target ≥{target_min}. "
+            f"Add more detailed explanations, extra examples and practice problems (short by ~{shortage} tokens)."
+        )
     
     return issues
 
@@ -1029,7 +882,7 @@ def reduce_two_stage(
     
     # === STAGE 3: Validate & Self-Repair ===
     print("[REDUCE] Stage 3: Validating output...")
-    issues = validate_reduce_output(result)
+    issues = validate_reduce_output(result, out_cap=out_cap)
     if issues:
         print(f"[REDUCE] Quality issues detected: {issues}")
         repair_user = build_self_repair_prompt(result, issues, language)
