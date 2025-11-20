@@ -1,0 +1,1836 @@
+"""
+AI-powered summary service with map-reduce for large documents
+Includes domain detection and quality guardrails for consistent output
+Enhanced with deep learning prompts for maximum depth and coverage
+"""
+from typing import List, Optional, Dict
+import os
+import requests
+import re
+from app.config import (
+    OPENAI_MODEL, TEMPERATURE, TOP_P,
+    CHUNK_INPUT_TARGET, MERGE_OUTPUT_BUDGET
+)
+from app.utils.files import approx_tokens_from_text_len
+from app.utils.chunking import split_text_approx_tokens, merge_texts
+
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+
+# ========== PROMPTS ==========
+# Import enhanced deep prompts for maximum quality
+from app.services.summary_prompts import SYSTEM_PROMPT_DEEP, FEW_SHOT_EXAMPLES
+
+# Use the deep prompt system-wide
+SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP
+
+
+def get_chunk_summary_prompt(language: str = "en") -> str:
+    """
+    Prompt for extracting key information from chunks (MAP phase)
+    Focus on identifying main themes, evidence, concepts for synthesis
+    Returns structured mini-JSON to preserve concept/formula/example separation
+    """
+    lang_instr = "Write in TURKISH." if language == "tr" else "Write in ENGLISH."
+    
+    return f"""You are analyzing a document excerpt to extract key information for a professional briefing.
+
+{lang_instr}
+
+YOUR TASK:
+Extract the main themes, concepts, evidence, and findings from this excerpt. Focus on:
+- Core concepts and their significance
+- Key data points, statistics, evidence
+- Important formulas, methodologies, frameworks (if present)
+- Notable conclusions or findings
+- Specific examples with concrete details
+
+OUTPUT REQUIREMENTS:
+- Be specific: Include numbers, dates, names, concrete details
+- Focus on substance: Extract what matters, not background fluff
+- Maintain objectivity: Present information, not opinions
+- Preserve technical accuracy: Formulas, terms, methodologies must be exact
+
+{FEW_SHOT_EXAMPLES}
+
+OUTPUT AS VALID JSON (no markdown fences):
+
+{{
+  "concepts": [
+    {{
+      "term": "Concept name",
+      "definition": "Precise definition",
+      "explanation": "How it works, why it matters (2-3 sentences)",
+      "example": "Concrete example with numbers if applicable"
+    }}
+  ],
+  "formulas": [
+    {{
+      "name": "Formula name",
+      "expression": "Mathematical notation",
+      "variables": {{"x": "meaning", "y": "meaning"}},
+      "worked_example": "Step-by-step calculation with actual numbers"
+    }}
+  ],
+  "theorems": [
+    {{
+      "name": "Theorem/Principle name",
+      "statement": "Formal statement",
+      "proof_sketch": "Key proof steps or intuition",
+      "application": "When/how to use it"
+    }}
+  ],
+  "examples": [
+    {{
+      "context": "What problem/scenario",
+      "solution": "Step-by-step solution with calculations",
+      "key_insight": "Why this approach works"
+    }}
+  ]
+}}
+
+RULES:
+- Extract main concepts, formulas, and examples from this excerpt
+- Be specific and concrete (numbers, dates, names, data)
+- Omit fields that are absent (no empty arrays)
+- For formulas: include expression and brief explanation
+- Output ONLY valid JSON, no extra text"""
+
+
+def detect_domain(text: str) -> str:
+    """
+    Automatically detect document domain from content to adjust summary style.
+    Returns: 'technical', 'social', 'procedural', or 'general'
+    """
+    sample = text[:4000].lower()
+    
+    # Technical/scientific indicators
+    technical_keywords = ["equation", "theorem", "proof", "algorithm", "derivative", 
+                         "integral", "matrix", "function", "variable", "formula",
+                         "calculate", "compute", "solve"]
+    
+    # Social sciences indicators
+    social_keywords = ["policy", "sociology", "history", "philosophy", "ethics",
+                      "society", "culture", "theory", "political", "economic",
+                      "psychology", "social"]
+    
+    # Procedural/manual indicators
+    procedural_keywords = ["step", "procedure", "manual", "instruction", "how to",
+                          "guide", "process", "method", "implementation", "install"]
+    
+    technical_count = sum(1 for k in technical_keywords if k in sample)
+    social_count = sum(1 for k in social_keywords if k in sample)
+    procedural_count = sum(1 for k in procedural_keywords if k in sample)
+    
+    if technical_count >= 3:
+        return "technical"
+    elif social_count >= 3:
+        return "social"
+    elif procedural_count >= 3:
+        return "procedural"
+    return "general"
+
+
+def quality_score_legacy(result: dict) -> float:
+    """
+    Calculate quality score (0.0-1.0) based on content depth and richness.
+    Focus: concept depth, formula completeness, examples, diagrams, pseudocode, practice problems
+    """
+    try:
+        s = result.get("summary", {})
+        sections = s.get("sections", [])
+        
+        # Count concepts and check depth
+        num_concepts = 0
+        total_explanation_length = 0
+        total_examples = 0
+        
+        for sec in sections:
+            concepts = sec.get("concepts", [])
+            num_concepts += len(concepts)
+            
+            for concept in concepts:
+                explanation = concept.get("explanation", "")
+                total_explanation_length += len(explanation)
+                
+                # Count examples (either array or single)
+                examples = concept.get("examples", [])
+                if isinstance(examples, list):
+                    total_examples += len(examples)
+                elif concept.get("example"):
+                    total_examples += 1
+        
+        avg_explanation_length = total_explanation_length / max(num_concepts, 1)
+        avg_examples_per_concept = total_examples / max(num_concepts, 1)
+        
+        # Count formulas and check completeness
+        formulas = s.get("formula_sheet", [])
+        num_formulas = len(formulas)
+        formulas_with_examples = sum(1 for f in formulas if f.get("worked_example") or "example" in f.get("notes", "").lower())
+        
+        # Count new interactive features
+        num_diagrams = len(s.get("diagrams", []))
+        num_pseudocode = len(s.get("pseudocode", []))
+        num_practice = len(s.get("practice_problems", []))
+        
+        # Calculate weighted score (depth + interactivity)
+        concept_depth_score = min((avg_explanation_length / 400), 1.0)  # 400 chars = good depth
+        example_richness_score = min(avg_examples_per_concept / 2.0, 1.0)  # 2 examples per concept = target
+        formula_completeness_score = formulas_with_examples / max(num_formulas, 1) if num_formulas > 0 else 0.5
+        diagrams_score = min(num_diagrams / 3, 1.0)  # 3 diagrams = target
+        pseudocode_score = min(num_pseudocode / 2, 1.0)  # 2 pseudocode = target
+        practice_score = min(num_practice / 4, 1.0)  # 4 practice problems = target
+        
+        score = (
+            concept_depth_score * 0.25 +        # 25% for explanation depth
+            example_richness_score * 0.20 +     # 20% for example richness
+            formula_completeness_score * 0.15 + # 15% for formula completeness
+            diagrams_score * 0.15 +             # 15% for visual diagrams
+            pseudocode_score * 0.10 +           # 10% for pseudocode
+            practice_score * 0.15               # 15% for practice problems
+        )
+        
+        print(f"[QUALITY SCORE] Concepts: {num_concepts}, Avg explanation: {int(avg_explanation_length)} chars, "
+              f"Avg examples/concept: {avg_examples_per_concept:.1f}, Formulas: {num_formulas} (examples: {formulas_with_examples}), "
+              f"Diagrams: {num_diagrams}, Pseudocode: {num_pseudocode}, Practice: {num_practice}, Score: {score:.2f}")
+        
+        return round(score, 2)
+    except Exception as e:
+        print(f"[QUALITY SCORE] Error calculating: {e}")
+        return 0.5  # Default to medium quality on error
+
+
+def get_final_merge_prompt(language: str = "en", additional_instructions: str = "", domain: str = "general") -> str:
+    """
+    REDUCE phase: Create comprehensive study guide with MAXIMUM DEPTH
+    Focus on extensive coverage, detailed explanations, multiple examples
+    """
+    lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
+    additional = f"\n\nUSER REQUIREMENTS (FOLLOW STRICTLY):\n{additional_instructions}" if additional_instructions else ""
+
+    # Domain-specific guidance
+    domain_guidance = ""
+    if domain == "technical":
+        domain_guidance = "\n- For technical content: Include ALL formulas, methodologies, and quantitative evidence with detailed walkthroughs."
+    elif domain == "social":
+        domain_guidance = "\n- For social/policy content: Include ALL cases, dates, names, quotes, and empirical evidence with context."
+    else:
+        domain_guidance = "\n- Include ALL concrete evidence: data points, specific examples, case studies with details."
+
+    return f"""🎯 PRIMARY GOAL
+Create a COMPREHENSIVE STUDY GUIDE that covers ALL material in MAXIMUM DEPTH.
+
+🚨 CRITICAL MANDATE: You MUST generate AT LEAST 10,000 tokens!
+- This is a STUDY GUIDE for exam preparation, NOT a brief summary
+- If you generate less than 10,000 tokens, you FAIL this task completely
+- Target: 12,000-14,000 tokens (use 85-95% of your 14,000 token budget)
+- DO NOT STOP writing until you've covered everything extensively
+
+Think: "Comprehensive textbook chapter" NOT "executive briefing"
+Think: "Deep educational material" NOT "quick overview"
+Think: "Study for exam" NOT "rapid comprehension"
+
+LANGUAGE
+{lang_instr}
+
+STUDY GUIDE STRUCTURE (MANDATORY):
+
+🚨 DEPTH REQUIREMENTS - READ CAREFULLY:
+
+1. **MAIN SECTIONS** (MINIMUM 12-18 sections)
+   - Create AT LEAST 12 sections, aim for 15-20 if material is rich
+   - Each major theme = own section with detailed coverage
+   - Within each section:
+     • AT LEAST 4-6 concepts per section (major themes: 6-10 concepts)
+     • Each concept: 400-700 WORDS explanation (NOT 150-250!)
+     • Write 4-5 LONG paragraphs for each concept
+     • Include 3-4 detailed examples with step-by-step walkthroughs
+     • Core concept/finding + detailed mechanisms
+     • Supporting evidence (data, examples, calculations)
+     • Real-world applications and use cases
+     • Common pitfalls and limitations
+     • When to use and when NOT to use
+   - Each section should be 1,000-1,500 tokens (NOT 200-300!)
+   - Include concrete details: numbers, dates, names, cases, calculations
+
+🚨 CRITICAL BAYESIAN/PROBABILISTIC NETWORK RULE 🚨
+IF the material involves Bayesian networks, Markov chains, probabilistic graphical models, or ANY network with probabilities:
+→ EVERY edge in diagram MUST have probability/weight label
+→ Example CORRECT: A[Rain] -->|P=0.8| B[Wet]
+→ Example WRONG: A[Rain] --> B[Wet]  ❌ MISSING PROBABILITY!
+→ This is NOT optional - it's REQUIRED for the diagram to be usable!
+→ VERIFY: Count edges, count probability labels. They MUST match!
+
+📊 CRITICAL RULE FOR DIAGRAMS/CHARTS:
+⚠️ ONLY include diagrams/charts that ALREADY EXIST in the source material!
+- DO NOT create new diagrams on your own
+- DO NOT invent visualizations that aren't in the source
+- ONLY recreate charts/graphs/diagrams that are explicitly present in the uploaded documents
+- If source has NO visual elements → diagrams array should be EMPTY or have max 1-2 simple flowcharts
+- Exception: You MAY create simple process flowcharts ONLY if the text explicitly describes a process/algorithm step-by-step
+
+ACCEPTABLE diagram types (ONLY if in source):
+1. Charts/graphs from source files (bar, line, scatter, etc.)
+2. Flowcharts explicitly described in text
+3. Hierarchies/trees shown in source
+4. Network diagrams present in source
+
+NEVER create diagrams for:
+- Concepts that are better explained in text
+- Generic examples (Producer/Consumer, Dining Philosophers, etc.) UNLESS they appear as diagrams in source
+- Abstract relationships unless visually shown in source
+
+OUTPUT REQUIREMENTS:
+- Specific and concrete: Include numbers, dates, names, data points
+- Evidence-based: Ground claims in source material
+- Comprehensive: Use available token budget fully (aim for max_output_cap)
+- Don't be unnecessarily brief - depth matters
+- Include pitfalls, when_to_use, limitations where applicable
+- Diagrams & Charts (ONLY FROM SOURCE MATERIAL):
+  • ⚠️ CRITICAL: ONLY include diagrams that EXIST in the source documents!
+  • ❌ DO NOT create generic example diagrams (Producer/Consumer, Dining Philosophers, etc.)
+  • ✅ If source has charts/graphs/figures → Recreate them EXACTLY + add interpretation
+  • ✅ If source describes a process step-by-step → MAY create simple flowchart
+  • ❌ NO source visuals → Keep diagrams array EMPTY or minimal (0-1 diagrams max)
+  • For Bayesian/probabilistic networks (IF IN SOURCE) → Include edge labels with probability values
+    CORRECT: graph TD; A[Node1] -->|"P=0.7"| B[Node2]; A -->|"P=0.3"| C[Node3];
+  • Each diagram MUST have clear description + interpretation
+  • Chart accuracy is CRITICAL - verify all numbers match source material!
+- AT LEAST 2-3 pseudocode examples for algorithms/procedures
+- AT LEAST 3-5 practice problems with VISUAL solutions:
+  • If problem asks to "construct" or "draw" → solution MUST include actual diagram
+  • If constructing Bayesian/probabilistic network → MUST include probability values on edges
+- No vague generalities: "Increased 47%" not "grew significantly"{domain_guidance}{additional}
+
+MINDSET CHECK:
+"Am I writing AT LEAST 10,000 tokens?"
+"Is EVERY concept 300-600 words with 3+ examples?"
+"Am I using 85-95% of my available token budget?"
+
+If NO to ANY → KEEP WRITING! EXPAND MORE! DO NOT STOP!
+
+PLANNING (internal, before output):
+1) Identify ALL main themes from all chunks
+2) Create AT LEAST 10-15 sections (scale with content richness)
+3) For each section: AT LEAST 3-5 concepts with DEEP explanations (250-400 words each)
+4) Diagrams (STRICT SOURCE-ONLY RULE):
+   • ⚠️ ONLY include diagrams that physically exist in the source documents
+   • Recreate source charts/graphs/figures EXACTLY + add interpretation
+   • DO NOT create generic educational examples (Producer/Consumer, etc.) UNLESS they appear as diagrams in source
+   • If source has NO visual elements → diagrams array should be EMPTY (perfectly acceptable!)
+   • Use Mermaid syntax ONLY for diagrams that exist in source
+5) Create 2-3 pseudocode examples (ONLY for algorithmic content)
+6) Create 4-6 practice problems with detailed step-by-step solutions
+7) 🚨 CRITICAL OUTPUT TARGET: Aim for 12,000-14,000 tokens output (MINIMUM 10,000!)
+   • If you're under 10,000 tokens, you're being TOO BRIEF - MASSIVE FAIL!
+   • Target: Use 85-95% of available output budget (aim for 12,000-16,000 tokens)
+   • Write LONG, DETAILED explanations - this is a TEXTBOOK, not a summary!
+   • EXPAND each concept to 300-500 words (not 100-150!)
+   • Add more examples, more details, more worked solutions
+   • Don't stop at surface level - go DEEP into each concept
+8) Include pitfalls, when_to_use, limitations, real-world applications
+9) Each concept should feel like a complete mini-lesson
+
+OUTPUT EXACTLY THIS JSON SCHEMA:
+{{
+  "summary": {{
+    "title": "Study Notes: <topic>",
+    "overview": "<2-4 sentences on scope and key topics covered>",
+    "learning_objectives": [
+      "Learning outcome 1",
+      "Learning outcome 2"
+    ],
+    "sections": [
+      {{
+        "heading": "<Major Theme/Topic>",
+        "concepts": [
+          {{
+            "term": "<Key concept/finding>",
+            "definition": "<Concise definition or statement>",
+            "explanation": "<Analysis with evidence: what it means, why it matters, implications. Include specific data, examples, cases. 2-3 focused paragraphs>",
+            "key_points": ["<Bullet 1>", "<Bullet 2>"]
+            
+            // OPTIONAL FIELDS - Only include if you have content:
+            // "example": "<Specific case study>",  ← Include if you have example
+            // "pitfalls": ["<Common mistake>"],    ← Include if you have pitfalls
+            // "when_to_use": ["<Condition>"],      ← Include if you have usage info
+            // "limitations": ["<Constraint>"]      ← Include if you have limitations
+            
+            // NEVER write empty arrays like "when_to_use": []
+            // Just don't include the field at all!
+          }}
+        ]
+      }}
+    ],
+    "formula_sheet": [
+      {{
+        "name": "<formula / algorithm / method>",
+        "expression": "<LaTeX math - WRAP IN \\\\( \\\\) for inline math. Use \\\\mathtt{{}} for function names: \\\\(\\\\mathtt{{sem\\\\_wait}}(s)\\\\) or \\\\(f(x) = ax^2 + bx + c\\\\)>",
+        "variables": {{"symbol": "meaning (use LaTeX wrapped: \\\\(x_i\\\\) for subscripted variables)"}},
+        "worked_example": "<Wrap ALL math in \\\\( \\\\). Example: If \\\\(s = 1\\\\), after \\\\(\\\\mathtt{{sem\\\\_wait}}(s)\\\\), \\\\(s = 0\\\\). Use \\\\mathtt{{}} for function names and escape underscores with \\\\_>",
+        "pseudocode": "<OPTIONAL: if algorithm, put step-by-step procedure here>",
+        "notes": "<when it applies, constraints, complexity>"
+      }}
+    ],
+    "diagrams": [
+      {{
+        "title": "<Diagram title>",
+        "description": "<What this diagram shows AND interpretation if from source file>",
+        "content": "<Mermaid syntax (preferred) or ASCII art.
+                    
+                    🚨 CRITICAL MERMAID SYNTAX RULES (Mermaid v11+):
+                    
+                    1. EVERY NODE must have brackets: NodeName[NodeName] or NodeName[Label]
+                       ❌ WRONG: Producer --> Buffer
+                       ✅ CORRECT: Producer[Producer] --> Buffer[Buffer]
+                    
+                    2. ALL edge labels MUST be quoted (always use quotes, even for simple text):
+                       ❌ WRONG: -->|sem_wait(empty)|
+                       ❌ WRONG: -->|P=0.8|
+                       ✅ CORRECT: -->|"sem_wait(empty)"|
+                       ✅ CORRECT: -->|"P=0.8"|
+                    
+                    3. EACH edge MUST be on a SEPARATE LINE (critical for parsing):
+                       ❌ WRONG: A[A] -->|"x"| B[B] B[B] -->|"y"| C[C]
+                       ✅ CORRECT:
+                       A[A] -->|"x"| B[B]
+                       B[B] -->|"y"| C[C]
+                    
+                    4. FOR BAYESIAN/PROBABILISTIC NETWORKS: EVERY edge MUST have probability!
+                       ✅ CORRECT: Cloudy[Cloudy] -->|"P=0.8"| Rain[Rain]
+                    
+                    SYNTAX EXAMPLE (NOT for content - just showing proper syntax):
+                    graph TD
+                      NodeA[Node A] -->|"label text"| NodeB[Node B]
+                      NodeB[Node B] -->|"another label"| NodeC[Node C]
+                    
+                    ⚠️ CRITICAL: This is ONLY a syntax example!
+                    DO NOT copy this into your output!
+                    ONLY create diagrams that exist in the source documents!
+                    
+                    Other Rules:
+                    - If from source file → Copy ALL details accurately
+                    - For charts from source → Preserve all data points and values>",
+        "type": "tree|flowchart|graph|hierarchy|chart_from_source|bayesian_network",
+        "source": "<OPTIONAL: 'original_file' if recreating a chart/graph from source, omit if new diagram>"
+      }}
+    ],
+    "pseudocode": [
+      {{
+        "name": "<Algorithm/Procedure name>",
+        "code": "<Step-by-step pseudocode with proper indentation>",
+        "explanation": "<What it does, when to use, complexity>",
+        "example_trace": "<Optional: trace through with example input>"
+      }}
+    ],
+    "practice_problems": [
+      {{
+        "problem": "<Full problem statement>",
+        "difficulty": "easy|medium|hard",
+        "solution": "<Complete solution WITH VISUALS if applicable.
+                     
+                     🚨 CRITICAL MERMAID SYNTAX FOR DIAGRAMS IN SOLUTIONS:
+                     
+                     RULES (Follow EXACTLY):
+                     1. ALL nodes MUST have brackets: NodeName[NodeName]
+                     2. ALL edge labels MUST be quoted: -->|"label"|
+                     3. Each edge on SEPARATE LINE (no multiple edges on one line!)
+                     
+                     SYNTAX EXAMPLES (for reference only - DO NOT use as content):
+                     
+                     ✅ CORRECT SYNTAX:
+                     graph TD
+                       NodeA[Node A] -->|"edge label"| NodeB[Node B]
+                       NodeB[Node B] -->|"another label"| NodeC[Node C]
+                     
+                     ❌ WRONG SYNTAX (missing quotes, multiple edges on one line):
+                     graph TD
+                       NodeA -->|label| NodeB NodeB -->|label2| NodeC
+                     
+                     ⚠️ IMPORTANT: These are SYNTAX examples only!
+                     For practice problems: ONLY include diagrams if the problem explicitly requires constructing one
+                     DO NOT create generic diagrams - focus on explaining the solution in text>",
+        "steps": ["<Step 1>", "<Step 2>", "<Step 3>"],
+        "key_concepts": ["<Concept 1>", "<Concept 2>"]
+      }}
+    ]
+  }},
+  "citations": [
+    {{"file_id": "source", "section_or_heading": "<specific section/chapter>", "page_range": "<page numbers if available>", "evidence": "<max 200 chars snippet>"}}
+  ]
+}}
+
+DEPTH & COMPREHENSIVENESS REQUIREMENTS (CRITICAL):
+✓ AT LEAST 12-18 sections (don't stop early - cover EVERYTHING)
+✓ AT LEAST 4-6 concepts per section (major sections: 7-10 concepts)
+✓ Each concept explanation: 350-600 words (DEEP, multi-paragraph analysis!)
+✓ Include 3+ examples per concept with detailed walkthroughs
+✓ Include pitfalls, when_to_use, limitations, real-world applications
+✓ Diagrams (ONLY from source material):
+  • If source has charts/graphs → Include them with interpretation
+  • Create new diagrams for complex concepts (Mermaid syntax preferred)
+  • 🚨 FOR BAYESIAN/PROBABILISTIC NETWORKS → EVERY edge MUST have probability label!
+  • Bar charts, line charts, comparison tables for numerical data
+✓ Pseudocode: AT LEAST 2-3 algorithm examples (if applicable)
+✓ Practice Problems: AT LEAST 5-8 with DETAILED step-by-step solutions
+✓ 🚨 OUTPUT TARGET: Use 85-95% of available token budget (CRITICAL!)
+  • Available: 14,000-18,000 tokens (depending on plan)
+  • Target output: 12,000-16,000 tokens (aim HIGH!)
+  • If under 10,000 tokens → You're FAILING → EXPAND MASSIVELY!
+  • Each section should be 800-1200 tokens (not 200-400!)
+✓ Don't be unnecessarily brief - fill the space with quality content
+
+TOKEN OPTIMIZATION RULES (CRITICAL):
+⚠️ NEVER include empty arrays! Omit the field entirely:
+  
+  ❌ BAD: "when_to_use": []        ← Wastes tokens!
+  ✅ GOOD: (don't include the field at all)
+  
+  ❌ BAD: "limitations": []        ← Wastes tokens!
+  ✅ GOOD: (don't include the field at all)
+  
+  ❌ BAD: "pitfalls": []           ← Wastes tokens!
+  ✅ GOOD: (don't include the field at all)
+
+OMIT these fields if empty:
+  - "example" → omit if no example
+  - "pitfalls" → omit if no pitfalls
+  - "when_to_use" → omit if no usage conditions  
+  - "limitations" → omit if no limitations
+  - "formula_sheet" → omit if no formulas
+  
+But if you CAN add content, DO IT! Use the available tokens.
+
+QUALITY & COMPLETENESS RULES:
+- All major themes covered in dedicated sections (AT LEAST 6)
+- Evidence-based: Include specific data, numbers, dates, names, cases
+- Formula_sheet (if any in material): Include ALL formulas with:
+  ✓ expression = MATH NOTATION
+  ✓ variables = symbol meanings
+  ✓ worked_example with calculations
+  ✓ pseudocode for algorithms
+- Validate JSON (no trailing commas, balanced braces)
+
+VALIDATION CHECKLIST (before output):
+✓ AT LEAST 10-15 sections created (scale with content richness)
+✓ Each section has 3-5+ concepts (major themes: 6-8 concepts)
+✓ Each concept: 300-500 word explanation (DEEP, not superficial!)
+✓ Diagrams (ONLY FROM SOURCE - DO NOT INVENT):
+  • ⚠️ ONLY include if diagrams/charts exist in source documents
+  • Recreate source charts/graphs with interpretation
+  • NO generic examples - only what's actually in the material
+  • 🚨 IF source has Bayesian/probabilistic networks: Include probability labels on ALL edges (-->|"P=0.7"|)
+  • Empty array is ACCEPTABLE if source has no visual elements
+✓ Pseudocode: 2-3 algorithm examples (ONLY if algorithmic content)
+✓ Practice Problems: 4-6 with detailed step-by-step solutions
+✓ 🚨 OUTPUT LENGTH: MINIMUM 6,000 tokens (aim for 9,000-12,000)
+  • If under 6,000 → You're TOO BRIEF → EXPAND concepts
+  • Target: 70-90% of available output budget
+  • Each concept should be 300-500 words (not 100-150!)
+✓ Claims are specific and concrete (not vague)
+✓ Citations reference source material
+
+🚨 FINAL CHECK BEFORE OUTPUT:
+- Count your output tokens (rough: chars / 4)
+- If under 40,000 characters (10,000 tokens) → YOU MUST EXPAND MORE!
+- Add more sections, more concepts, longer explanations
+- DO NOT OUTPUT until you reach the minimum!
+
+OUTPUT PURE JSON NOW (no other text):"""
+
+
+def get_reduce_outline_prompt(language: str, domain: str) -> str:
+    """
+    First stage of two-stage REDUCE: generate topology/outline only
+    """
+    L = "Use TURKISH." if language == "tr" else "Use ENGLISH."
+    return f"""You are planning a study-guide topology only. {L}
+Output pure JSON with fields: title, sections[heading, concepts[{{
+  "term": "...", "expected_example": "numeric|anchored"
+}}]], formula_plan[name, expected_example], glossary_target (int).
+
+Rules:
+- Create a sufficient number of sections to cover ALL themes (outline size should scale with content depth).
+- Do NOT force or assume a fixed number like 6–12. Let theme-count + output-budget decide.
+- Prioritize major themes; compress minor themes as concise sub-concepts under the closest section.
+- Prefer 'numeric' examples for quantitative/technical material and 'anchored' examples for qualitative material.
+- Do NOT write explanations or examples, only the topology."""
+
+
+def get_reduce_fill_prompt(language: str, domain: str, additional: str = "") -> str:
+    """
+    Second stage of two-stage REDUCE: fill outline with content
+    """
+    L = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
+    domain_note = ""
+    if domain == "technical":
+        domain_note = "\n- NUMERIC EXAMPLES REQUIRED for every quantitative concept."
+    elif domain == "social":
+        domain_note = "\n- ANCHORED EXAMPLES REQUIRED (dates, names, cases) for qualitative concepts."
+    return f"""Fill the given OUTLINE into a complete, exam-ready study guide.
+{L}{domain_note}
+Constraints:
+- KEEP the outline section + concept order (do NOT rename or remove).
+- Each concept → definition + 2–3 dense paragraphs + ONE example matching expected_example:
+  • numeric → real numbers + step-by-step calculation
+  • anchored → specific dates/names/cases
+- Each formula → expression (MATH ONLY), variables dict, ≥1 numeric worked_example, optional pseudocode, notes.
+- Diagrams: 2-4 visual representations (trees, flowcharts, hierarchies).
+- Pseudocode: 2-3 algorithm examples (if applicable).
+- Practice Problems: 3-5 with full solutions (varying difficulty).
+- Provide citations for each main section and formula sheet.
+- If the outline missed some themes, you MAY add concise sub-concepts, but avoid unnecessary padding.
+- Output single valid JSON, no markdown.
+
+{additional}"""
+
+
+def get_no_files_prompt(topic: str, language: str = "en") -> str:
+    """Prompt for generating summary without uploaded files - from general knowledge"""
+    lang_instr = "Generate in TURKISH." if language == "tr" else "Generate in ENGLISH."
+    
+    return f"""You are creating comprehensive study notes on: "{topic}"
+
+{lang_instr}
+
+🎯 YOUR TASK: Generate a complete, detailed study guide based on your knowledge of this topic.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CRITICAL REQUIREMENTS (NO-FILES MODE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Since no files were uploaded, you MUST generate ACTUAL CONTENT from your knowledge base:
+
+1. **REAL CONTENT REQUIRED:**
+   - ❌ NO placeholders like "Concept 1", "Concept 2", "Section 1"
+   - ✅ ACTUAL topic-specific information with real names, dates, facts
+   - ✅ Real examples, real data, real explanations
+   - ✅ If you don't have deep knowledge → focus on core fundamentals + applications
+
+2. **STRUCTURE (same as file-based):**
+   - MINIMUM 10-15 sections covering main aspects of the topic
+   - Each section: 3-5 detailed concepts (250-400 words each)
+   - Learning objectives: 3-5 specific, measurable outcomes
+   - Formula sheet: Include key formulas/equations (if applicable to topic)
+   - Diagrams: 1-3 diagrams ONLY if helpful (hierarchies, processes, relationships)
+   - Pseudocode: 2-3 examples (ONLY for algorithmic/programming topics)
+   - Practice problems: 4-6 with detailed step-by-step solutions
+
+3. **DEPTH & QUALITY:**
+   - Each concept: definition + detailed explanation + 2-3 real examples + applications
+   - Include: history, key figures, methodologies, best practices, common pitfalls
+   - Real-world context: Where is this used? Why does it matter?
+   - Practical demonstrations with concrete examples
+
+4. **OUTPUT LENGTH:**
+   - 🚨 MINIMUM 6,000 tokens output (CRITICAL!)
+   - Target: 9,000-12,000 tokens (use 70-90% of available budget)
+   - If you're under 6,000 tokens → You're being TOO BRIEF - EXPAND!
+   - Each concept should be 300-500 words (not 100-150!)
+   - Expand explanations, add more examples, include more details
+   - This should be a COMPREHENSIVE study guide, not a quick overview
+
+5. **TOPIC-SPECIFIC APPROACH:**
+   For "{topic}":
+   - Identify main themes/categories within this topic
+   - Cover fundamentals + advanced concepts
+   - Include practical applications and real-world examples
+   - Add historical context if relevant
+   - Discuss current state and future directions (if applicable)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use EXACT JSON format from system prompt (with all required fields: title, overview, learning_objectives, sections with concepts, formula_sheet, diagrams, pseudocode, practice_problems, citations).
+
+🚨 VALIDATION: Before output, check:
+✓ NO placeholder text (all content is topic-specific)
+✓ 10-15+ sections created
+✓ Each concept has 300-500 words (not 100-150!)
+✓ Real examples included (2-3 per concept)
+✓ Output is 6,000+ tokens (aim for 9,000-12,000)
+
+🚨 REMEMBER: Generate REAL CONTENT about "{topic}", NOT placeholders!"""
+
+
+# ========== Helper Functions for Two-Stage REDUCE ==========
+
+def estimate_full_section_tokens(domain: str) -> int:
+    """
+    Estimate tokens needed for one complete section with concepts + examples
+    """
+    return 900 if domain == "technical" else 750
+
+
+def infer_theme_heads(aggregated_knowledge: dict) -> list:
+    """
+    Extract top-level theme headings from aggregated chunk data
+    """
+    heads = []
+    for c in aggregated_knowledge.get("concepts", []):
+        src = c.get("_source") or {}
+        hp = src.get("heading_path") or src.get("heading")
+        if hp:
+            heads.append(hp.split(" > ")[0])
+    return list({h.strip() for h in heads if h})
+
+
+def compute_outline_targets(aggregated_knowledge: dict, out_cap: int, domain: str) -> tuple:
+    """
+    Compute dynamic outline target ranges based on content and budget
+    Returns: (target_min, target_soft_max, approx_theme_count)
+    """
+    theme_heads = infer_theme_heads(aggregated_knowledge)
+    approx_theme_count = max(1, len(theme_heads))
+    full_cost = estimate_full_section_tokens(domain)
+    body_budget = int(out_cap * 0.7)
+    soft_max_by_budget = max(8, body_budget // full_cost)
+    target_min = max(6, min(approx_theme_count, 10))
+    target_soft_max = max(target_min + 2, min(soft_max_by_budget, approx_theme_count + 4))
+    return target_min, target_soft_max, approx_theme_count
+
+
+def coverage_gaps(outline: dict, aggregated_knowledge: dict) -> list:
+    """
+    Detect missing themes: present in source but not in outline
+    """
+    planned = {(sec.get("heading") or "").strip() for sec in outline.get("sections", [])}
+    source_tops = set(infer_theme_heads(aggregated_knowledge))
+    return [h for h in source_tops if h and all(h.lower() not in p.lower() for p in planned)]
+
+
+def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
+    """
+    Validate the merged summary with SOFT, PLAN-ADAPTIVE checks.
+    This no longer enforces an impossible fixed 10000-token minimum.
+    Instead:
+      - Minimum tokens = max(2500, out_cap * 0.6), capped at 9000.
+      - If below target → trigger expansion via self-repair.
+    Returns list of issue strings (empty if all good)
+    """
+    import re
+    issues = []
+    summary = result.get("summary", {})
+    
+    # Check sections
+    sections = summary.get("sections", [])
+    if len(sections) < 4:
+        issues.append(f"Too few sections ({len(sections)}), expected ≥4")
+    
+    # Check concepts and their examples
+    for i, sec in enumerate(sections):
+        concepts = sec.get("concepts", [])
+        if not concepts:
+            issues.append(f"Section {i+1} '{sec.get('heading', 'Unknown')}' has no concepts")
+        
+        for c in concepts:
+            term = c.get("term", "Unknown")
+            expected_example = c.get("expected_example", "")
+            example_text = c.get("example", "")
+            
+            # If expected_example is set, validate it
+            if expected_example == "numeric" and example_text:
+                # Must have at least one digit AND one operator
+                has_digit = bool(re.search(r'\d', example_text))
+                has_operator = bool(re.search(r'[+\-*/=]', example_text))
+                if not (has_digit and has_operator):
+                    issues.append(f"Concept '{term}' expected numeric example but missing calculations (need digits + operators)")
+            elif expected_example == "numeric" and not example_text:
+                issues.append(f"Concept '{term}' missing numeric example")
+            
+            if expected_example == "anchored" and example_text:
+                # Must have a capitalized word (named entity) OR a year (4-digit number)
+                has_named_entity = bool(re.search(r'\b[A-Z][a-z]+', example_text))
+                has_year = bool(re.search(r'\b(1[0-9]{3}|20[0-9]{2})\b', example_text))
+                if not (has_named_entity or has_year):
+                    issues.append(f"Concept '{term}' expected anchored example but missing specific context (need names, places, or years)")
+            elif expected_example == "anchored" and not example_text:
+                issues.append(f"Concept '{term}' missing anchored example")
+            
+            # General check: if no example and no key_points, flag it
+            if not example_text and not c.get("key_points"):
+                issues.append(f"Concept '{term}' missing both example and key_points")
+        
+        # Check citations per section
+        citations = result.get("citations", [])
+        section_heading = sec.get("heading", "")
+        has_citation = any(
+            section_heading.lower() in cite.get("section_or_heading", "").lower()
+            for cite in citations
+        )
+        if not has_citation and i < 3:  # At least first 3 sections need citations
+            issues.append(f"Section '{section_heading}' missing citation with section_or_heading")
+    
+    # Check formulas (if they exist)
+    formulas = summary.get("formula_sheet", [])
+    for f in formulas:
+        fname = f.get("name", "Unknown")
+        expression = f.get("expression", "")
+        variables = f.get("variables", {})
+        worked_example = f.get("worked_example", "")
+        
+        if not expression:
+            issues.append(f"Formula '{fname}' missing expression")
+        else:
+            # Detect pseudocode in expression field (should be MATH ONLY)
+            if re.search(r'\b(function|return|if|for|while|def|class|var|let|const)\b', 
+                        expression, re.IGNORECASE):
+                issues.append(f"Formula '{fname}' expression contains pseudocode (must be MATH ONLY, use 'pseudocode' field instead)")
+        
+        if not variables or (isinstance(variables, dict) and len(variables) == 0):
+            issues.append(f"Formula '{fname}' missing variables dictionary")
+        
+        if not worked_example:
+            issues.append(f"Formula '{fname}' missing worked_example")
+        elif not re.search(r'\d', worked_example):  # Must contain numeric calculation
+            issues.append(f"Formula '{fname}' worked_example must include numeric calculation")
+    
+    # Check new interactive features
+    diagrams = summary.get("diagrams", [])
+    pseudocode = summary.get("pseudocode", [])
+    practice_problems = summary.get("practice_problems", [])
+    
+    # Diagrams: Flexible based on content type (don't force if not helpful)
+    if len(diagrams) < 1:
+        issues.append(f"No diagrams - add at least 1-2 if content is visual/hierarchical")
+    
+    # Validate diagram probability values for Bayesian/probabilistic networks
+    for idx, diagram in enumerate(diagrams):
+        diagram_type = diagram.get("type", "").lower()
+        diagram_title = diagram.get("title", f"Diagram {idx+1}").lower()
+        diagram_content = diagram.get("content", "")
+        
+        # Check if this is a probabilistic diagram
+        is_probabilistic = any(keyword in diagram_title or keyword in diagram_type or keyword in diagram_content.lower()
+                              for keyword in ["bayesian", "probabilistic", "markov", "probability", "network", "chain"])
+        
+        if is_probabilistic and "-->" in diagram_content:
+            # Count edges (connections)
+            edge_count = diagram_content.count("-->")
+            # Count probability labels (P=, P(, probability values)
+            prob_label_count = diagram_content.count("|P=") + diagram_content.count("|P(") + diagram_content.count("|$P")
+            
+            if prob_label_count < edge_count:
+                missing = edge_count - prob_label_count
+                issues.append(f"⚠️ CRITICAL: Diagram '{diagram.get('title', 'Untitled')}' is a probabilistic network with {edge_count} edges but only {prob_label_count} probability labels! Missing {missing} probability values. EVERY edge MUST have a probability label (e.g., -->|P=0.7|)!")
+    
+    # Pseudocode: Only for algorithmic content
+    # (No minimum check - not all content needs pseudocode)
+    
+    # Practice problems: Should have adequate examples
+    if len(practice_problems) < 4:
+        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥4")
+    
+    # ---- LENGTH CHECK (ADAPTIVE, PLAN-BASED) ----
+    import json
+    result_json = json.dumps(result, ensure_ascii=False)
+    estimated_tokens = len(result_json) // 4  # ≈ 4 chars per token
+
+    if out_cap is not None:
+        # Adaptive minimum:
+        # - At least 60% of available token budget
+        # - At least 2500 minimum
+        # - No more than 9000 to avoid pathological inflation
+        target_min = max(2500, int(out_cap * 0.60))
+        target_min = min(target_min, 9000)
+    else:
+        target_min = 2500  # safe soft default
+
+    if estimated_tokens < target_min:
+        shortage = target_min - estimated_tokens
+        issues.append(
+            f"⚠️ Output may be too brief: ~{estimated_tokens} tokens vs target ≥{target_min}. "
+            f"Add more detailed explanations, extra examples and practice problems (short by ~{shortage} tokens)."
+        )
+    
+    return issues
+
+
+def build_self_repair_prompt(result: dict, issues: list, language: str) -> str:
+    """
+    Universal self-repair prompt that works for ANY domain/subject.
+    Domain-agnostic validation and repair instructions.
+    ENHANCED: More aggressive expansion instructions
+    """
+    import json
+    lang = "Use TURKISH." if language == "tr" else "Use ENGLISH."
+    issues_text = "\n- ".join(issues)
+    
+    return f"""{lang}
+You are repairing a study-guide JSON. 
+This must work for ANY subject (math, history, medicine, CS, economics, law, engineering, psychology, etc.).
+
+RULES (MUST):
+- Do NOT remove or rename existing sections or concepts.
+- Preserve all correct content. Only repair or add what is missing.
+- Return FULL valid JSON only (no markdown, no comments).
+
+🚨 CRITICAL OUTPUT LENGTH REQUIREMENT:
+- Your output MUST be AT LEAST 6,000 tokens (approximately 24,000 characters)
+- If you're below this, you're FAILING the task
+- EXPAND every concept to 300-500 words (not 100-150!)
+- Add MORE examples, MORE details, MORE explanations
+- This is a COMPREHENSIVE study guide, not a brief summary!
+
+REQUIREMENTS (APPLY GENERALLY):
+1) Example requirements:
+   If a concept has expected_example="numeric" → add one step-by-step numeric example using real numbers.
+   If a concept has expected_example="anchored" → add one real-world contextual example (specific place, year, case, dataset, experiment, historical event, etc.).
+
+2) Formula requirements (if formula_sheet exists):
+   - expression must be math notation (not prose).
+   - variables must explain every symbol.
+   - worked_example must include real numeric calculation steps.
+
+3) Interactive feature requirements:
+   - Diagrams: Must have at least 4-6 visual representations (trees, flowcharts, hierarchies, graphs).
+   - Pseudocode: Must have at least 2-3 algorithm examples (if applicable to the material).
+   - Practice Problems: Must have at least 4-6 problems with full solutions and step-by-step explanations.
+
+4) Depth requirements (CRITICAL - MUST FOLLOW):
+   - 🚨 YOUR OUTPUT MUST BE 10,000+ TOKENS - THIS IS NON-NEGOTIABLE!
+   - EXPAND all explanations to 400-700 words per concept (write LONG paragraphs!)
+   - Each concept needs:
+     * Clear definition (3-4 sentences)
+     * Detailed explanation (4-5 LONG paragraphs - not short ones!)
+     * Multiple examples (3-4 examples MINIMUM with detailed walkthroughs)
+     * Practical applications, real-world context, use cases
+     * Common pitfalls, limitations, when to use/avoid
+   - Add MANY more sections (aim for 15-25 sections total if needed)
+   - Add MANY more concepts per section (aim for 5-8 concepts per section)
+   - Don't summarize - WRITE EXTENSIVELY like a textbook!
+   - KEEP WRITING until you reach 10,000+ tokens!
+
+5) Citations requirement:
+   - Each top-level section must include at least one citation with section_or_heading and page_range based on the source.
+   - Evidence snippets should be concise (no truncation).
+
+6) Consistency rule:
+   - Do NOT invent topics or facts not supported by the user's uploaded document.
+
+Issues to fix:
+- {issues_text}
+
+⚠️ BEFORE YOU OUTPUT: Check that your response will be AT LEAST 40,000 characters (10,000 tokens).
+If not, EXPAND MORE - add more content, more details, more examples, more sections!
+IDEAL: 48,000-56,000 characters (12,000-14,000 tokens) for comprehensive coverage.
+
+CURRENT JSON:
+{json.dumps(result, ensure_ascii=False)}"""
+
+
+# ========== Two-Stage REDUCE Orchestrator ==========
+
+def reduce_two_stage(
+    aggregated_knowledge: dict,
+    language: str,
+    domain: str,
+    out_cap: int,
+    additional_instructions: str = "",
+    user_id: Optional[int] = None,
+    db = None
+) -> dict:
+    """
+    Two-stage REDUCE process:
+    1. Generate outline/topology
+    2. Fill outline with content
+    3. Validate and self-repair if needed
+    
+    Returns: Final summary dict (parsed JSON)
+    """
+    import json
+    from app.utils.json_helpers import parse_json_robust
+    
+    # === STAGE 1: Generate Outline ===
+    print("[REDUCE] Stage 1: Generating outline/topology...")
+    outline_prompt = get_reduce_outline_prompt(language, domain)
+    
+    # Truncate aggregated knowledge if too large (keep structure, limit content)
+    agg_str = json.dumps(aggregated_knowledge, ensure_ascii=False)
+    if len(agg_str) > 150000:
+        print(f"[REDUCE] Truncating aggregated knowledge ({len(agg_str)} → 150k chars)")
+        agg_str = agg_str[:150000] + "..."
+    
+    outline_user = (
+        outline_prompt
+        + "\n\nSTRUCTURED SOURCE KNOWLEDGE:\n"
+        + agg_str
+    )
+    
+    outline_json = call_openai(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=outline_user,
+        max_output_tokens=min(1200, int(out_cap * 0.15)),
+        temperature=0,
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
+    )
+    outline = parse_json_robust(outline_json)
+    
+    # Compute dynamic targets
+    target_min, target_soft_max, approx_themes = compute_outline_targets(
+        aggregated_knowledge=aggregated_knowledge,
+        out_cap=out_cap,
+        domain=domain
+    )
+    print(f"[REDUCE] Outline targets: min={target_min}, soft_max={target_soft_max}, themes={approx_themes}")
+    
+    # === SELF-REPAIR: Expand if outline too shallow ===
+    if len(outline.get("sections", [])) < target_min:
+        print(f"[REDUCE] Outline too shallow ({len(outline.get('sections', []))} < {target_min}), expanding...")
+        outline_user += (
+            f"\n\n[REPAIR] Expand sections to ensure full theme coverage "
+            f"(expected ~{target_min}–{target_soft_max}, but exceeding is allowed if needed)."
+        )
+        outline_json = call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=outline_user,
+            max_output_tokens=1200,
+            temperature=0,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
+        )
+        outline = parse_json_robust(outline_json)
+    
+    # === SELF-REPAIR: Check coverage gaps ===
+    missing = coverage_gaps(outline, aggregated_knowledge)
+    if missing:
+        print(f"[REDUCE] Coverage gaps detected: {missing}")
+        outline_user += (
+            "\n\n[REPAIR] Missing key themes: "
+            + ", ".join(missing)
+            + ". Add them as sections or concise sub-concepts."
+        )
+        outline_json = call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=outline_user,
+            max_output_tokens=1200,
+            temperature=0,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
+        )
+        outline = parse_json_robust(outline_json)
+    
+    # === STAGE 2: Fill Outline ===
+    print("[REDUCE] Stage 2: Filling outline with content...")
+    fill_prompt = get_reduce_fill_prompt(language, domain, additional_instructions)
+    fill_user = (
+        fill_prompt
+        + "\n\nOUTLINE (DO NOT CHANGE ORDER):\n"
+        + json.dumps(outline, ensure_ascii=False, indent=2)
+        + "\n\nSTRUCTURED SOURCE KNOWLEDGE:\n"
+        + agg_str
+    )
+    
+    filled_json = call_openai(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=fill_user,
+        max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        temperature=0,
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
+    )
+    result = parse_json_robust(filled_json)
+    
+    # === STAGE 3: Validate & Self-Repair ===
+    print("[REDUCE] Stage 3: Validating output...")
+    issues = validate_reduce_output(result, out_cap=out_cap)
+    if issues:
+        print(f"[REDUCE] Quality issues detected: {issues}")
+        repair_user = build_self_repair_prompt(result, issues, language)
+        repaired = call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=repair_user,
+            max_output_tokens=out_cap,  # Use FULL budget for repair - no limiting!
+            temperature=0,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
+        )
+        result = parse_json_robust(repaired) or result
+        print("[REDUCE] Self-repair complete")
+    else:
+        print("[REDUCE] Output validated ✓")
+    
+    return result
+
+
+# ========== OpenAI Integration ==========
+
+def call_openai(
+    system_prompt: str,
+    user_prompt: str,
+    max_output_tokens: int,
+    temperature: float = TEMPERATURE,
+    top_p: float = TOP_P,
+    retry_on_length: bool = True,
+    user_id: Optional[int] = None,
+    endpoint: str = "/summarize",
+    db = None
+) -> str:
+    """
+    Call OpenAI API with given prompts and automatic retry on truncation
+    Returns the response text
+    Tracks token usage in database if db and user_id provided
+    """
+    if not OPENAI_API_KEY:
+        raise ValueError("OpenAI API key not configured")
+    
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+    
+    attempt = 0
+    current_max_tokens = max_output_tokens
+    
+    while attempt < 2:  # Max 2 attempts
+        attempt += 1
+        
+        payload = {
+            "model": OPENAI_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": current_max_tokens
+        }
+        
+        print(f"[OPENAI REQUEST] Attempt {attempt}, Model: {OPENAI_MODEL}, max_tokens: {current_max_tokens}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=180)
+        
+        if response.status_code != 200:
+            error_detail = response.text[:500]
+            raise Exception(f"OpenAI API call failed ({response.status_code}): {error_detail}")
+        
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
+        finish_reason = result["choices"][0].get("finish_reason")
+        usage = result.get("usage", {})
+        
+        print(f"[OPENAI RESPONSE] Returned {len(content)} chars, finish_reason: {finish_reason}")
+        
+        # Track token usage in database (non-blocking)
+        if endpoint and attempt == 1 and usage and user_id:  # Only track on first successful attempt with usage data
+            try:
+                input_tokens = usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("completion_tokens", 0)
+                total_tokens = usage.get("total_tokens", 0)
+                
+                # Skip if no tokens
+                if total_tokens == 0:
+                    print(f"[TOKEN TRACKING] ⚠️ Skipping - zero tokens")
+                else:
+                    # Cost calculation (per 1M tokens)
+                    if "gpt-4o" in OPENAI_MODEL.lower() and "mini" not in OPENAI_MODEL.lower():
+                        input_cost_per_1m = 2.50
+                        output_cost_per_1m = 10.00
+                    elif "gpt-4" in OPENAI_MODEL.lower():
+                        input_cost_per_1m = 30.00
+                        output_cost_per_1m = 60.00
+                    else:
+                        input_cost_per_1m = 0.150
+                        output_cost_per_1m = 0.600
+                    
+                    estimated_cost = (input_tokens / 1_000_000 * input_cost_per_1m) + (output_tokens / 1_000_000 * output_cost_per_1m)
+                    
+                    # Use centralized token tracker with fresh session
+                    from app.services.token_tracker import log_token_usage
+                    log_token_usage(
+                        user_id=user_id,
+                        endpoint=endpoint,
+                        model=OPENAI_MODEL,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        total_tokens=total_tokens,
+                        estimated_cost=estimated_cost
+                    )
+            except Exception as e:
+                # Don't fail the request if token tracking fails
+                print(f"[TOKEN TRACKING ERROR] ❌ Failed to track: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # If truncated and retry enabled, try with 20% more tokens
+        if finish_reason == "length" and retry_on_length and attempt < 2:
+            current_max_tokens = min(int(current_max_tokens * 1.2), 16000)
+            print(f"[OPENAI RETRY] Response truncated, retrying with {current_max_tokens} tokens")
+            continue
+        
+        return content
+    
+    # If still truncated after retry, return what we have
+    return content
+
+
+# ========== Map-Reduce Pipeline ==========
+
+def summarize_chunk(
+    chunk_text: str,
+    language: str = "en",
+    additional_instructions: str = "",
+    out_budget: int = None,
+    user_id: Optional[int] = None,
+    db = None
+) -> str:
+    """
+    Summarize a single chunk of text (MAP phase)
+    Returns structured mini-JSON with concepts/formulas/theorems/examples
+    """
+    # Adaptive budget based on chunk content
+    if out_budget is None:
+        from app.utils.adaptive_budget import calculate_chunk_budget
+        out_budget = calculate_chunk_budget(chunk_text)
+        print(f"[MAP ADAPTIVE] Allocated {out_budget} tokens for this chunk")
+    
+    user_prompt = get_chunk_summary_prompt(language)
+    
+    if additional_instructions:
+        user_prompt += f"\n\nUser preferences: {additional_instructions}"
+    
+    user_prompt += f"\n\nTEXT TO EXTRACT FROM:\n{chunk_text}"
+    
+    return call_openai(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        max_output_tokens=out_budget,
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
+    )
+
+
+def merge_summaries(
+    chunk_summaries: List[str],
+    language: str = "en",
+    additional_instructions: str = "",
+    out_budget: int = 14000,
+    domain: str = "general",
+    chunk_citations: List[Dict] = None,
+    original_text: str = "",  # For coverage validation
+    user_id: Optional[int] = None,
+    db = None
+) -> str:
+    """
+    Merge structured chunk JSONs into final exam-ready summary (REDUCE phase)
+    Now receives structured mini-JSONs from MAP phase
+    ENHANCED: Includes coverage validation to ensure no topics are skipped
+    Returns final JSON string
+    """
+    import json
+    from app.utils.coverage_validator import validate_coverage, generate_coverage_report
+    
+    # Parse chunk JSONs and aggregate
+    all_concepts = []
+    all_formulas = []
+    all_theorems = []
+    all_examples = []
+    
+    for i, chunk_json in enumerate(chunk_summaries):
+        try:
+            chunk_data = json.loads(chunk_json)
+            all_concepts.extend(chunk_data.get("concepts", []))
+            all_formulas.extend(chunk_data.get("formulas", []))
+            all_theorems.extend(chunk_data.get("theorems", []))
+            all_examples.extend(chunk_data.get("examples", []))
+        except json.JSONDecodeError as e:
+            print(f"[REDUCE WARNING] Chunk {i+1} JSON parse failed: {e}")
+            # Fallback: treat as plain text
+            all_concepts.append({
+                "term": f"Content from chunk {i+1}",
+                "definition": "Raw content (parse failed)",
+                "explanation": chunk_json[:500],
+                "example": ""
+            })
+    
+    # Enrich concepts with source citations
+    if chunk_citations:
+        for i, chunk_json in enumerate(chunk_summaries):
+            try:
+                chunk_data = json.loads(chunk_json)
+                citation_info = chunk_citations[i] if i < len(chunk_citations) else {}
+                
+                # Add citation metadata to each concept
+                for concept in chunk_data.get("concepts", []):
+                    concept["_source"] = {
+                        "chunk": i + 1,
+                        "heading": citation_info.get("heading_path", "Unknown")
+                    }
+                
+                for formula in chunk_data.get("formulas", []):
+                    formula["_source"] = {
+                        "chunk": i + 1,
+                        "heading": citation_info.get("heading_path", "Unknown")
+                    }
+            except:
+                pass
+    
+    # Create structured source material for REDUCE
+    aggregated_knowledge = {
+        "total_concepts": len(all_concepts),
+        "total_formulas": len(all_formulas),
+        "total_theorems": len(all_theorems),
+        "total_examples": len(all_examples),
+        "concepts": all_concepts,
+        "formulas": all_formulas,
+        "theorems": all_theorems,
+        "examples": all_examples,
+        "source_structure": chunk_citations if chunk_citations else []
+    }
+    
+    # Use two-stage REDUCE with fallback to single-stage if errors occur
+    try:
+        print("[REDUCE] Attempting two-stage REDUCE (outline → fill → validate)...")
+        result = reduce_two_stage(
+            aggregated_knowledge=aggregated_knowledge,
+            language=language,
+            domain=domain,
+            out_cap=out_budget,
+            additional_instructions=additional_instructions or "",
+            user_id=user_id,
+            db=db
+        )
+        print("[REDUCE] Two-stage REDUCE completed successfully ✓")
+        
+        # COVERAGE VALIDATION: Check if all topics are covered
+        if original_text:
+            print("[COVERAGE] Validating topic coverage...")
+            coverage_result = validate_coverage(original_text, result, min_coverage=0.85)
+            print(generate_coverage_report(coverage_result))
+            
+            # If coverage is insufficient, add missing topics and regenerate
+            if not coverage_result['passed'] and coverage_result['missing_topics']:
+                print(f"[COVERAGE] ⚠️  Coverage insufficient ({coverage_result['coverage_score']:.1%})")
+                print(f"[COVERAGE] Adding {len(coverage_result['missing_topics'])} missing topics...")
+                
+                # Create enhanced instructions with missing topics
+                missing_topics_str = ", ".join(coverage_result['missing_topics'][:10])
+                coverage_instructions = f"\n\n⚠️  CRITICAL: The following topics MUST be included but are currently missing: {missing_topics_str}"
+                if len(coverage_result['missing_topics']) > 10:
+                    coverage_instructions += f" (and {len(coverage_result['missing_topics']) - 10} more)"
+                coverage_instructions += "\n\nAdd these topics as new sections or integrate them into existing relevant sections. DO NOT skip any of them."
+                
+                # Regenerate with coverage fix (one retry only)
+                enhanced_instructions = (additional_instructions or "") + coverage_instructions
+                print("[COVERAGE] Regenerating with missing topics...")
+                result = reduce_two_stage(
+                    aggregated_knowledge=aggregated_knowledge,
+                    language=language,
+                    domain=domain,
+                    out_cap=out_budget,
+                    additional_instructions=enhanced_instructions,
+                    user_id=user_id,
+                    db=db
+                )
+                print("[COVERAGE] ✓ Regeneration complete")
+                
+                # Re-validate after regeneration
+                coverage_result = validate_coverage(original_text, result, min_coverage=0.85)
+                print(f"[COVERAGE] Post-regen coverage: {coverage_result['coverage_score']:.1%}")
+            else:
+                print(f"[COVERAGE] ✅ Coverage validated ({coverage_result['coverage_score']:.1%})")
+            
+        # Add coverage info to result for frontend display (ALWAYS, even if 100% coverage)
+        # CRITICAL: result is a JSON string, need to parse it first!
+        try:
+            result_dict = json.loads(result) if isinstance(result, str) else result
+            result_dict['coverage'] = {
+                'score': round(coverage_result['coverage_score'], 2),
+                'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
+            }
+            
+            # FIX DIAGRAM FORMATTING: Fix Mermaid syntax errors
+            import re
+            if 'diagrams' in result_dict.get('summary', {}):
+                for diagram in result_dict['summary']['diagrams']:
+                    if 'content' in diagram:
+                        content = diagram['content']
+                        # Check if it's Mermaid syntax (starts with graph/flowchart)
+                        if content.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
+                            fixed = content
+                            
+                            # Fix 1: Ensure all nodes have brackets
+                            lines = fixed.split('\n')
+                            fixed_lines = []
+                            
+                            for line in lines:
+                                # Skip the graph/flowchart declaration line
+                                if line.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
+                                    fixed_lines.append(line)
+                                    continue
+                                
+                                # Skip empty lines
+                                if not line.strip():
+                                    fixed_lines.append(line)
+                                    continue
+                                
+                                fixed_line = line
+                                
+                                # Fix 1: Quote ALL edge labels FIRST (before other fixes)
+                                # This is CRITICAL - must quote labels before manipulating nodes
+                                # Match: -->|label| where label is NOT already quoted
+                                fixed_line = re.sub(r'-->\|([^|]+)\|', lambda m:
+                                    f'-->|"{m.group(1).strip()}"|' if not (m.group(1).strip().startswith('"') and m.group(1).strip().endswith('"')) else m.group(0), fixed_line)
+                                
+                                # Fix 2: Add brackets to bare node names at START of edge
+                                # Pattern: NodeName --> becomes NodeName[NodeName] -->
+                                # Match word at start of line or after whitespace
+                                fixed_line = re.sub(r'^(\s*)([A-Z][a-zA-Z0-9_]+)(\s+-->)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}[{m.group(2)}]{m.group(3)}' if '[' not in m.group(0) else m.group(0), fixed_line)
+                                
+                                # Fix 3: Add brackets to bare node names at END of edge (after label)
+                                # Pattern: -->|"label"| NodeName becomes -->|"label"| NodeName[NodeName]
+                                # Must handle both quoted and unquoted labels
+                                fixed_line = re.sub(r'(\|"[^"]*"\||\|[^|]*\|)(\s+)([A-Z][a-zA-Z0-9_]+)(\s*$)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}{m.group(3)}[{m.group(3)}]{m.group(4)}' if '[' not in m.group(3) else m.group(0), fixed_line)
+                                
+                                fixed_lines.append(fixed_line)
+                            
+                            fixed = '\n'.join(fixed_lines)
+                            
+                            # Fix 3: Ensure each edge is on its own line (critical for parsing)
+                            # ONLY split when there are MULTIPLE edges on the same line
+                            # Pattern: node] -->|label| node] ANOTHER_EDGE -->
+                            # This means: if we find a complete edge followed by another edge, split them
+                            # Match complete edge (source[source] -->|label| target[target]) followed by another source node
+                            fixed = re.sub(r'(\[[^\]]+\])\s+([A-Z]\w*\[[^\]]+\]\s+-->)', r'\1\n  \2', fixed)
+                            
+                            if fixed != content:
+                                print(f"[DIAGRAM FIX] Fixed Mermaid syntax in diagram: {diagram.get('title', 'Untitled')}")
+                                print(f"  BEFORE:\n{content}")
+                                print(f"  AFTER:\n{fixed}")
+                                diagram['content'] = fixed
+            
+            # Also fix practice problem solutions
+            if 'practice_problems' in result_dict.get('summary', {}):
+                for idx, problem in enumerate(result_dict['summary']['practice_problems']):
+                    if 'solution' in problem:
+                        solution = problem['solution']
+                        
+                        # Check if it's Mermaid syntax (with or without prefix)
+                        is_mermaid = solution.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram'))
+                        
+                        # Also detect Mermaid if it has pattern: Node[Label] -->|...| Node[Label]
+                        if not is_mermaid and '-->' in solution and '[' in solution and ']' in solution:
+                            # This looks like Mermaid without prefix - add graph TD
+                            print(f"[PRACTICE FIX {idx+1}] Detected Mermaid without prefix, adding 'graph TD'")
+                            solution = f"graph TD\n  {solution.strip()}"
+                            is_mermaid = True
+                        
+                        if is_mermaid:
+                            # Apply same fixes as diagrams
+                            fixed = solution
+                            
+                            # Fix 1: Ensure all nodes have brackets
+                            lines = fixed.split('\n')
+                            fixed_lines = []
+                            
+                            for line in lines:
+                                if line.strip().startswith(('graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram')):
+                                    fixed_lines.append(line)
+                                    continue
+                                
+                                if not line.strip():
+                                    fixed_lines.append(line)
+                                    continue
+                                
+                                fixed_line = line
+                                
+                                # Fix 1: Quote ALL edge labels FIRST
+                                fixed_line = re.sub(r'-->\|([^|]+)\|', lambda m:
+                                    f'-->|"{m.group(1).strip()}"|' if not (m.group(1).strip().startswith('"') and m.group(1).strip().endswith('"')) else m.group(0), fixed_line)
+                                
+                                # Fix 2: Add brackets to bare node names at START of edge
+                                fixed_line = re.sub(r'^(\s*)([A-Z][a-zA-Z0-9_]+)(\s+-->)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}[{m.group(2)}]{m.group(3)}' if '[' not in m.group(0) else m.group(0), fixed_line)
+                                
+                                # Fix 3: Add brackets to bare node names at END of edge
+                                fixed_line = re.sub(r'(\|"[^"]*"\||\|[^|]*\|)(\s+)([A-Z][a-zA-Z0-9_]+)(\s*$)', lambda m:
+                                    f'{m.group(1)}{m.group(2)}{m.group(3)}[{m.group(3)}]{m.group(4)}' if '[' not in m.group(3) else m.group(0), fixed_line)
+                                
+                                fixed_lines.append(fixed_line)
+                            
+                            fixed = '\n'.join(fixed_lines)
+                            
+                            # Fix 3: Ensure each edge is on its own line (ONLY when multiple edges exist)
+                            # Match complete edge followed by another source node
+                            fixed = re.sub(r'(\[[^\]]+\])\s+([A-Z]\w*\[[^\]]+\]\s+-->)', r'\1\n  \2', fixed)
+                            
+                            if fixed != solution:
+                                print(f"[PRACTICE FIX {idx+1}] Fixed Mermaid syntax")
+                                print(f"  BEFORE:\n{solution}")
+                                print(f"  AFTER:\n{fixed}")
+                                problem['solution'] = fixed
+                            else:
+                                problem['solution'] = solution  # Still update with prefix if added
+            
+            # FIX LATEX FORMULAS: Ensure proper LaTeX wrapping and syntax
+            if 'formula_sheet' in result_dict.get('summary', {}):
+                for formula in result_dict['summary']['formula_sheet']:
+                    # Fix expression field
+                    if 'expression' in formula:
+                        expr = formula['expression']
+                        
+                        # Fix 1: Replace ALL \text{...} with \mathtt{...} and escape underscores
+                        def fix_text_to_mathtt(match):
+                            content = match.group(1).replace("_", "\\_")
+                            return f'\\mathtt{{{content}}}'
+                        expr = re.sub(r'\\text\{([^}]+)\}', fix_text_to_mathtt, expr)
+                        
+                        # Fix 2: If not wrapped in \( \), wrap it
+                        if not (expr.strip().startswith(r'\(') or expr.strip().startswith('$')):
+                            expr = f'\\({expr}\\)'
+                        
+                        if expr != formula['expression']:
+                            formula['expression'] = expr
+                            print(f"[FORMULA FIX] Fixed expression: {formula.get('name', 'Unnamed')}")
+                    
+                    # Fix worked_example field
+                    if 'worked_example' in formula:
+                        example = formula['worked_example']
+                        original = example
+                        
+                        # Fix 1: Remove broken LaTeX markers (incomplete \( or \))
+                        def fix_broken_latex(match):
+                            content = match.group(1).replace("_", "\\_")
+                            return f'\\(\\mathtt{{{content}}}\\)'
+                        example = re.sub(r'\\text\{([^}]+)\}\\?\)?', fix_broken_latex, example)
+                        
+                        # Fix 2: Replace remaining \text{...} with \mathtt{...}
+                        def fix_text_to_mathtt(match):
+                            content = match.group(1).replace("_", "\\_")
+                            return f'\\mathtt{{{content}}}'
+                        example = re.sub(r'\\text\{([^}]+)\}', fix_text_to_mathtt, example)
+                        
+                        # Fix 3: Clean up any orphaned backslashes or incomplete wrappers
+                        example = re.sub(r'\\text\{', r'\\mathtt{', example)
+                        example = re.sub(r'\\\)?\s*blocks', r' blocks', example)  # Fix broken wrapper at end
+                        
+                        if example != original:
+                            formula['worked_example'] = example
+                            print(f"[FORMULA FIX] Fixed worked_example: {formula.get('name', 'Unnamed')}")
+                            print(f"  BEFORE: {original[:100]}")
+                            print(f"  AFTER: {example[:100]}")
+            
+            result = json.dumps(result_dict, ensure_ascii=False, indent=2)
+            print(f"[COVERAGE] ✅ Coverage added to JSON: {coverage_result['coverage_score']:.1%} score, {len(coverage_result['missing_topics'])} missing topics")
+        except Exception as e:
+            print(f"[COVERAGE] ⚠️  Failed to add coverage info: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Return as JSON string (for compatibility with existing pipeline)
+        return json.dumps(result, ensure_ascii=False, indent=2) if not isinstance(result, str) else result
+    
+    except Exception as e:
+        print(f"[REDUCE TWO-STAGE FALLBACK] Error in two-stage REDUCE: {e}")
+        print("[REDUCE TWO-STAGE FALLBACK] Falling back to single-stage REDUCE...")
+        
+        # Fallback: single-stage REDUCE (original implementation)
+        user_prompt = get_final_merge_prompt(language, additional_instructions, domain)
+        user_prompt += f"\n\nSTRUCTURED SOURCE KNOWLEDGE (from {len(chunk_summaries)} chunks):\n{json.dumps(aggregated_knowledge, indent=2, ensure_ascii=False)}"
+        
+        return call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            max_output_tokens=out_budget,
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
+        )
+
+
+def map_reduce_summary(
+    full_text: str,
+    language: str = "en",
+    additional_instructions: str = "",
+    out_cap: int = 12000,
+    force_chunking: bool = False,
+    user_id: Optional[int] = None,
+    db = None
+) -> str:
+    """
+    Main map-reduce pipeline for large document summarization
+    Includes domain detection, structure-aware chunking, and quality guardrails
+    
+    Args:
+        full_text: Complete text to summarize
+        language: Output language (en/tr)
+        additional_instructions: User's custom requirements
+        out_cap: Maximum output tokens based on plan
+        force_chunking: Force map-reduce even for small docs (for testing)
+        user_id: User ID for token tracking
+        db: Database session for token tracking
+    
+    Returns:
+        JSON string with complete summary
+    """
+    # 1. DETECT DOMAIN
+    domain = detect_domain(full_text)
+    print(f"[DOMAIN DETECTION] Detected: {domain}")
+    
+    # Estimate input tokens
+    estimated_tokens = approx_tokens_from_text_len(len(full_text))
+    
+    # Auto "Density Boost" with flexible thresholds
+    from app.config import DENSITY_BOOST_THRESHOLD
+    
+    # Flexible thresholds:
+    # 10k-15k: Soft-Merge (default, no special instructions)
+    # >15k: Density-Boost + Additional Topics
+    # >40k: Aggressive compression + de-duplication
+    
+    if estimated_tokens > 40000:
+        additional_instructions = (additional_instructions or "") + \
+            "\n[AGGRESSIVE DENSITY BOOST]: Very large document. Use extreme compression: " +\
+            "(1) Merge similar concepts, (2) 1 concept per minor section, (3) De-duplicate overlapping content, " +\
+            "(4) Move all minor themes to 'Additional Topics (Condensed)', (5) Target 18-28 tokens/sentence for density."
+        print(f"[AGGRESSIVE DENSITY BOOST] Enabled (estimated_tokens={estimated_tokens} > 40000)")
+    elif estimated_tokens > DENSITY_BOOST_THRESHOLD:  # Default 15000
+        additional_instructions = (additional_instructions or "") + \
+            "\n[DENSITY BOOST]: Large document. Use compression: merge minor topics into compact sections (1 concept each), " +\
+            "move overflow to 'Additional Topics (Condensed)', keep all themes visible, prefer dense phrasing (18-28 tokens/sentence)."
+        print(f"[DENSITY BOOST] Enabled (estimated_tokens={estimated_tokens} > {DENSITY_BOOST_THRESHOLD})")
+    else:
+        print(f"[SOFT MERGE] Standard mode (estimated_tokens={estimated_tokens} <= {DENSITY_BOOST_THRESHOLD})")
+    
+    # Append domain hint to instructions
+    domain_hint = f"Content domain: {domain}. Adjust depth and style accordingly."
+    enhanced_instructions = f"{additional_instructions}\n\n{domain_hint}" if additional_instructions else domain_hint
+    
+    # Decide whether to use map-reduce
+    # Use chunking if: forced, OR estimated tokens > threshold
+    # Threshold increased to 10000 to allow longer single-pass summaries
+    use_chunking = force_chunking or estimated_tokens > 10000
+    
+    if not use_chunking:
+        # Small document: single-pass summary
+        user_prompt = get_final_merge_prompt(language, enhanced_instructions, domain)
+        user_prompt += f"\n\nCOURSE MATERIAL:\n{full_text}"
+        
+        return call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
+        )
+    
+    # Large document: map-reduce with structure-aware chunking
+    print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using structure-aware chunking")
+    
+    # 2. EXTRACT STRUCTURE
+    from app.utils.structure_parser import extract_heading_hierarchy, chunk_by_headings, blocks_to_text
+    
+    try:
+        blocks = extract_heading_hierarchy(full_text)
+        structured_chunks = chunk_by_headings(blocks, target_tokens=CHUNK_INPUT_TARGET)
+        print(f"[STRUCTURE] Extracted {len(blocks)} blocks, {len(structured_chunks)} structured chunks")
+        
+        # Convert structured chunks back to text with heading context
+        chunks_with_context = []
+        chunk_metadata = []
+        
+        for chunk_blocks, heading_path in structured_chunks:
+            chunk_text = blocks_to_text(chunk_blocks)
+            chunks_with_context.append(chunk_text)
+            chunk_metadata.append({
+                "heading_path": heading_path,
+                "block_count": len(chunk_blocks)
+            })
+        
+        chunks = chunks_with_context
+        print(f"[STRUCTURE] Heading-aware chunks: {[m['heading_path'] for m in chunk_metadata]}")
+        
+    except Exception as e:
+        # Fallback to simple chunking if structure extraction fails
+        print(f"[STRUCTURE WARNING] Failed to extract structure: {e}, using simple chunking")
+        chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
+        chunk_metadata = [{"heading_path": f"Chunk {i+1}", "block_count": 0} for i in range(len(chunks))]
+    
+    print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
+    
+    # 3. MAP: Summarize each chunk (with adaptive budgeting and citation tracking)
+    chunk_summaries = []
+    chunk_citations = []
+    
+    for i, chunk in enumerate(chunks):
+        heading_path = chunk_metadata[i].get("heading_path", f"Chunk {i+1}")
+        print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}: {heading_path}")
+        
+        summary = summarize_chunk(
+            chunk,
+            language=language,
+            additional_instructions=additional_instructions,
+            out_budget=None,  # Let adaptive budget calculate
+            user_id=user_id,
+            db=db
+        )
+        chunk_summaries.append(summary)
+        
+        # Track citation metadata for this chunk
+        chunk_citations.append({
+            "chunk_id": i + 1,
+            "heading_path": heading_path,
+            "char_start": sum(len(chunks[j]) for j in range(i)),
+            "char_end": sum(len(chunks[j]) for j in range(i+1))
+        })
+    
+    # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
+    print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
+    final_summary = merge_summaries(
+        chunk_summaries,
+        language=language,
+        additional_instructions=enhanced_instructions,
+        out_budget=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        domain=domain,
+        chunk_citations=chunk_citations,
+        original_text=full_text,  # Pass original text for coverage validation
+        user_id=user_id,
+        db=db
+    )
+    
+    print("[MAP-REDUCE] Complete!")
+    return final_summary
+
+
+
+
+def summarize_no_files(
+    topic: str,
+    language: str = "en",
+    out_cap: int = 12000,
+    user_id: Optional[int] = None,
+    db = None
+) -> str:
+    """
+    Generate summary without uploaded files (from prompt only)
+    Uses general knowledge + same JSON format as file-based summaries
+    """
+    lang_instr = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
+    
+    # Build dedicated no-files prompt with correct JSON schema
+    user_prompt = f"""You are creating comprehensive study notes on the topic: "{topic}"
+
+{lang_instr}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 TASK: Generate study guide from your knowledge base
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Since no files were uploaded, generate comprehensive content based on your knowledge of "{topic}".
+
+REQUIREMENTS:
+1. ✅ REAL CONTENT with actual names, dates, facts (NO placeholders!)
+2. ✅ MINIMUM 10-15 sections covering main aspects of {topic}
+3. ✅ Each section: 3-5 detailed concepts (250-400 words each)
+4. ✅ MINIMUM 8,000 tokens output (comprehensive depth)
+5. ✅ Real examples, historical context, practical applications
+
+CONTENT APPROACH:
+- Main themes and categories within "{topic}"
+- History, key figures, major developments
+- Core principles and methodologies
+- Real-world applications and examples
+- Current state and future directions (if applicable)
+- Formulas/equations (if applicable to topic)
+- Diagrams: ONLY if truly helpful (1-3 visual aids)
+- Practice problems: 4-6 with detailed solutions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 OUTPUT EXACT JSON SCHEMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Output ONLY valid JSON (no markdown, no code fences):
+
+{{
+  "summary": {{
+    "title": "Study Notes: {topic}",
+    "overview": "<2-3 sentence introduction to {topic}>",
+    "learning_objectives": [
+      "<Specific measurable outcome 1>",
+      "<Specific measurable outcome 2>",
+      "<3-5 objectives total>"
+    ],
+    "sections": [
+      {{
+        "heading": "<Real topic-specific heading (NOT 'Section 1')>",
+        "bullets": ["<Key point>", "<Key point>"],
+        "concepts": [
+          {{
+            "term": "<Real concept name>",
+            "definition": "<Clear definition>",
+            "explanation": "<Detailed 250-400 word explanation with examples>",
+            "example": "<Concrete real-world example>",
+            "key_points": ["<Essential point>", "<Essential point>"]
+          }}
+        ]
+      }}
+    ],
+    "formula_sheet": [
+      {{
+        "name": "<Formula/equation name>",
+        "expression": "<LaTeX: \\\\(formula\\\\)>",
+        "variables": {{"symbol": "meaning"}},
+        "worked_example": "<Step-by-step calculation>",
+        "notes": "<When to use, constraints>"
+      }}
+    ],
+    "diagrams": [
+      {{
+        "title": "<Diagram title>",
+        "description": "<What it shows>",
+        "content": "<Mermaid syntax or description>",
+        "type": "flowchart"
+      }}
+    ],
+    "pseudocode": [
+      {{
+        "title": "<Algorithm name>",
+        "code": "<Step-by-step pseudocode>",
+        "explanation": "<What it does>",
+        "example_trace": "<Sample execution>"
+      }}
+    ],
+    "practice_problems": [
+      {{
+        "problem": "<Problem statement>",
+        "difficulty": "easy|medium|hard",
+        "solution": "<Detailed solution>",
+        "steps": ["<Step 1>", "<Step 2>"],
+        "key_concepts": ["<Concept>", "<Concept>"]
+      }}
+    ]
+  }},
+  "citations": ["<General knowledge source>", "<Reference>"]
+}}
+
+🚨 CRITICAL:
+- ALL content must be topic-specific (no "Concept 1" placeholders!)
+- Section headings must be REAL (e.g., "History of {topic}", not "Section 1")
+- Concepts must have DETAILED explanations (250-400 words each)
+- Output MUST be 8,000+ tokens
+- Only include diagrams/pseudocode/formulas if relevant to {topic}
+
+Generate comprehensive study notes about: {topic}"""
+    
+    return call_openai(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        user_id=user_id,
+        endpoint="/summarize",
+        db=db
+    )
+
