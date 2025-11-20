@@ -1452,24 +1452,16 @@ def map_reduce_summary(
     domain_hint = f"Content domain: {domain}. Adjust depth and style accordingly."
     enhanced_instructions = f"{additional_instructions}\n\n{domain_hint}" if additional_instructions else domain_hint
     
-    # Decide whether to use map-reduce
-    # Use chunking if: forced, OR estimated tokens > threshold
-    # Threshold increased to 10000 to allow longer single-pass summaries
-    use_chunking = force_chunking or estimated_tokens > 10000
+    # ALWAYS use map-reduce with two-stage reduce for depth
+    # Even small documents need outline → fill → validate → repair pipeline
+    # to achieve target token depth (70-90% of out_cap)
+    use_chunking = True  # Force deep pipeline always
     
-    if not use_chunking:
-        # Small document: single-pass summary
-        user_prompt = get_final_merge_prompt(language, enhanced_instructions, domain)
-        user_prompt += f"\n\nCOURSE MATERIAL:\n{full_text}"
-        
-        return call_openai(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
-            user_id=user_id,
-            endpoint="/summarize",
-            db=db
-        )
+    # OLD CODE: Single-pass mode BYPASSED the entire deep pipeline
+    # if not use_chunking:
+    #     user_prompt = get_final_merge_prompt(language, enhanced_instructions, domain)
+    #     user_prompt += f"\n\nCOURSE MATERIAL:\n{full_text}"
+    #     return call_openai(...)  # This never used reduce_two_stage!
     
     # Large document: map-reduce with structure-aware chunking
     print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using structure-aware chunking")
