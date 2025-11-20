@@ -1840,8 +1840,10 @@ async def summarize_from_files(
         self_repair_triggered = False
         self_repair_improvement = None
         
-        # Step 3: Trigger self-repair if needed
-        if (repair_prompts or needs_repair) and score < 0.7:
+        # Step 3: DISABLED POST-PROCESSING SELF-REPAIR (prevents timeout)
+        # reduce_two_stage already does self-repair, no need for 2nd repair
+        # This was causing 180s+ timeouts due to double repair
+        if False and (repair_prompts or needs_repair) and score < 0.5:  # DISABLED
             self_repair_triggered = True
             
             # Combine all repair prompts
@@ -1858,7 +1860,7 @@ async def summarize_from_files(
                 repaired_json = call_openai(
                     system_prompt=SYSTEM_PROMPT,
                     user_prompt=f"Fix the following issues in this summary:\n\n{repair_instruction}",
-                    max_output_tokens=min(out_cap, 8000),
+                    max_output_tokens=min(out_cap, 2000),  # Reduced: 8000 → 2000
                     retry_on_length=False
                 )
                 
