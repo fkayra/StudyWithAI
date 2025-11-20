@@ -804,7 +804,7 @@ def reduce_two_stage(
     outline_json = call_openai(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=outline_user,
-        max_output_tokens=min(1200, int(out_cap * 0.15)),
+        max_output_tokens=min(4000, int(out_cap * 0.30)),  # Increased: 1200→4000, 15%→30%
         temperature=0,
         user_id=user_id,
         endpoint="/summarize",
@@ -830,7 +830,7 @@ def reduce_two_stage(
         outline_json = call_openai(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=outline_user,
-            max_output_tokens=1200,
+            max_output_tokens=4000,  # Increased from 1200
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",
@@ -850,7 +850,7 @@ def reduce_two_stage(
         outline_json = call_openai(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=outline_user,
-            max_output_tokens=1200,
+            max_output_tokens=4000,  # Increased from 1200
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",

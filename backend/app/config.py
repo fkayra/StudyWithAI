@@ -63,10 +63,12 @@ TOKEN_PER_CHAR = 0.25
 # Chunking configuration for map-reduce
 CHUNK_INPUT_TARGET = 3500  # target tokens per chunk for map phase
 
-# Adaptive chunk output budget (Optimized for efficiency)
-CHUNK_OUTPUT_BASE = 600  # Balanced: deep but efficient
-CHUNK_OUTPUT_FORMULA_BOOST = 200  # Key derivation steps, not full proofs
-CHUNK_OUTPUT_THEOREM_BOOST = 250  # Essential proof elements
+# Adaptive chunk output budget (DEEP MODE: Prevent JSON truncation)
+# OLD VALUES (600/200/250) caused "Unterminated string" errors
+# → JSON cut mid-stream → reduce_two_stage FAIL → fallback → 1k garbage
+CHUNK_OUTPUT_BASE = 1800  # Ensure complete JSON structure (was 600)
+CHUNK_OUTPUT_FORMULA_BOOST = 400  # Full worked examples (was 200)
+CHUNK_OUTPUT_THEOREM_BOOST = 400  # Complete proof steps (was 250)
 
 MERGE_OUTPUT_BUDGET = (4000, 18000)  # Increased upper limit: More comprehensive outputs
 
