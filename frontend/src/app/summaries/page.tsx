@@ -474,7 +474,11 @@ export default function SummariesPage() {
   
   if (data && data.summary) {
     let summary = data.summary
-    
+    // PATCH: Ensure sections is ALWAYS an array
+    const safeSections = Array.isArray(summary.sections)
+      ? summary.sections
+      : [];
+    summary.sections = safeSections;
     // Validate and normalize summary structure
     // Handle case where summary might be a string
     if (typeof summary === 'string') {
@@ -664,9 +668,9 @@ export default function SummariesPage() {
           )}
 
           {/* Main Content Sections */}
-          {summary.sections && summary.sections.length > 0 ? (
+          {Array.isArray(summary.sections) && summary.sections.length > 0 ? (
           <div className="space-y-8">
-            {summary.sections.map((section, sectionIdx) => (
+            {summary.sections?.map?.((section, sectionIdx) => (
               <div key={sectionIdx} className="glass-card animate-slide-up" style={{ animationDelay: `${sectionIdx * 0.1}s` }}>
                 <div className="flex items-start gap-4 mb-6">
                   <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/30 rounded-xl flex items-center justify-center text-teal-400 font-bold">
