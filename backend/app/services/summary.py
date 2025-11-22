@@ -30,7 +30,10 @@ Rules:
 - Output ONLY valid JSON (no markdown, no prose, no explanations)
 - Never write paragraphs or explanations outside JSON
 - Keep output under 2000 tokens
-- ALWAYS include: concepts, formulas, theorems, examples arrays"""
+- ALWAYS include: concepts, formulas, theorems, examples arrays
+- ALWAYS preserve heading_path metadata inside _source.
+- NEVER drop concepts, even if similar.
+"""
 
 OUTLINE_SYSTEM_PROMPT = """You generate JSON outlines for study guides.
 
@@ -448,9 +451,11 @@ def get_reduce_fill_prompt(language: str, domain: str, additional: str = "") -> 
 {L}{domain_note}
 Constraints:
 - KEEP the outline section + concept order (do NOT rename or remove).
-- Each concept → definition + 2–3 dense paragraphs + ONE example matching expected_example:
-  • numeric → real numbers + step-by-step calculation
-  • anchored → specific dates/names/cases
+- EACH SECTION must expand to 700–1200 tokens.
+- EACH CONCEPT must expand to 300–500 words (~1500–2500 chars).
+- EACH SECTION will become 1000–2000 words total.
+- DO NOT shorten explanations.
+- DO NOT omit examples.
 - Each formula → expression (MATH ONLY), variables dict, ≥1 numeric worked_example, optional pseudocode, notes.
 - Diagrams: 2-4 visual representations (trees, flowcharts, hierarchies).
 - Pseudocode: 2-3 algorithm examples (if applicable).
