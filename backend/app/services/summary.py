@@ -33,11 +33,18 @@ Rules:
 - ALWAYS include: concepts, formulas, theorems, examples arrays"""
 
 OUTLINE_SYSTEM_PROMPT = """You generate JSON outlines for study guides.
-Rules:
+
+RULES:
 - Output ONLY valid JSON (no markdown, no code blocks)
-- Create 6-12 sections with concept term lists
-- Keep concise - just structure, no content yet
-- Never write explanations or examples"""
+- ONE SECTION PER MAJOR THEME found in the source document.
+- Do NOT compress multiple themes into one section.
+- Do NOT skip or merge themes.
+- The number of sections MUST MATCH the number of top-level headings in the source.
+- Each section must contain 4–6 concepts.
+- Each concept must specify term and expected_example (numeric|anchored).
+- NO explanations, NO examples — structure only.
+"""
+
 
 FILL_SYSTEM_PROMPT = """You are an educational content writer.
 Task: Fill the provided outline with comprehensive study content.
@@ -546,17 +553,17 @@ def infer_theme_heads(aggregated_knowledge: dict) -> list:
 
 def compute_outline_targets(aggregated_knowledge: dict, out_cap: int, domain: str) -> tuple:
     """
-    Compute dynamic outline target ranges based on content and budget
-    Returns: (target_min, target_soft_max, approx_theme_count)
+    NEW LOGIC:
+    - Section count MUST EQUAL number of top-level headings
+    - Allow +2 buffer for small theme expansions
     """
     theme_heads = infer_theme_heads(aggregated_knowledge)
-    approx_theme_count = max(1, len(theme_heads))
-    full_cost = estimate_full_section_tokens(domain)
-    body_budget = int(out_cap * 0.7)
-    soft_max_by_budget = max(8, body_budget // full_cost)
-    target_min = max(6, min(approx_theme_count, 10))
-    target_soft_max = max(target_min + 2, min(soft_max_by_budget, approx_theme_count + 4))
-    return target_min, target_soft_max, approx_theme_count
+    theme_count = max(1, len(theme_heads))
+
+    target_min = theme_count
+    target_soft_max = theme_count + 2
+
+    return target_min, target_soft_max, theme_count
 
 
 def coverage_gaps(outline: dict, aggregated_knowledge: dict) -> list:
@@ -850,9 +857,13 @@ def reduce_two_stage(
     repair_reason = []
     
     # Check 1: Too shallow?
-    if len(outline.get("sections", [])) < target_min:
+    current_sections = len(outline.get("sections", []))
+    if current_sections < target_min:
         outline_needs_repair = True
-        repair_reason.append(f"too shallow ({len(outline.get('sections', []))} < {target_min})")
+        repair_reason.append(
+            f"too shallow ({current_sections} < {target_min}) — MUST MATCH major themes"
+        )
+
     
     # Check 2: Coverage gaps?
     missing = coverage_gaps(outline, aggregated_knowledge)
@@ -864,9 +875,12 @@ def reduce_two_stage(
     if outline_needs_repair:
         print(f"[REDUCE] Outline repair needed: {'; '.join(repair_reason)}")
         outline_user += (
-            f"\n\n[REPAIR] Fix these issues: {'; '.join(repair_reason)}. "
-            f"Expected ~{target_min}–{target_soft_max} sections."
+            f"\n\n[REPAIR] You MUST produce EXACTLY {target_min}–{target_soft_max} sections.\n"
+            f"One section per major heading. Do NOT merge themes. Do NOT delete themes.\n"
+            f"Expand outline to match the exact theme count from source.\n"
+            f"Fix issues: {'; '.join(repair_reason)}."
         )
+
         outline_json = call_openai(
             system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused
             user_prompt=outline_user,
