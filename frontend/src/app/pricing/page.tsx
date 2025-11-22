@@ -80,10 +80,10 @@ export default function PricingPage() {
       description: "Ideal for serious students",
       buttonText: loading 
         ? 'Loading...' 
-        : user?.tier === 'starter' || user?.tier === 'premium'
+        : (user?.tier === 'starter' || user?.tier === 'premium' || user?.tier === 'professional' || user?.tier === 'pro')
           ? 'Current Plan' 
           : 'Upgrade to Starter',
-      href: user?.tier === 'starter' || user?.tier === 'premium' ? '#' : '#',
+      href: (user?.tier === 'starter' || user?.tier === 'premium' || user?.tier === 'professional' || user?.tier === 'pro') ? '#' : '#',
       isPopular: true,
       onClick: () => handlePurchase('Starter'),
     },

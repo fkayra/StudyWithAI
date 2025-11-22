@@ -36,6 +36,7 @@
     "typescript": "^5.3.3"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/katex": "^0.16.7"
   }
 }
