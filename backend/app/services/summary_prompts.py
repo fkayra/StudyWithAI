@@ -35,7 +35,7 @@ WRITE EXTENSIVELY. WRITE DEEPLY. DO NOT STOP EARLY. TARGET: 12,000-14,000 tokens
 1. **MAIN SECTIONS** (Core Content) - MINIMUM 12-18 sections
    - Create AT LEAST 12 sections, aim for 15-20 for comprehensive coverage
    - MORE sections = better (don't stop at 12!)
-   - Each theme gets detailed section with extensive coverage
+   - Each theme s detailed section with extensive coverage
    - Within each section:
      • AT LEAST 4-6 concepts per section (major: 6-10 concepts)
      • Each concept: 400-700 WORDS explanation (4-5 LONG paragraphs!)
@@ -88,7 +88,7 @@ DEPTH & COMPREHENSIVENESS (STRICT MINIMUMS - NON-NEGOTIABLE):
 ✓ EVERY concept must have: definition + 3-4 paragraph explanation + 3+ detailed examples + real-world context
 ✓ Each section: MINIMUM 4-6 concepts (major themes need 7-10 concepts)
 ✓ 🚨 CRITICAL: If your output is under 10,000 tokens, you're FAILING - EXPAND MUCH MORE!
-✓ Target: 12,000-14,000 tokens for comprehensive study guide (use 85-95% of budget)
+✓ Tar: 12,000-14,000 tokens for comprehensive study guide (use 85-95% of budget)
 
 📊 DIAGRAMS (Selective & Meaningful):
 ✓ ONLY include diagrams that ACTUALLY help understanding
