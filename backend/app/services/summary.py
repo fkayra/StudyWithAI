@@ -35,27 +35,74 @@ Rules:
 - NEVER drop concepts, even if similar.
 """
 
-OUTLINE_SYSTEM_PROMPT = """You generate JSON outlines for study guides.
+OUTLINE_SYSTEM_PROMPT = """You generate JSON OUTLINES for a study guide.
 
-RULES:
- RULES:
- - Output ONLY valid JSON (no markdown, no code blocks)
- - Create 10–18 sections REGARDLESS of the input heading count.
- - A deep outline MUST contain a high number of sections to support long-form content.
- - Your goal is to create enough sections to allow 10k–14k token final output.
- - Do NOT compress multiple themes into one section.
- - Do NOT skip or merge themes.
- - Each section must contain 4–6 concepts.
+CRITICAL RULES:
+- Output ONLY valid JSON.
+- Structure MUST be:
+{
+  "title": "...",
+  "sections": [
+    {
+      "heading": "...",
+      "concepts": [
+        {"term": "...", "expected_example": "numeric|anchored"}
+      ]
+    }
+  ],
+  "formula_plan": [],
+  "glossary_target": 10
+}
+
+MANDATORY:
+- Create BETWEEN 12 and 18 SECTIONS (not less).
+- Each section MUST contain 4–6 concepts.
+- Concepts MUST NOT be empty.
+- DO NOT summarize, DO NOT write actual explanations.
+
+Your sole task: create a *large, deep outline* with many sections to support 10k+ token fill stage.
 """
 
 
-FILL_SYSTEM_PROMPT = """You are an educational content writer.
-Task: Fill the provided outline with comprehensive study content.
-Rules:
-- Follow outline structure EXACTLY
-- Output ONLY valid JSON (no markdown, no code blocks)
-- Write detailed explanations (300-600 words per concept)
-- Include examples, formulas, practice problems"""
+
+FILL_SYSTEM_PROMPT = """You generate FULL JSON study guides.
+
+OUTPUT FORMAT (STRICT):
+
+{
+  "summary": {
+    "title": "...",
+    "overview": "...",
+    "learning_objectives": ["...", "..."],
+    "sections": [
+      {
+        "heading": "...",
+        "concepts": [
+          {
+            "term": "...",
+            "definition": "...",
+            "explanation": "...",
+            "example": "...",
+            "key_points": ["...", "..."]
+          }
+        ]
+      }
+    ],
+    "formula_sheet": [],
+    "diagrams": [],
+    "pseudocode": [],
+    "practice_problems": []
+  }
+}
+
+RULES:
+- Output ONLY valid JSON.
+- Follow EXACTLY the outline provided.
+- Do NOT add/remove/rename sections.
+- Each concept must have: definition (3–4 sentences), 2–4 paragraphs explanation, 1 concrete example, and key points.
+- Use 70–90% of token budget.
+"""
+
 
 # Deep prompt only for single-pass summaries (not used in two-stage reduce)
 SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP
@@ -592,7 +639,13 @@ def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
     """
     import re
     issues = []
-    summary = result.get("summary", {})
+    # Allow both top-level or wrapped summaries
+    summary = result.get("summary")
+    if summary is None:
+        # auto-wrap
+        summary = result
+        result = {"summary": result}
+
     
     # Check sections
     sections = summary.get("sections", [])
