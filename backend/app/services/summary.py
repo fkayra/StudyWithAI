@@ -565,9 +565,9 @@ def compute_outline_targets(aggregated_knowledge: dict, out_cap: int, domain: st
     theme_heads = infer_theme_heads(aggregated_knowledge)
     theme_count = max(1, len(theme_heads))
 
-     # We ALWAYS want a large outline to allow deep final output
-     target_min = 10
-     target_soft_max = 18
+    # We ALWAYS want a large outline to allow deep final output
+    target_min = 10
+    target_soft_max = 18
 
     return target_min, target_soft_max, theme_count
 
