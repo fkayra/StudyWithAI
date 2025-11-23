@@ -38,14 +38,14 @@ Rules:
 OUTLINE_SYSTEM_PROMPT = """You generate JSON outlines for study guides.
 
 RULES:
-- Output ONLY valid JSON (no markdown, no code blocks)
-- ONE SECTION PER MAJOR THEME found in the source document.
-- Do NOT compress multiple themes into one section.
-- Do NOT skip or merge themes.
-- The number of sections MUST MATCH the number of top-level headings in the source.
-- Each section must contain 4–6 concepts.
-- Each concept must specify term and expected_example (numeric|anchored).
-- NO explanations, NO examples — structure only.
+ RULES:
+ - Output ONLY valid JSON (no markdown, no code blocks)
+ - Create 10–18 sections REGARDLESS of the input heading count.
+ - A deep outline MUST contain a high number of sections to support long-form content.
+ - Your goal is to create enough sections to allow 10k–14k token final output.
+ - Do NOT compress multiple themes into one section.
+ - Do NOT skip or merge themes.
+ - Each section must contain 4–6 concepts.
 """
 
 
@@ -451,8 +451,8 @@ def get_reduce_fill_prompt(language: str, domain: str, additional: str = "") -> 
 {L}{domain_note}
 Constraints:
 - KEEP the outline section + concept order (do NOT rename or remove).
-- EACH SECTION must expand to 700–1200 tokens.
-- EACH CONCEPT must expand to 300–500 words (~1500–2500 chars).
+- EACH SECTION must expand to AT LEAST 1500–2500 tokens (no upper limit).
+- EACH CONCEPT must expand to 400–800 words (~2500–5000 chars).
 - EACH SECTION will become 1000–2000 words total.
 - DO NOT shorten explanations.
 - DO NOT omit examples.
@@ -565,8 +565,9 @@ def compute_outline_targets(aggregated_knowledge: dict, out_cap: int, domain: st
     theme_heads = infer_theme_heads(aggregated_knowledge)
     theme_count = max(1, len(theme_heads))
 
-    target_min = theme_count
-    target_soft_max = theme_count + 2
+     # We ALWAYS want a large outline to allow deep final output
+     target_min = 10
+     target_soft_max = 18
 
     return target_min, target_soft_max, theme_count
 
@@ -595,8 +596,9 @@ def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
     
     # Check sections
     sections = summary.get("sections", [])
-    if len(sections) < 4:
-        issues.append(f"Too few sections ({len(sections)}), expected ≥4")
+    # Allow flexible section count - do not enforce minimum
+    if len(sections) == 0:
+        issues.append("No sections produced — JSON invalid.")
     
     # Check concepts and their examples
     for i, sec in enumerate(sections):
@@ -746,12 +748,9 @@ RULES (MUST):
 - Preserve all correct content. Only repair or add what is missing.
 - Return FULL valid JSON only (no markdown, no comments).
 
-🚨 CRITICAL OUTPUT LENGTH REQUIREMENT:
-- Your output MUST be AT LEAST 6,000 tokens (approximately 24,000 characters)
-- If you're below this, you're FAILING the task
-- EXPAND every concept to 300-500 words (not 100-150!)
-- Add MORE examples, MORE details, MORE explanations
-- This is a COMPREHENSIVE study guide, not a brief summary!
++ 🚨 LENGTH TARGET:
++ - Aim for 8,000–12,000 tokens.
++ - If <4000 tokens → expand explanations, add examples.
 
 REQUIREMENTS (APPLY GENERALLY):
 1) Example requirements:
