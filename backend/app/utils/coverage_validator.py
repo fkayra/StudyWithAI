@@ -8,7 +8,7 @@ from typing import List, Dict
 from difflib import SequenceMatcher
 
 # NEW: use the same heading engine as summarizer
-from utils.structure_parser import extract_heading_hierarchy
+from app.utils.structure_parser import extract_heading_hierarchy
 
 
 def extract_source_topics(text: str) -> List[str]:
