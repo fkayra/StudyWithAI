@@ -1552,19 +1552,9 @@ def map_reduce_summary(
         use_chunking = estimated_tokens > 8000
 
     if not use_chunking:
-        print(f"[SINGLE-PASS] estimated_tokens={estimated_tokens}, using direct reduce")
-
-        user_prompt = get_final_merge_prompt(language, enhanced_instructions, domain)
-        user_prompt += f"\n\nCOURSE MATERIAL:\n{full_text}"
-
-        return call_openai(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            max_output_tokens=min(out_cap, 9000),  # küçük dokümanlarda 9k tavan
-            user_id=user_id,
-            endpoint="/summarize",
-            db=db
-        )
+        print("[SINGLE-PASS DISABLED] Forcing MAP-REDUCE for deep academic summary")
+        # simply do nothing → let normal MAP-REDUCE flow run
+        pass  
 
     
     # OLD CODE: Single-pass mode BYPASSED the entire deep pipeline
