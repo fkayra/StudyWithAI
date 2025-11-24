@@ -1579,33 +1579,33 @@ chunk_metadata = [
 ]
 
     
-    print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
+print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
+
+# 3. MAP: Summarize each chunk (with adaptive budgeting and citation tracking)
+chunk_summaries = []
+chunk_citations = []
+
+for i, chunk in enumerate(chunks):
+    heading_path = chunk_metadata[i].get("heading_path", f"Chunk {i+1}")
+    print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}: {heading_path}")
     
-    # 3. MAP: Summarize each chunk (with adaptive budgeting and citation tracking)
-    chunk_summaries = []
-    chunk_citations = []
+    summary = summarize_chunk(
+        chunk,
+        language=language,
+        additional_instructions=additional_instructions,
+        out_budget=None,  # Let adaptive budget calculate
+        user_id=user_id,
+        db=db
+    )
+    chunk_summaries.append(summary)
     
-    for i, chunk in enumerate(chunks):
-        heading_path = chunk_metadata[i].get("heading_path", f"Chunk {i+1}")
-        print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}: {heading_path}")
-        
-        summary = summarize_chunk(
-            chunk,
-            language=language,
-            additional_instructions=additional_instructions,
-            out_budget=None,  # Let adaptive budget calculate
-            user_id=user_id,
-            db=db
-        )
-        chunk_summaries.append(summary)
-        
-        # Track citation metadata for this chunk
-        chunk_citations.append({
-            "chunk_id": i + 1,
-            "heading_path": heading_path,
-            "char_start": sum(len(chunks[j]) for j in range(i)),
-            "char_end": sum(len(chunks[j]) for j in range(i+1))
-        })
+    # Track citation metadata for this chunk
+    chunk_citations.append({
+        "chunk_id": i + 1,
+        "heading_path": heading_path,
+        "char_start": sum(len(chunks[j]) for j in range(i)),
+        "char_end": sum(len(chunks[j]) for j in range(i+1))
+    })
     
     # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
     print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
