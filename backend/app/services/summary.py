@@ -487,31 +487,44 @@ Rules:
 def get_reduce_fill_prompt(language: str, domain: str, additional: str = "") -> str:
     """
     Second stage of two-stage REDUCE: fill outline with content
+    Daha gerçekçi token hedefleriyle (4k–12k) çalışır.
     """
     L = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
     domain_note = ""
     if domain == "technical":
-        domain_note = "\n- NUMERIC EXAMPLES REQUIRED for every quantitative concept."
+        domain_note = "\n- Prefer numeric examples when possible."
     elif domain == "social":
-        domain_note = "\n- ANCHORED EXAMPLES REQUIRED (dates, names, cases) for qualitative concepts."
+        domain_note = "\n- Use anchored real-world examples (years, names, cases)."
+
     return f"""Fill the given OUTLINE into a complete, exam-ready study guide.
 {L}{domain_note}
-Constraints:
-- KEEP the outline section + concept order (do NOT rename or remove).
-- EACH SECTION must expand to AT LEAST 1500–2500 tokens (no upper limit).
-- EACH CONCEPT must expand to 400–800 words (~2500–5000 chars).
-- EACH SECTION will become 1000–2000 words total.
-- DO NOT shorten explanations.
-- DO NOT omit examples.
-- Each formula → expression (MATH ONLY), variables dict, ≥1 numeric worked_example, optional pseudocode, notes.
-- Diagrams: 2-4 visual representations (trees, flowcharts, hierarchies).
-- Pseudocode: 2-3 algorithm examples (if applicable).
-- Practice Problems: 3-5 with full solutions (varying difficulty).
-- Provide citations for each main section and formula sheet.
-- If the outline missed some themes, you MAY add concise sub-concepts, but avoid unnecessary padding.
-- Output single valid JSON, no markdown.
 
+LENGTH TARGETS (GLOBAL, NOT PER SECTION):
+- Ideal total length: 8000–12000 tokens.
+- Minimum acceptable length: 4000 tokens.
+- Focus on dense, useful content instead of padding.
+
+CONSTRAINTS:
+- KEEP the outline section + concept order (do NOT rename or remove).
+- For each concept:
+  • Short definition (2–3 sentences)
+  • 1–2 dense paragraphs of explanation
+  • 1 concrete example
+  • key_points bullets
+- For formulas (if any):
+  • LaTeX expression
+  • variables dict
+  • 1 numeric worked_example
+- Practice problems: 4–6 TOTAL for the whole guide.
+- Diagrams/pseudocode: optional, 0–2 TOTAL (only if they genuinely help).
+
+STYLE:
+- No filler, no repetitive padding.
+- Depth and clarity > sheer size.
+
+Output a SINGLE valid JSON, no markdown.
 {additional}"""
+
 
 
 def get_no_files_prompt(topic: str, language: str = "en") -> str:
@@ -726,10 +739,6 @@ def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
     pseudocode = summary.get("pseudocode", [])
     practice_problems = summary.get("practice_problems", [])
     
-    # Diagrams: Flexible based on content type (don't force if not helpful)
-    if len(diagrams) < 1:
-        issues.append(f"No diagrams - add at least 1-2 if content is visual/hierarchical")
-    
     # Validate diagram probability values for Bayesian/probabilistic networks
     for idx, diagram in enumerate(diagrams):
         diagram_type = diagram.get("type", "").lower()
@@ -754,102 +763,66 @@ def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
     # (No minimum check - not all content needs pseudocode)
     
     # Practice problems: Should have adequate examples
-    if len(practice_problems) < 4:
-        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥4")
+    if len(practice_problems) < 2:
+        issues.append(f"Practice problems too few ({len(practice_problems)}), expected ≥2")
     
     # ---- LENGTH CHECK (ADAPTIVE, PLAN-BASED) ----
     import json
     result_json = json.dumps(result, ensure_ascii=False)
     estimated_tokens = len(result_json) // 4  # ≈ 4 chars per token
 
-    if out_cap is not None:
-        # Adaptive minimum:
-        # - At least 60% of available token budget
-        # - At least 2500 minimum
-        # - No more than 9000 to avoid pathological inflation
-        target_min = max(2500, int(out_cap * 0.60))
-        target_min = min(target_min, 9000)
-    else:
-        target_min = 2500  # safe soft default
+    # LENGTH CHECK: Min 4000, ideal 8000+ (ama hard değil)
+    min_tokens = 4000
 
-    if estimated_tokens < target_min:
-        shortage = target_min - estimated_tokens
+    if estimated_tokens < min_tokens:
+        shortage = min_tokens - estimated_tokens
         issues.append(
-            f"⚠️ Output may be too brief: ~{estimated_tokens} tokens vs target ≥{target_min}. "
-            f"Add more detailed explanations, extra examples and practice problems (short by ~{shortage} tokens)."
+            f"Output may be too brief: ~{estimated_tokens} tokens vs target ≥{min_tokens}. "
+            f"Add a bit more explanation and a few extra examples (short by ~{shortage} tokens)."
         )
+
     
     return issues
 
 
 def build_self_repair_prompt(result: dict, issues: list, language: str) -> str:
     """
-    Universal self-repair prompt that works for ANY domain/subject.
-    Domain-agnostic validation and repair instructions.
-    ENHANCED: More aggressive expansion instructions
+    Soft self-repair:
+    - Küçük eksikleri düzelt
+    - Belgeyi baştan yazma
+    - 4000 token'ı geçme
     """
     import json
     lang = "Use TURKISH." if language == "tr" else "Use ENGLISH."
     issues_text = "\n- ".join(issues)
     
     return f"""{lang}
-You are repairing a study-guide JSON. 
-This must work for ANY subject (math, history, medicine, CS, economics, law, engineering, psychology, etc.).
+You are repairing an existing study-guide JSON.
 
-RULES (MUST):
-- Do NOT remove or rename existing sections or concepts.
-- Preserve all correct content. Only repair or add what is missing.
-- Return FULL valid JSON only (no markdown, no comments).
+GOAL:
+Fix ONLY the issues listed below. Do NOT rewrite or heavily expand the document.
 
-+ 🚨 LENGTH TARGET:
-+ - Aim for 8,000–12,000 tokens.
-+ - If <4000 tokens → expand explanations, add examples.
+ALLOWED FIXES:
+- Add missing examples (1 per concept if required)
+- Add missing citations
+- Add missing key_points
+- Add a short numeric example for formulas that require it
+- Slightly extend very short explanations (2–3 sentences max)
+- Fix invalid JSON structure
 
-REQUIREMENTS (APPLY GENERALLY):
-1) Example requirements:
-   If a concept has expected_example="numeric" → add one step-by-step numeric example using real numbers.
-   If a concept has expected_example="anchored" → add one real-world contextual example (specific place, year, case, dataset, experiment, historical event, etc.).
+NOT ALLOWED:
+- Do NOT create new sections
+- Do NOT rename or remove existing sections/concepts
+- Do NOT significantly increase total length
+- Do NOT exceed 4000 tokens in this repair step
 
-2) Formula requirements (if formula_sheet exists):
-   - expression must be math notation (not prose).
-   - variables must explain every symbol.
-   - worked_example must include real numeric calculation steps.
-
-3) Interactive feature requirements:
-   - Diagrams: Must have at least 4-6 visual representations (trees, flowcharts, hierarchies, graphs).
-   - Pseudocode: Must have at least 2-3 algorithm examples (if applicable to the material).
-   - Practice Problems: Must have at least 4-6 problems with full solutions and step-by-step explanations.
-
-4) Depth requirements (CRITICAL - MUST FOLLOW):
-   - 🚨 YOUR OUTPUT MUST BE 10,000+ TOKENS - THIS IS NON-NEGOTIABLE!
-   - EXPAND all explanations to 400-700 words per concept (write LONG paragraphs!)
-   - Each concept needs:
-     * Clear definition (3-4 sentences)
-     * Detailed explanation (4-5 LONG paragraphs - not short ones!)
-     * Multiple examples (3-4 examples MINIMUM with detailed walkthroughs)
-     * Practical applications, real-world context, use cases
-     * Common pitfalls, limitations, when to use/avoid
-   - Add MANY more sections (aim for 15-25 sections total if needed)
-   - Add MANY more concepts per section (aim for 5-8 concepts per section)
-   - Don't summarize - WRITE EXTENSIVELY like a textbook!
-   - KEEP WRITING until you reach 10,000+ tokens!
-
-5) Citations requirement:
-   - Each top-level section must include at least one citation with section_or_heading and page_range based on the source.
-   - Evidence snippets should be concise (no truncation).
-
-6) Consistency rule:
-   - Do NOT invent topics or facts not supported by the user's uploaded document.
-
-Issues to fix:
+ISSUES TO FIX:
 - {issues_text}
 
-⚠️ BEFORE YOU OUTPUT: Check that your response will be AT LEAST 40,000 characters (10,000 tokens).
-If not, EXPAND MORE - add more content, more details, more examples, more sections!
-IDEAL: 48,000-56,000 characters (12,000-14,000 tokens) for comprehensive coverage.
-
+Return a SINGLE valid JSON with the improved version.
 CURRENT JSON:
 {json.dumps(result, ensure_ascii=False)}"""
+
 
 
 # ========== Two-Stage REDUCE Orchestrator ==========
@@ -1018,19 +991,16 @@ def reduce_two_stage(
         print(f"[REDUCE] Quality issues detected: {issues}")
         repair_user = (
             build_self_repair_prompt(result, issues, language)
-            + "\n\nCRITICAL FIX INSTRUCTIONS:\n"
-              "- Ensure EVERY MAP theme (heading_path) appears as a section.\n"
-              "- Expand explanations deeply.\n"
-              "- Include 4–8 practice problems.\n"
-              "- Add diagrams using Mermaid.\n"
-              "- Summary MUST use at least 70–90% of token budget.\n"
-              "- Do NOT change JSON structure.\n"
-              "- KEEP THE ORIGINAL OUTLINE ORDER.\n"
+            + "\n\nFIX INSTRUCTIONS (SOFT):\n"
+              "- Focus only on the listed issues.\n"
+              "- Do NOT significantly change length or structure.\n"
+              "- Keep the original outline and section order.\n"
         )
+
         repaired = call_openai(
             system_prompt=FILL_SYSTEM_PROMPT,  # Same as fill - repairing JSON structure
             user_prompt=repair_user,
-            max_output_tokens=out_cap,  # Use FULL budget for repair - no limiting!
+            max_output_tokens=min(4000, out_cap),  # Use FULL budget for repair - no limiting!
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",
@@ -1573,10 +1543,29 @@ def map_reduce_summary(
     domain_hint = f"Content domain: {domain}. Adjust depth and style accordingly."
     enhanced_instructions = f"{additional_instructions}\n\n{domain_hint}" if additional_instructions else domain_hint
     
-    # ALWAYS use map-reduce with two-stage reduce for depth
-    # Even small documents need outline → fill → validate → repair pipeline
-    # to achieve target token depth (70-90% of out_cap)
-    use_chunking = True  # Force deep pipeline always
+    # === CHUNKING KARARI ===
+    # Küçük dokümanlarda hız için tek-pass mod
+    if force_chunking:
+        use_chunking = True
+    else:
+        # 8000 token'dan küçükse tek aşama özet
+        use_chunking = estimated_tokens > 8000
+
+    if not use_chunking:
+        print(f"[SINGLE-PASS] estimated_tokens={estimated_tokens}, using direct reduce")
+
+        user_prompt = get_final_merge_prompt(language, enhanced_instructions, domain)
+        user_prompt += f"\n\nCOURSE MATERIAL:\n{full_text}"
+
+        return call_openai(
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            max_output_tokens=min(out_cap, 9000),  # küçük dokümanlarda 9k tavan
+            user_id=user_id,
+            endpoint="/summarize",
+            db=db
+        )
+
     
     # OLD CODE: Single-pass mode BYPASSED the entire deep pipeline
     # if not use_chunking:
@@ -1646,11 +1635,14 @@ def map_reduce_summary(
     
     # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
     print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
+    # Çıkış bütçesini 12k ile sınırla
+    merge_budget = min(out_cap, MERGE_OUTPUT_BUDGET[1], 14000)
+
     final_summary = merge_summaries(
         chunk_summaries,
         language=language,
         additional_instructions=enhanced_instructions,
-        out_budget=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        out_budget=merge_budget,
         domain=domain,
         chunk_citations=chunk_citations,
         original_text=full_text,  # Pass original text for coverage validation
