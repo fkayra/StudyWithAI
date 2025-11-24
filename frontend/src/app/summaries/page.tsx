@@ -670,7 +670,7 @@ export default function SummariesPage() {
           {/* Main Content Sections */}
           {Array.isArray(summary.sections) && summary.sections.length > 0 ? (
           <div className="space-y-8">
-            {summary.sections?.map?.((section, sectionIdx) => (
+            {Array.isArray(summary.sections) && summary.sections.map((section, sectionIdx) => (
               <div key={sectionIdx} className="glass-card animate-slide-up" style={{ animationDelay: `${sectionIdx * 0.1}s` }}>
                 <div className="flex items-start gap-4 mb-6">
                   <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-500/30 rounded-xl flex items-center justify-center text-teal-400 font-bold">
@@ -680,9 +680,9 @@ export default function SummariesPage() {
                 </div>
 
                 {/* Concepts (new schema) */}
-                {section.concepts && section.concepts.length > 0 && (
+                {Array.isArray(section.concepts) && section.concepts.length > 0 && (
                   <div className="space-y-6">
-                    {section.concepts.map((concept, conceptIdx) => (
+                      {section.concepts.map((concept, conceptIdx) => (
                       <div key={conceptIdx} className="p-5 bg-gradient-to-br from-teal-500/5 to-cyan-500/5 border border-teal-500/20 rounded-xl hover:border-teal-500/40 transition-all">
                         <div className="flex items-start gap-3 mb-3">
                           <div className="flex-shrink-0 w-8 h-8 bg-teal-500/20 rounded-lg flex items-center justify-center text-teal-400 text-sm font-bold mt-0.5">
@@ -769,10 +769,10 @@ export default function SummariesPage() {
                 )}
 
                 {/* Bullets (old schema - backward compatibility) */}
-                {section.bullets && section.bullets.length > 0 && (
-                  <ul className="space-y-3">
-                    {section.bullets.map((bullet, bulletIdx) => (
-                      <li key={bulletIdx} className="flex items-start group">
+                {Array.isArray(section.bullets) && section.bullets.length > 0 && (
+                   <ul>
+                      {section.bullets.filter(Boolean).map((bullet, bulletIdx) => (
+                        <li key={bulletIdx} className="flex items-start group">
                         <span className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mr-3 mt-0.5 group-hover:scale-110 transition-transform">
                           <span className="text-teal-400 text-xs">✓</span>
                         </span>
