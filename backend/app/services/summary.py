@@ -1569,31 +1569,15 @@ def map_reduce_summary(
     # 2. EXTRACT STRUCTURE
     from app.utils.structure_parser import extract_heading_hierarchy, chunk_by_headings, blocks_to_text
     
-    try:
-        blocks = extract_heading_hierarchy(full_text)
-        structured_chunks = chunk_by_headings(blocks, target_tokens=CHUNK_INPUT_TARGET)
-        print(f"[STRUCTURE] Extracted {len(blocks)} blocks, {len(structured_chunks)} structured chunks")
-        
-        # Convert structured chunks back to text with heading context
-        chunks_with_context = []
-        chunk_metadata = []
-        
-        for chunk_blocks, heading_path in structured_chunks:
-            chunk_text = blocks_to_text(chunk_blocks)
-            chunks_with_context.append(chunk_text)
-            chunk_metadata.append({
-                "heading_path": heading_path,
-                "block_count": len(chunk_blocks)
-            })
-        
-        chunks = chunks_with_context
-        print(f"[STRUCTURE] Heading-aware chunks: {[m['heading_path'] for m in chunk_metadata]}")
-        
-    except Exception as e:
-        # Fallback to simple chunking if structure extraction fails
-        print(f"[STRUCTURE WARNING] Failed to extract structure: {e}, using simple chunking")
-        chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
-        chunk_metadata = [{"heading_path": f"Chunk {i+1}", "block_count": 0} for i in range(len(chunks))]
+    # === CHUNKING (Structure parser disabled — universal & reliable mode) ===
+print("[CHUNKING] Structure parser disabled — using pure token-based chunking")
+
+chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
+chunk_metadata = [
+    {"heading_path": f"Chunk {i+1}", "block_count": 0}
+    for i in range(len(chunks))
+]
+
     
     print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
     
