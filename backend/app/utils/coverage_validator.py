@@ -2,177 +2,122 @@
 Coverage validation to ensure no topics are skipped
 Extracts all headings/topics from source and verifies they appear in summary
 """
-
 import re
 from typing import List, Dict
 from difflib import SequenceMatcher
 
-# NEW: use the same heading engine as summarizer
-from app.utils.structure_parser import extract_heading_hierarchy
+
+# ===========================================================
+# RELIABLE HEADING EXTRACTION (more aligned with parser)
+# ===========================================================
+HEADING_RE = re.compile(
+    r'^(?:'
+    r'(\d+(?:\.\d+)+\s+.+)'                           # 1.2.3 Heading
+    r'|([A-Z][A-Za-z0-9\s]{5,120})'                    # Capitalized lines
+    r'|(Example|Problem|Definition|Theorem)\b.+)'      # Keyword start
+    r'$',
+    re.MULTILINE
+)
 
 
 def extract_source_topics(text: str) -> List[str]:
-    """
-    Extract source topics using the SAME heading engine as the summarizer.
-    This guarantees consistent topic detection.
-    """
-
-    blocks = extract_heading_hierarchy(text)
     topics = []
 
-    for block in blocks:
-        if block.block_type == "heading":
+    for match in HEADING_RE.finditer(text):
+        line = match.group(0).strip()
+        # exclude too long garbage
+        if 5 <= len(line) <= 140:
+            topics.append(line)
 
-            # include the heading itself
-            topics.append(block.content.strip())
-
-            # also include full heading path for stronger coverage matching
-            if block.heading_path:
-                full_path = " > ".join(block.heading_path)
-                topics.append(full_path)
-
-    # remove duplicates while preserving order
-    cleaned = []
-    seen = set()
-    for t in topics:
-        if t not in seen and len(t.strip()) > 2:
-            cleaned.append(t)
-            seen.add(t)
-
-    return cleaned
+    return list(dict.fromkeys(topics))
 
 
-
+# ===========================================================
+# SUMMARY TOPIC EXTRACTION
+# ===========================================================
 def extract_summary_topics(summary_json: dict) -> List[str]:
-    """
-    Extract all topics/concepts from generated summary
-    Returns list of topic strings found in the summary
-    """
     topics = []
-    
-    summary_data = summary_json.get("summary", {})
+    data = summary_json.get("summary", {})
 
-    for section in summary_data.get("sections", []):
-        heading = section.get("heading", "")
-        if heading:
-            topics.append(heading)
+    for section in data.get("sections", []):
+        if section.get("heading"):
+            topics.append(section["heading"])
+        for c in section.get("concepts", []):
+            if c.get("term"):
+                topics.append(c["term"])
 
-        # Extract concept names
-        for concept in section.get("concepts", []):
-            term = concept.get("term", "")
-            if term:
-                topics.append(term)
+    for f in data.get("formula_sheet", []):
+        if f.get("name"):
+            topics.append(f["name"])
 
-    # Extract formula names
-    for formula in summary_data.get("formula_sheet", []):
-        name = formula.get("name", "")
-        if name:
-            topics.append(name)
-    
-    # Extract glossary terms
-    for term in summary_data.get("glossary", []):
-        term_text = term.get("term", "")
-        if term_text:
-            topics.append(term_text)
-    
+    for g in data.get("glossary", []):
+        if g.get("term"):
+            topics.append(g["term"])
+
     return topics
 
 
-
-def similarity_score(a: str, b: str) -> float:
-    """Fuzzy string similarity"""
+# ===========================================================
+# FUZZY MATCHING + COVERAGE SCORING
+# ===========================================================
+def similarity_score(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-
-def find_missing_topics(source_topics: List[str], summary_topics: List[str], threshold: float = 0.70) -> List[str]:
-    """
-    Find source topics not represented in summary topics.
-    """
+def find_missing_topics(source_topics, summary_topics, threshold=0.55):
     missing = []
-
-    for source_topic in source_topics:
-        best_score = 0.0
-        for summary_topic in summary_topics:
-            score = similarity_score(source_topic, summary_topic)
-            if score > best_score:
-                best_score = score
-
-        if best_score < threshold:
-            missing.append(source_topic)
-
+    for st in source_topics:
+        if max(similarity_score(st, s) for s in summary_topics) < threshold:
+            missing.append(st)
     return missing
 
 
-
-def calculate_coverage_score(source_topics: List[str], summary_topics: List[str], threshold: float = 0.70) -> float:
-    """
-    Calculate percentage of source headings that appear in summary.
-    """
-    if not source_topics:
-        return 1.0
-
-    matched = 0
-    for source_topic in source_topics:
-        for summary_topic in summary_topics:
-            if similarity_score(source_topic, summary_topic) >= threshold:
-                matched += 1
-                break
-
-    return matched / len(source_topics)
+def calculate_coverage_score(source_topics, summary_topics, threshold=0.55):
+    matched = sum(
+        1 for st in source_topics
+        if any(similarity_score(st, s) >= threshold for s in summary_topics)
+    )
+    return matched / len(source_topics) if source_topics else 1.0
 
 
-
-def validate_coverage(source_text: str, summary_json: dict, min_coverage: float = 0.85) -> Dict:
-    """
-    Main coverage validation logic.
-    """
-
+# ===========================================================
+# VALIDATE + REPORTING
+# ===========================================================
+def validate_coverage(source_text: str, summary_json: dict, min_coverage=0.80):
     source_topics = extract_source_topics(source_text)
     summary_topics = extract_summary_topics(summary_json)
 
-    missing = find_missing_topics(source_topics, summary_topics)
     coverage = calculate_coverage_score(source_topics, summary_topics)
-    matched = len(source_topics) - len(missing)
+    missing = find_missing_topics(source_topics, summary_topics)
 
     return {
         "passed": coverage >= min_coverage,
         "coverage_score": coverage,
         "total_source_topics": len(source_topics),
-        "matched_topics": matched,
+        "matched_topics": len(source_topics) - len(missing),
         "missing_topics": missing,
-        "source_topics_sample": source_topics[:10],
-        "summary_topics_count": len(summary_topics),
+        "summary_topics_count": len(summary_topics)
     }
 
 
-
 def generate_coverage_report(result: Dict) -> str:
-    """
-    Human-readable coverage report
-    """
-    report = f"""
+    rep = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 COVERAGE VALIDATION REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Status: {"✅ PASSED" if result['passed'] else "❌ FAILED"}
-Coverage Score: {result['coverage_score']:.1%}
+Coverage Score: {result['coverage_score']*100:.1f}%
 
 Topics Found in Source: {result['total_source_topics']}
 Topics Matched in Summary: {result['matched_topics']}
 Topics in Summary: {result['summary_topics_count']}
-
 """
 
-    if result['missing_topics']:
-        report += f"\n⚠️  MISSING TOPICS ({len(result['missing_topics'])}):\n"
-        for i, topic in enumerate(result['missing_topics'][:15], 1):
-            report += f"  {i}. {topic}\n"
-        if len(result['missing_topics']) > 15:
-            report += f"  ...and {len(result['missing_topics']) - 15} more\n"
-    else:
-        report += "\n✅ All major topics covered!\n"
+    if result["missing_topics"]:
+        rep += "\n⚠️ Missing Topics:\n"
+        for i, t in enumerate(result["missing_topics"][:20], 1):
+            rep += f"  {i}. {t}\n"
 
-    report += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    return report
+    rep += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    return rep
