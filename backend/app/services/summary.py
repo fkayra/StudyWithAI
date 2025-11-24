@@ -888,7 +888,12 @@ def reduce_two_stage(
         outline_prompt
         + "\n\nSTRUCTURED SOURCE KNOWLEDGE:\n"
         + agg_str
+        + "\n\nIMPORTANT:\n"
+        + "Use _source.heading_path metadata to generate SECTIONS.\n"
+        + "Each section MUST correspond to major themes extracted from heading_path.\n"
+        + "Do NOT invent new themes.\n"
     )
+
     
     outline_json = call_openai(
         system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused prompt
@@ -908,6 +913,28 @@ def reduce_two_stage(
         domain=domain
     )
     print(f"[REDUCE] Outline targets: min={target_min}, soft_max={target_soft_max}, themes={approx_themes}")
+
+    # === EXTRACT ALL MAP HEADINGS ===
+    source_themes = set()
+    
+    for c in aggregated_knowledge.get("concepts", []):
+        if "_source" in c and "heading_path" in c["_source"]:
+            source_themes.add(c["_source"]["heading_path"])
+    
+    for f in aggregated_knowledge.get("formulas", []):
+        if "_source" in f and "heading_path" in f["_source"]:
+            source_themes.add(f["_source"]["heading_path"])
+    
+    for t in aggregated_knowledge.get("theorems", []):
+        if "_source" in t and "heading_path" in t["_source"]:
+            source_themes.add(t["_source"]["heading_path"])
+    
+    # NOW update outline targets
+    map_heading_count = len(source_themes)
+    target_min = max(target_min, map_heading_count)
+    target_soft_max = max(target_soft_max, map_heading_count)
+
+    # Check 1b: Missing MAP themes (always check!)
     
     # === SELF-REPAIR: Max 1 repair attempt to prevent loop ===
     outline_needs_repair = False
@@ -920,13 +947,17 @@ def reduce_two_stage(
         repair_reason.append(
             f"too shallow ({current_sections} < {target_min}) — MUST MATCH major themes"
         )
-
     
-    # Check 2: Coverage gaps?
-    missing = coverage_gaps(outline, aggregated_knowledge)
-    if missing:
+    
+    
+    outline_themes = {sec.get("heading","") for sec in outline.get("sections", [])}
+    
+    missing_themes = [t for t in source_themes if t not in outline_themes]
+    
+    if missing_themes:
         outline_needs_repair = True
-        repair_reason.append(f"missing themes: {', '.join(missing[:3])}")
+        repair_reason.append(f"missing MAP themes: {missing_themes[:5]}")
+    
     
     # Single repair attempt (prevents loop)
     if outline_needs_repair:
@@ -954,32 +985,48 @@ def reduce_two_stage(
     
     # === STAGE 2: Fill Outline ===
     print("[REDUCE] Stage 2: Filling outline with content...")
+    agg_trim = agg_str[:min(len(agg_str), 120000)]
     fill_prompt = get_reduce_fill_prompt(language, domain, additional_instructions)
     fill_user = (
         fill_prompt
         + "\n\nOUTLINE (DO NOT CHANGE ORDER):\n"
         + json.dumps(outline, ensure_ascii=False, indent=2)
         + "\n\nSTRUCTURED SOURCE KNOWLEDGE:\n"
-        + agg_str
+        + agg_trim
+        + "\n\nIMPORTANT:\n"
+        + "Use heading_path to attach each concept to the correct section.\n"
+        + "Do NOT mix unrelated themes.\n"
+        + "Cover EVERY concept.\n"
+        + "Use 70–95% of token budget.\n"
     )
     
     filled_json = call_openai(
         system_prompt=FILL_SYSTEM_PROMPT,  # MODERATE, structure-focused prompt
         user_prompt=fill_user,
-        max_output_tokens=min(out_cap, MERGE_OUTPUT_BUDGET[1]),
+        max_output_tokens=out_cap,
         temperature=0,
         user_id=user_id,
         endpoint="/summarize",
         db=db
     )
-    result = parse_json_robust(filled_json)
+    result = parse_json_robust(filled_json) or {}
     
     # === STAGE 3: Validate & Self-Repair ===
     print("[REDUCE] Stage 3: Validating output...")
     issues = validate_reduce_output(result, out_cap=out_cap)
     if issues:
         print(f"[REDUCE] Quality issues detected: {issues}")
-        repair_user = build_self_repair_prompt(result, issues, language)
+        repair_user = (
+            build_self_repair_prompt(result, issues, language)
+            + "\n\nCRITICAL FIX INSTRUCTIONS:\n"
+              "- Ensure EVERY MAP theme (heading_path) appears as a section.\n"
+              "- Expand explanations deeply.\n"
+              "- Include 4–8 practice problems.\n"
+              "- Add diagrams using Mermaid.\n"
+              "- Summary MUST use at least 70–90% of token budget.\n"
+              "- Do NOT change JSON structure.\n"
+              "- KEEP THE ORIGINAL OUTLINE ORDER.\n"
+        )
         repaired = call_openai(
             system_prompt=FILL_SYSTEM_PROMPT,  # Same as fill - repairing JSON structure
             user_prompt=repair_user,
