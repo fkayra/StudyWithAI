@@ -1570,62 +1570,62 @@ def map_reduce_summary(
     from app.utils.structure_parser import extract_heading_hierarchy, chunk_by_headings, blocks_to_text
     
     # === CHUNKING (Structure parser disabled — universal & reliable mode) ===
-print("[CHUNKING] Structure parser disabled — using pure token-based chunking")
-
-chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
-chunk_metadata = [
-    {"heading_path": f"Chunk {i+1}", "block_count": 0}
-    for i in range(len(chunks))
-]
-
+    print("[CHUNKING] Structure parser disabled — using pure token-based chunking")
     
-print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
-
-# 3. MAP: Summarize each chunk (with adaptive budgeting and citation tracking)
-chunk_summaries = []
-chunk_citations = []
-
-for i, chunk in enumerate(chunks):
-    heading_path = chunk_metadata[i].get("heading_path", f"Chunk {i+1}")
-    print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}: {heading_path}")
+    chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
+    chunk_metadata = [
+        {"heading_path": f"Chunk {i+1}", "block_count": 0}
+        for i in range(len(chunks))
+    ]
     
-    summary = summarize_chunk(
-        chunk,
-        language=language,
-        additional_instructions=additional_instructions,
-        out_budget=None,  # Let adaptive budget calculate
-        user_id=user_id,
-        db=db
-    )
-    chunk_summaries.append(summary)
+        
+    print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
     
-    # Track citation metadata for this chunk
-    chunk_citations.append({
-        "chunk_id": i + 1,
-        "heading_path": heading_path,
-        "char_start": sum(len(chunks[j]) for j in range(i)),
-        "char_end": sum(len(chunks[j]) for j in range(i+1))
-    })
+    # 3. MAP: Summarize each chunk (with adaptive budgeting and citation tracking)
+    chunk_summaries = []
+    chunk_citations = []
     
-    # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
-    print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
-    # Çıkış bütçesini 12k ile sınırla
-    merge_budget = min(out_cap, MERGE_OUTPUT_BUDGET[1], 14000)
-
-    final_summary = merge_summaries(
-        chunk_summaries,
-        language=language,
-        additional_instructions=enhanced_instructions,
-        out_budget=merge_budget,
-        domain=domain,
-        chunk_citations=chunk_citations,
-        original_text=full_text,  # Pass original text for coverage validation
-        user_id=user_id,
-        db=db
-    )
+    for i, chunk in enumerate(chunks):
+        heading_path = chunk_metadata[i].get("heading_path", f"Chunk {i+1}")
+        print(f"[MAP-REDUCE] Processing chunk {i+1}/{len(chunks)}: {heading_path}")
+        
+        summary = summarize_chunk(
+            chunk,
+            language=language,
+            additional_instructions=additional_instructions,
+            out_budget=None,  # Let adaptive budget calculate
+            user_id=user_id,
+            db=db
+        )
+        chunk_summaries.append(summary)
+        
+        # Track citation metadata for this chunk
+        chunk_citations.append({
+            "chunk_id": i + 1,
+            "heading_path": heading_path,
+            "char_start": sum(len(chunks[j]) for j in range(i)),
+            "char_end": sum(len(chunks[j]) for j in range(i+1))
+        })
+        
+        # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
+        print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
+        # Çıkış bütçesini 12k ile sınırla
+        merge_budget = min(out_cap, MERGE_OUTPUT_BUDGET[1], 14000)
     
-    print("[MAP-REDUCE] Complete!")
-    return final_summary
+        final_summary = merge_summaries(
+            chunk_summaries,
+            language=language,
+            additional_instructions=enhanced_instructions,
+            out_budget=merge_budget,
+            domain=domain,
+            chunk_citations=chunk_citations,
+            original_text=full_text,  # Pass original text for coverage validation
+            user_id=user_id,
+            db=db
+        )
+        
+        print("[MAP-REDUCE] Complete!")
+        return final_summary
 
 
 
