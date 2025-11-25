@@ -1143,7 +1143,7 @@ def reduce_two_stage(
         + "Use 70–95% of token budget.\n"
     )
     time.sleep(2.0) 
-    fill_max = max(8000, min(out_cap, 14000))  # Kesin minimum 8k
+    fill_max = 14000
     filled_json = call_openai(
         system_prompt=FILL_SYSTEM_PROMPT,  # MODERATE, structure-focused prompt
         user_prompt=fill_user,
@@ -1300,7 +1300,7 @@ def call_openai(
         
         # If truncated and retry enabled, try with 20% more tokens
         if finish_reason == "length" and retry_on_length and attempt < 2:
-            current_max_tokens = min(int(current_max_tokens * 1.2), 16000)
+            current_max_tokens = 14000
             # Retry sırasında minimum 8000'e çık
             if current_max_tokens < 8000:
                 current_max_tokens = 8000
