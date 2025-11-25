@@ -871,7 +871,7 @@ def reduce_two_stage(
     outline_json = call_openai(
         system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused prompt
         user_prompt=outline_user,
-        max_output_tokens=min(4000, int(out_cap * 0.30)),  # Increased: 1200→4000, 15%→30%
+        max_output_tokens=min(6000, int(out_cap * 0.30)),  # Increased: 1200→4000, 15%→30%
         temperature=0,
         user_id=user_id,
         endpoint="/summarize",
@@ -945,7 +945,7 @@ def reduce_two_stage(
         outline_json = call_openai(
             system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused
             user_prompt=outline_user,
-            max_output_tokens=4000,
+            max_output_tokens=6000,
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",
@@ -1000,7 +1000,7 @@ def reduce_two_stage(
         repaired = call_openai(
             system_prompt=FILL_SYSTEM_PROMPT,  # Same as fill - repairing JSON structure
             user_prompt=repair_user,
-            max_output_tokens=min(4000, out_cap),  # Use FULL budget for repair - no limiting!
+            max_output_tokens=min(5000, out_cap),
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",
@@ -1015,11 +1015,11 @@ def reduce_two_stage(
 
 
 # ========== OpenAI Integration ==========
-
+    
 def call_openai(
     system_prompt: str,
     user_prompt: str,
-    max_output_tokens: int,
+    max_output_tokens: Optional[int] = None,
     temperature: float = TEMPERATURE,
     top_p: float = TOP_P,
     retry_on_length: bool = True,
@@ -1032,6 +1032,10 @@ def call_openai(
     Returns the response text
     Tracks token usage in database if db and user_id provided
     """
+
+    if max_output_tokens is None:
+        max_output_tokens = 14000  # default fallback
+    
     if not OPENAI_API_KEY:
         raise ValueError("OpenAI API key not configured")
     
