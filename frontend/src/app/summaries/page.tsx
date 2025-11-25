@@ -474,6 +474,77 @@ export default function SummariesPage() {
   
   if (data && data.summary) {
     let summary = data.summary
+    // 🔒 SAFETY PATCH: Ensure summary structure is valid
+    if (!summary.sections || !Array.isArray(summary.sections)) {
+      summary.sections = []
+    }
+    
+    // Normalize every section
+    summary.sections = summary.sections.map((section, idx) => {
+    
+      // If section is a string, wrap into object
+      if (typeof section === 'string') {
+        return {
+          heading: `Section ${idx + 1}`,
+          bullets: [section],
+          concepts: []
+        }
+      }
+    
+      // If null/undefined
+      if (!section || typeof section !== 'object') {
+        return {
+          heading: `Section ${idx + 1}`,
+          bullets: [],
+          concepts: []
+        }
+      }
+    
+      // Ensure heading
+      if (!section.heading) section.heading = `Section ${idx + 1}`
+    
+      // Ensure bullets
+      if (!section.bullets) section.bullets = []
+      if (!Array.isArray(section.bullets)) section.bullets = [section.bullets]
+    
+      // Ensure concepts
+      if (!Array.isArray(section.concepts)) {
+        section.concepts = []
+      } else {
+        section.concepts = section.concepts.map((c, cIdx) => {
+          if (typeof c === 'string') {
+            return {
+              term: `Concept ${cIdx + 1}`,
+              definition: c,
+              explanation: c,
+              key_points: []
+            }
+          }
+          if (!c || typeof c !== 'object') {
+            return {
+              term: `Concept ${cIdx + 1}`,
+              definition: '',
+              explanation: '',
+              key_points: []
+            }
+          }
+          // Guarantee required fields exist
+          return {
+            term: c.term || `Concept ${cIdx + 1}`,
+            definition: c.definition || c.explanation || '',
+            explanation: c.explanation || c.definition || '',
+            example: c.example || '',
+            key_points: Array.isArray(c.key_points) ? c.key_points : [],
+            pitfalls: Array.isArray(c.pitfalls) ? c.pitfalls : [],
+            when_to_use: Array.isArray(c.when_to_use) ? c.when_to_use : [],
+            limitations: Array.isArray(c.limitations) ? c.limitations : []
+          }
+        })
+      }
+    
+      return section
+    })
+
     // PATCH: Ensure sections is ALWAYS an array
     const safeSections = Array.isArray(summary.sections)
       ? summary.sections
