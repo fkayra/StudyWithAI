@@ -1653,7 +1653,34 @@ def merge_summaries(
             print(f"[COVERAGE] ⚠️  Failed to add coverage info: {e}")
             import traceback
             traceback.print_exc()
+        # ==========================================================
+        # AUTO-FIX: Guarantee all required summary fields exist
+        # Prevents frontend from crashing on undefined.map
+        # ==========================================================
         
+        try:
+            result_dict = json.loads(result) if isinstance(result, str) else result
+        except:
+            # Son çare: boş summary ile wrap
+            result_dict = {"summary": {}}
+        
+        # SAFE DEFAULTS: FRONTEND CRASH ENGELLER
+        summary_obj = result_dict.setdefault("summary", {})
+        
+        summary_obj.setdefault("title", "Generated Summary")
+        summary_obj.setdefault("overview", "")
+        summary_obj.setdefault("learning_objectives", [])
+        summary_obj.setdefault("sections", [])
+        summary_obj.setdefault("formula_sheet", [])
+        summary_obj.setdefault("diagrams", [])
+        summary_obj.setdefault("pseudocode", [])
+        summary_obj.setdefault("practice_problems", [])
+        
+        # Citations her zaman array olmalı (frontend bunu bekliyor)
+        result_dict.setdefault("citations", [])
+        
+        # Tekrar JSON'a çevirip return edelim
+        result = json.dumps(result_dict, ensure_ascii=False, indent=2)
         # Return as JSON string (for compatibility with existing pipeline)
         return result
     
