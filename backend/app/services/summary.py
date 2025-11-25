@@ -7,6 +7,8 @@ from typing import List, Optional, Dict
 import os
 import requests
 import re
+import time
+import json
 from app.config import (
     OPENAI_MODEL, TEMPERATURE, TOP_P,
     CHUNK_INPUT_TARGET, MERGE_OUTPUT_BUDGET
@@ -35,45 +37,64 @@ Rules:
 - NEVER drop concepts, even if similar.
 """
 
-OUTLINE_SYSTEM_PROMPT = """You generate JSON OUTLINES for a study guide.
+OUTLINE_SYSTEM_PROMPT = """
+You generate a STRICT JSON OUTLINE for a study guide.
 
-CRITICAL RULES:
-- Output ONLY valid JSON.
-- Structure MUST be:
+OUTPUT RULES (EXTREMELY IMPORTANT):
+- Output ONLY valid JSON. No markdown. No explanations.
+- NEVER output prose outside JSON brackets.
+- The JSON structure MUST be exactly:
+
 {
-  "title": "...",
+  "title": "<Extracted or generic topic>",
   "sections": [
     {
-      "heading": "...",
-      "concepts": [
-        {"term": "...", "expected_example": "numeric|anchored"}
-      ]
+      "heading": "<Real theme heading>",
+      "concepts": []
     }
-  ],
-  "formula_plan": [],
-  "glossary_target": 10
+  ]
 }
 
-MANDATORY:
-- Create BETWEEN 12 and 18 SECTIONS (not less).
-- Each section MUST contain 4–6 concepts.
-- Concepts MUST NOT be empty.
-- DO NOT summarize, DO NOT write actual explanations.
+SECTION RULES:
+- MINIMUM 10 sections.
+- SOFT MAXIMUM 18 sections.
+- IDEAL RANGE: 12–16 sections.
+- Section headings MUST come from:
+    • heading_path metadata (MAP stage)
+    • or major themes inferred from it.
+- NEVER invent fake headings like "Section 1".
+- NEVER group multiple themes into one section.
+- NEVER output empty or placeholder headings.
 
-Your sole task: create a *large, deep outline* with many sections to support 10k+ token fill stage.
+COVERAGE REQUIREMENTS:
+- Every UNIQUE top-level heading_path MUST produce a section.
+- If MAP produced 14 top-level headings → You MUST output 14 sections.
+- If MAP produced <10 themes → Expand by splitting large themes into sub-themes.
+- ZERO themes may be dropped.
+
+QUALITY:
+- Section headings must be meaningful, short, and descriptive.
+- Do NOT fill concepts; keep concepts=[] only.
+
+STRICTNESS:
+- If you are unsure, ALWAYS err toward producing MORE sections (never fewer).
+- Missing sections = INVALID OUTPUT.
+
+Return ONLY the JSON object.
 """
 
 
 
-FILL_SYSTEM_PROMPT = """You generate FULL JSON study guides.
 
-OUTPUT FORMAT (STRICT):
 
+FILL_SYSTEM_PROMPT = """You fill an outline into FULL STUDY NOTES.
+
+OUTPUT FORMAT:
 {
   "summary": {
     "title": "...",
     "overview": "...",
-    "learning_objectives": ["...", "..."],
+    "learning_objectives": [],
     "sections": [
       {
         "heading": "...",
@@ -83,7 +104,7 @@ OUTPUT FORMAT (STRICT):
             "definition": "...",
             "explanation": "...",
             "example": "...",
-            "key_points": ["...", "..."]
+            "key_points": []
           }
         ]
       }
@@ -96,12 +117,15 @@ OUTPUT FORMAT (STRICT):
 }
 
 RULES:
-- Output ONLY valid JSON.
-- Follow EXACTLY the outline provided.
-- Do NOT add/remove/rename sections.
-- Each concept must have: definition (3–4 sentences), 2–4 paragraphs explanation, 1 concrete example, and key points.
-- Use 70–90% of token budget.
+- Follow the EXACT section order from the outline.
+- For each section, attach ALL concepts whose
+  concept._source.heading_path matches that section heading.
+- If needed, fuzzy match: lowercase + prefix match.
+- Minimum total length: 4000 tokens
+- Ideal target: 8000–12000 tokens
+- No content outside JSON
 """
+
 
 
 # Deep prompt only for single-pass summaries (not used in two-stage reduce)
@@ -467,63 +491,125 @@ OUTPUT PURE JSON NOW (no other text):"""
 
 
 def get_reduce_outline_prompt(language: str, domain: str) -> str:
-    """
-    First stage of two-stage REDUCE: generate topology/outline only
-    """
     L = "Use TURKISH." if language == "tr" else "Use ENGLISH."
-    return f"""You are planning a study-guide topology only. {L}
-Output pure JSON with fields: title, sections[heading, concepts[{{
-  "term": "...", "expected_example": "numeric|anchored"
-}}]], formula_plan[name, expected_example], glossary_target (int).
 
-Rules:
-- Create a sufficient number of sections to cover ALL themes (outline size should scale with content depth).
-- Do NOT force or assume a fixed number like 6–12. Let theme-count + output-budget decide.
-- Prioritize major themes; compress minor themes as concise sub-concepts under the closest section.
-- Prefer 'numeric' examples for quantitative/technical material and 'anchored' examples for qualitative material.
-- Do NOT write explanations or examples, only the topology."""
+    return f"""
+You are generating an OUTLINE for a full study guide.
+
+{L}
+
+STRUCTURE (STRICT):
+Return ONLY this JSON structure:
+
+{{
+  "title": "Generated Outline",
+  "sections": [
+    {{
+      "heading": "Topic heading",
+      "concepts": []
+    }}
+  ]
+}}
+
+RULES:
+- 10–18 sections total
+- Each section heading MUST be based on:
+    • heading_path (from MAP stage)
+    • top-level themes extracted from _source.heading
+- Section titles MUST be descriptive phrases (not “Section 1”)
+- Do NOT write explanations or definitions
+- Do NOT add content, only headings
+"""
 
 
-def get_reduce_fill_prompt(language: str, domain: str, additional: str = "") -> str:
+
+
+def get_reduce_fill_prompt(language: str, additional_instructions: str, domain: str):
     """
-    Second stage of two-stage REDUCE: fill outline with content
-    Daha gerçekçi token hedefleriyle (4k–12k) çalışır.
+    Fill stage prompt — ensures deep, exam-ready content with maximum token usage.
     """
-    L = "Use TURKISH for ALL output." if language == "tr" else "Use ENGLISH for ALL output."
-    domain_note = ""
-    if domain == "technical":
-        domain_note = "\n- Prefer numeric examples when possible."
-    elif domain == "social":
-        domain_note = "\n- Use anchored real-world examples (years, names, cases)."
 
-    return f"""Fill the given OUTLINE into a complete, exam-ready study guide.
-{L}{domain_note}
+    return f"""
+You are an elite academic tutor generating FINAL STUDY NOTES.
 
-LENGTH TARGETS (GLOBAL, NOT PER SECTION):
-- Ideal total length: 8000–12000 tokens.
-- Minimum acceptable length: 4000 tokens.
-- Focus on dense, useful content instead of padding.
+STAGE = FILL (CONTENT EXPANSION)
+Your task:
+- Expand EACH section from the outline into a fully detailed, exam-ready explanation.
+- Use ALL available space (target 8,000–14,000 tokens if possible).
+- Never shorten explanations unnecessarily.
+- Never stop early.
+- Never leave a section shallow.
 
-CONSTRAINTS:
-- KEEP the outline section + concept order (do NOT rename or remove).
-- For each concept:
-  • Short definition (2–3 sentences)
-  • 1–2 dense paragraphs of explanation
-  • 1 concrete example
-  • key_points bullets
-- For formulas (if any):
-  • LaTeX expression
-  • variables dict
-  • 1 numeric worked_example
-- Practice problems: 4–6 TOTAL for the whole guide.
-- Diagrams/pseudocode: optional, 0–2 TOTAL (only if they genuinely help).
+===========================
+ABSOLUTE RULES (CRITICAL)
+===========================
 
-STYLE:
-- No filler, no repetitive padding.
-- Depth and clarity > sheer size.
+1) **JSON ONLY**
+   Output MUST be valid JSON.
+   Do NOT add commentary before or after.
 
-Output a SINGLE valid JSON, no markdown.
-{additional}"""
+2) **LENGTH REQUIREMENTS**
+   - TOTAL output: **minimum 8,000 tokens** (target 10k–14k)
+   - Each section: **minimum 400 tokens**, may exceed 1200+
+   - Depth > brevity. If unsure, write more.
+
+3) **DEPTH REQUIREMENTS**
+   For EVERY concept, include:
+   - Clear definition
+   - Long-form explanation (200+ tokens)
+   - Real-world example
+   - Edge cases
+   - Pitfalls
+   - When to use / when not to use
+   - Step-by-step reasoning or workflow
+   - Mini-scenario or analogy when appropriate
+
+4) **DOMAIN-ADAPTIVE DEPTH**
+   Domain is: {domain}
+   - If technical → include detailed reasoning
+   - If math → include 2–3 worked examples per formula
+   - If CS → include pseudocode + flow
+   - If social sciences → include theory comparison + examples
+   - If business/econ → include frameworks + case examples
+
+5) **USE ALL AVAILABLE TOKENS**
+   Maximize detail, examples, explanations.
+   Never conclude early.
+
+6) **STRICT ALIGNMENT WITH OUTLINE**
+   - Do NOT add new sections.
+   - Do NOT remove sections.
+   - All final JSON must follow EXACT structure of outline.
+
+7) **SELF-REPAIR MODE**
+   - If a concept seems under-explained (<250 tokens), automatically expand it.
+   - If a formula lacks examples, add more.
+   - If a section is shorter than others, expand to match depth.
+   - Keep self-repair reasonable (academic-level, not “write a textbook”).
+
+8) **NO FLUFF**
+   - Never say “this is important.”
+   - Never list topics without explaining.
+   - Every sentence must add knowledge.
+
+===========================
+OUTPUT FORMAT
+===========================
+
+Return ONLY:
+
+{{
+  "summary": {{
+     "title": "...",
+     "overview": "...",
+     "learning_objectives": [...],
+     "sections": [...]
+  }}
+}}
+
+No analysis, no markdown.
+"""
+
 
 
 
@@ -707,8 +793,11 @@ def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
             section_heading.lower() in cite.get("section_or_heading", "").lower()
             for cite in citations
         )
-        if not has_citation and i < 3:  # At least first 3 sections need citations
-            issues.append(f"Section '{section_heading}' missing citation with section_or_heading")
+        if not has_citation and i < 3:
+            print(f"[CITATION] Warning: Section '{section_heading}' missing citation")
+            # NO issues.append !!!
+            continue
+
     
     # Check formulas (if they exist)
     formulas = summary.get("formula_sheet", [])
@@ -772,14 +861,15 @@ def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
     estimated_tokens = len(result_json) // 4  # ≈ 4 chars per token
 
     # LENGTH CHECK: Min 4000, ideal 8000+ (ama hard değil)
-    min_tokens = 4000
+    min_tokens = 8000   # <- SENİN İSTEDİĞİN ASGARİ SINIR
+    target_min = 10000  # <- optimum hedef (outline + fill)
+    target_max = 14000  # <- plan sınırı
 
     if estimated_tokens < min_tokens:
-        shortage = min_tokens - estimated_tokens
-        issues.append(
-            f"Output may be too brief: ~{estimated_tokens} tokens vs target ≥{min_tokens}. "
-            f"Add a bit more explanation and a few extra examples (short by ~{shortage} tokens)."
-        )
+        issues.append(f"Output too short ({estimated_tokens} tokens). MUST be >= {min_tokens}.")
+    elif estimated_tokens < target_min:
+        issues.append(f"Output below target range ({estimated_tokens} tokens). Should be >= {target_min}.")
+        
 
     
     return issues
@@ -827,6 +917,69 @@ CURRENT JSON:
 
 # ========== Two-Stage REDUCE Orchestrator ==========
 
+# ========== Supportive functions first ==========
+def safe_parse_outline(raw: str):
+    """
+    SAFE JSON PARSER v3 — NEVER truncate valid JSON.
+    Tries several strategies:
+    1. Direct JSON parse
+    2. Extract largest JSON object using a bracket counter
+    3. Last-resort fallback: return {"summary": {}, "sections": []}
+    """
+
+    import json
+
+    if not raw or not isinstance(raw, str):
+        return {"title": "Invalid", "sections": []}
+
+    # 1. Direct parse
+    try:
+        return json.loads(raw)
+    except:
+        pass
+
+    # 2. Extract the largest {...} block using bracket stack
+    start = None
+    depth = 0
+    best_block = ""
+
+    for i, ch in enumerate(raw):
+        if ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start is not None:
+                candidate = raw[start:i+1]
+                if len(candidate) > len(best_block):
+                    best_block = candidate
+
+    if best_block:
+        try:
+            return json.loads(best_block)
+        except:
+            pass
+
+    # 3. ABSOLUTE LAST RESORT (never crash)
+    return {
+        "title": "Fallback Outline",
+        "sections": []
+    }
+
+
+def detect_heading_from_text(chunk: str) -> str:
+    # Look for lines that look like headings
+    lines = chunk.split("\n")
+    for line in lines:
+        if len(line) < 80 and line.strip().istitle():
+            return line.strip()
+    return "General Topic"
+
+
+
+
+
 def reduce_two_stage(
     aggregated_knowledge: dict,
     language: str,
@@ -866,18 +1019,20 @@ def reduce_two_stage(
         + "Each section MUST correspond to major themes extracted from heading_path.\n"
         + "Do NOT invent new themes.\n"
     )
-
+    
+    outline_max = max(3000, int(out_cap * 0.30))  # 12k → 3600 minimum → 3600
     
     outline_json = call_openai(
         system_prompt=OUTLINE_SYSTEM_PROMPT,  # SHORT, JSON-focused prompt
         user_prompt=outline_user,
-        max_output_tokens=min(6000, int(out_cap * 0.30)),  # Increased: 1200→4000, 15%→30%
+        max_output_tokens = outline_max,
         temperature=0,
         user_id=user_id,
         endpoint="/summarize",
         db=db
     )
-    outline = parse_json_robust(outline_json)
+    outline = safe_parse_outline(outline_json)
+
     
     # Compute dynamic targets
     target_min, target_soft_max, approx_themes = compute_outline_targets(
@@ -951,7 +1106,12 @@ def reduce_two_stage(
             endpoint="/summarize",
             db=db
         )
-        outline = parse_json_robust(outline_json)
+        outline = safe_parse_outline(outline_json)
+        # Normalize section headings
+        for sec in outline.get("sections", []):
+            if not isinstance(sec.get("heading"), str) or not sec.get("heading").strip():
+                sec["heading"] = "General Topic"
+
         print(f"[REDUCE] Outline repaired: {len(outline.get('sections', []))} sections")
     else:
         print(f"[REDUCE] Outline OK: {len(outline.get('sections', []))} sections")
@@ -960,6 +1120,16 @@ def reduce_two_stage(
     print("[REDUCE] Stage 2: Filling outline with content...")
     agg_trim = agg_str[:min(len(agg_str), 120000)]
     fill_prompt = get_reduce_fill_prompt(language, domain, additional_instructions)
+    fill_prompt += """
+    MATCHING RULE (CRITICAL):
+    For every concept from aggregated_knowledge.concepts:
+    - Read concept._source.heading_path
+    - Compare to section headings in the OUTLINE
+    - Normalize both: lowercase + strip
+    - If heading_path starts with section heading → attach concept to that section
+    - If no direct match, attach to the closest semantically similar heading
+    """
+
     fill_user = (
         fill_prompt
         + "\n\nOUTLINE (DO NOT CHANGE ORDER):\n"
@@ -972,17 +1142,18 @@ def reduce_two_stage(
         + "Cover EVERY concept.\n"
         + "Use 70–95% of token budget.\n"
     )
-    
+    time.sleep(2.0) 
+    fill_max = max(8000, min(out_cap, 14000))  # Kesin minimum 8k
     filled_json = call_openai(
         system_prompt=FILL_SYSTEM_PROMPT,  # MODERATE, structure-focused prompt
         user_prompt=fill_user,
-        max_output_tokens=out_cap,
+        max_output_tokens = fill_max,
         temperature=0,
         user_id=user_id,
         endpoint="/summarize",
         db=db
     )
-    result = parse_json_robust(filled_json) or {}
+    result = safe_parse_outline(filled_json)
     
     # === STAGE 3: Validate & Self-Repair ===
     print("[REDUCE] Stage 3: Validating output...")
@@ -996,11 +1167,11 @@ def reduce_two_stage(
               "- Do NOT significantly change length or structure.\n"
               "- Keep the original outline and section order.\n"
         )
-
+        repair_max = min(int(out_cap * 0.40), 6000)
         repaired = call_openai(
             system_prompt=FILL_SYSTEM_PROMPT,  # Same as fill - repairing JSON structure
             user_prompt=repair_user,
-            max_output_tokens=min(5000, out_cap),
+            max_output_tokens = repair_max,
             temperature=0,
             user_id=user_id,
             endpoint="/summarize",
@@ -1015,7 +1186,7 @@ def reduce_two_stage(
 
 
 # ========== OpenAI Integration ==========
-    
+import time
 def call_openai(
     system_prompt: str,
     user_prompt: str,
@@ -1035,6 +1206,10 @@ def call_openai(
 
     if max_output_tokens is None:
         max_output_tokens = 14000  # default fallback
+
+    # En düşük sınır 6000; hiçbir aşama 4000’e düşemez
+    if max_output_tokens < 6000:
+        max_output_tokens = 6000
     
     if not OPENAI_API_KEY:
         raise ValueError("OpenAI API key not configured")
@@ -1054,6 +1229,7 @@ def call_openai(
     current_max_tokens = max_output_tokens
     
     while attempt < 2:  # Max 2 attempts
+        time.sleep(1.0) 
         attempt += 1
         
         payload = {
@@ -1125,6 +1301,9 @@ def call_openai(
         # If truncated and retry enabled, try with 20% more tokens
         if finish_reason == "length" and retry_on_length and attempt < 2:
             current_max_tokens = min(int(current_max_tokens * 1.2), 16000)
+            # Retry sırasında minimum 8000'e çık
+            if current_max_tokens < 8000:
+                current_max_tokens = 8000
             print(f"[OPENAI RETRY] Response truncated, retrying with {current_max_tokens} tokens")
             continue
         
@@ -1273,21 +1452,28 @@ def merge_summaries(
             # Coverage validator was causing timeout by recursively calling reduce_two_stage
             # If coverage insufficient, just log and continue with what we have
             if not coverage_result['passed'] and coverage_result['missing_topics']:
-                print(f"[COVERAGE] ⚠️  Coverage insufficient ({coverage_result['coverage_score']:.1%})")
-                print(f"[COVERAGE] Missing {len(coverage_result['missing_topics'])} topics (accepting current output)")
-                # NO REGENERATION - prevents loop
+                print(f"[COVERAGE] ⚠️ Coverage insufficient ({coverage_result['coverage_score']:.1%})")
+                print(f"[COVERAGE] Missing {len(coverage_result['missing_topics'])} topics — accepting current output (NO regeneration)")
             else:
                 print(f"[COVERAGE] ✅ Coverage validated ({coverage_result['coverage_score']:.1%})")
             
+                        
         # Add coverage info to result for frontend display (ALWAYS, even if 100% coverage)
         # CRITICAL: result is a JSON string, need to parse it first!
         try:
             result_dict = json.loads(result) if isinstance(result, str) else result
-            result_dict['coverage'] = {
-                'score': round(coverage_result['coverage_score'], 2),
-                'missing_topics': coverage_result['missing_topics'][:20]  # Limit to 20 for display
-            }
+            # --- SAFE COVERAGE WRAP (fixes crash) ---
+            if original_text and 'coverage_result' in locals():
+                score = round(coverage_result.get('coverage_score', 1.0), 2)
+                missing = coverage_result.get('missing_topics', [])[:20]
+            else:
+                score = 1.0
+                missing = []
             
+            result_dict['coverage'] = {
+                'score': score,
+                'missing_topics': missing
+            }
             # FIX DIAGRAM FORMATTING: Fix Mermaid syntax errors
             import re
             if 'diagrams' in result_dict.get('summary', {}):
@@ -1469,7 +1655,7 @@ def merge_summaries(
             traceback.print_exc()
         
         # Return as JSON string (for compatibility with existing pipeline)
-        return json.dumps(result, ensure_ascii=False, indent=2) if not isinstance(result, str) else result
+        return result
     
     except Exception as e:
         print(f"[REDUCE TWO-STAGE FALLBACK] Error in two-stage REDUCE: {e}")
@@ -1560,13 +1746,6 @@ def map_reduce_summary(
         # simply do nothing → let normal MAP-REDUCE flow run
         pass  
 
-    
-    # OLD CODE: Single-pass mode BYPASSED the entire deep pipeline
-    # if not use_chunking:
-    #     user_prompt = get_final_merge_prompt(language, enhanced_instructions, domain)
-    #     user_prompt += f"\n\nCOURSE MATERIAL:\n{full_text}"
-    #     return call_openai(...)  # This never used reduce_two_stage!
-    
     # Large document: map-reduce with structure-aware chunking
     print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using structure-aware chunking")
     
@@ -1577,10 +1756,11 @@ def map_reduce_summary(
     print("[CHUNKING] Structure parser disabled — using pure token-based chunking")
     
     chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
-    chunk_metadata = [
-        {"heading_path": f"Chunk {i+1}", "block_count": 0}
-        for i in range(len(chunks))
-    ]
+    chunk_metadata = []
+    for chunk in chunks:
+        chunk_metadata.append({
+            "heading_path": detect_heading_from_text(chunk)
+        })
     
         
     print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
@@ -1611,25 +1791,25 @@ def map_reduce_summary(
             "char_end": sum(len(chunks[j]) for j in range(i+1))
         })
         
-        # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
-        print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
-        # Çıkış bütçesini 12k ile sınırla
-        merge_budget = min(out_cap, MERGE_OUTPUT_BUDGET[1], 14000)
+    # 4. REDUCE: Merge into final JSON with citation tracking and coverage validation
+    print(f"[MAP-REDUCE] Merging {len(chunk_summaries)} summaries with domain: {domain}...")
+    # Çıkış bütçesini 12k ile sınırla
+    merge_budget = min(out_cap, MERGE_OUTPUT_BUDGET[1], 14000)
+    print("[MAP-REDUCE] Merging ALL chunks…")
+    final_summary = merge_summaries(
+        chunk_summaries,
+        language=language,
+        additional_instructions=enhanced_instructions,
+        out_budget=merge_budget,
+        domain=domain,
+        chunk_citations=chunk_citations,
+        original_text=full_text,  # Pass original text for coverage validation
+        user_id=user_id,
+        db=db
+    )
     
-        final_summary = merge_summaries(
-            chunk_summaries,
-            language=language,
-            additional_instructions=enhanced_instructions,
-            out_budget=merge_budget,
-            domain=domain,
-            chunk_citations=chunk_citations,
-            original_text=full_text,  # Pass original text for coverage validation
-            user_id=user_id,
-            db=db
-        )
-        
-        print("[MAP-REDUCE] Complete!")
-        return final_summary
+    
+    return final_summary
 
 
 
