@@ -474,6 +474,16 @@ export default function SummariesPage() {
   
   if (data && data.summary) {
     let summary = data.summary
+    // FIRST-STAGE NORMALIZATION (must be first!)
+    const forceArray = (value: any) =>
+      Array.isArray(value)
+        ? value.filter(Boolean)
+        : [];
+  
+    summary.formula_sheet     = forceArray(summary.formula_sheet);
+    summary.diagrams          = forceArray(summary.diagrams);
+    summary.pseudocode        = forceArray(summary.pseudocode);
+    summary.practice_problems = forceArray(summary.practice_problems);
     // 🔒 HARDEN SUMMARY STRUCTURE (absolute crash-proof)
     if (!summary || typeof summary !== 'object') {
       summary = { title: 'Summary', sections: [] }
