@@ -474,14 +474,12 @@ export default function SummariesPage() {
   
   if (data && data.summary) {
     let summary = data.summary
-    // 🔒 UNIVERSAL SAFETY PATCH (CRASH-PROOF)
-    // Ensures summary and sections are always valid structures
-    
+    // 🔒 HARDEN SUMMARY STRUCTURE (absolute crash-proof)
     if (!summary || typeof summary !== 'object') {
       summary = { title: 'Summary', sections: [] }
     }
     
-    // Ensure `sections` is always an array
+    // Ensure sections ALWAYS exists & is array
     if (!Array.isArray(summary.sections)) {
       summary.sections = []
     }
