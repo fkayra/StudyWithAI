@@ -27,15 +27,29 @@ from app.services.summary_prompts import SYSTEM_PROMPT_DEEP, FEW_SHOT_EXAMPLES
 # CRITICAL FIX: Stage-specific system prompts to prevent JSON corruption
 # MAP/OUTLINE need ultra-minimal prompts, FILL needs deep prompt
 
-MAP_SYSTEM_PROMPT = """You extract key information as structured JSON.
-Rules:
-- Output ONLY valid JSON (no markdown, no prose, no explanations)
-- Never write paragraphs or explanations outside JSON
-- Keep output under 2000 tokens
-- ALWAYS include: concepts, formulas, theorems, examples arrays
-- ALWAYS preserve heading_path metadata inside _source.
-- NEVER drop concepts, even if similar.
-"""
+MAP_SYSTEM_PROMPT = """You are an expert educator extracting and expanding conceptual content from document chunks.
+
+YOUR ROLE IN MAP PHASE:
+- Extract ALL key concepts, definitions, and explanations
+- EXPAND ideas with additional context and clarification
+- Add missing explanations that would help students understand
+- Write in clear, teaching-oriented prose
+- Add examples and real-world context
+- Clarify technical terms and their relationships
+
+CRITICAL RULES:
+- Output PLAIN TEXT only (NO JSON, NO structured format)
+- Write as continuous prose with natural paragraphs
+- Use a teaching tone (explain WHY and HOW, not just WHAT)
+- Minimum 1200-2000 words per chunk
+- Be comprehensive - cover ALL content in the chunk
+- DO NOT compress - EXPAND for deeper understanding
+- Add context from domain knowledge when helpful
+- Make connections between concepts explicit
+
+FORMAT:
+Write naturally flowing explanatory text. Use paragraphs.
+You may use simple lists within prose if natural, but no rigid structure."""
 
 OUTLINE_SYSTEM_PROMPT = """
 You generate a STRICT JSON OUTLINE for a study guide.
@@ -1411,93 +1425,62 @@ def summarize_chunk(
     db = None
 ) -> str:
     """
-    Summarize a single chunk of text (MAP phase)
-    Returns structured mini-JSON with concepts/formulas/theorems/examples
-    ENHANCED: Forces valid JSON output with skeleton enforcement
+    Extract and expand content from a single chunk (MAP phase)
+    Returns PLAIN TEXT (not JSON) - comprehensive explanatory prose
+    Reduce phase will later synthesize all chunks into structured JSON
     """
-    # Adaptive budget based on chunk content
+    # Adaptive budget based on chunk content (boosted for deeper output)
     if out_budget is None:
         from app.utils.adaptive_budget import calculate_chunk_budget
         out_budget = calculate_chunk_budget(chunk_text)
-        print(f"[MAP ADAPTIVE] Allocated {out_budget} tokens for this chunk")
+        # Boost budget for plain text mode (more comprehensive)
+        out_budget = int(out_budget * 1.5)  # 50% more tokens for deeper prose
+        print(f"[MAP ADAPTIVE] Allocated {out_budget} tokens for this chunk (plain text mode)")
     
-    # JSON skeleton enforcement - guarantees valid JSON output
-    lang_instruction = "Use TURKISH." if language == "tr" else "Use ENGLISH."
+    lang_instruction = "Write in TURKISH." if language == "tr" else "Write in ENGLISH."
     
     user_prompt = f"""
-You MUST return valid JSON in this EXACT schema:
+You are extracting the raw conceptual content of this document chunk.
 
-{{
-  "concepts": [
-    {{
-      "term": "Concept name",
-      "definition": "Short definition",
-      "explanation": "Detailed explanation",
-      "example": "Real-world example"
-    }}
-  ],
-  "formulas": [
-    {{
-      "name": "Formula name",
-      "expression": "LaTeX expression",
-      "variables": {{"x": "meaning"}},
-      "worked_example": "Step-by-step calculation"
-    }}
-  ],
-  "theorems": [],
-  "examples": []
-}}
+TASK:
+- Extract ALL concepts, definitions, explanations, formulas, examples
+- EXPAND ideas with additional context and clarification
+- Add missing explanations that help understanding
+- Clarify relationships between concepts
+- Add examples and real-world applications
+- Explain WHY and HOW, not just WHAT
 
-CRITICAL RULES:
-- Output MUST be valid JSON (no markdown, no backticks, no prose)
-- Never write explanations outside JSON structure
-- Never return empty response
-- Fill missing items with empty arrays []
-- Always escape quotes in strings
-- If no formulas/theorems, use empty arrays
+OUTPUT FORMAT:
+- Plain text prose (NO JSON, NO rigid structure)
+- Use natural paragraphs
+- Teaching tone - explain deeply
+- Minimum 1200-2000 words
+- Cover EVERYTHING in the chunk
+- DO NOT compress - EXPAND for clarity
 
 {lang_instruction}
 
-NOW EXTRACT FROM THIS TEXT:
+{additional_instructions if additional_instructions else ""}
+
+CHUNK TO PROCESS:
 
 {chunk_text}
 
-Output ONLY the JSON structure above:"""
+Write comprehensive explanatory text covering all content above:"""
     
     response = call_openai(
-        system_prompt=MAP_SYSTEM_PROMPT,  # Ultra-minimal for guaranteed JSON
+        system_prompt=MAP_SYSTEM_PROMPT,  # Plain text mode
         user_prompt=user_prompt,
         max_output_tokens=out_budget,
-        temperature=0,  # Deterministic for JSON
+        temperature=0.2,  # Slightly creative but focused
         user_id=user_id,
         endpoint="/summarize",
         db=db
     )
     
-    # Validate JSON response
-    try:
-        import json
-        parsed = json.loads(response)
-        # Ensure required keys exist
-        if "concepts" not in parsed:
-            parsed["concepts"] = []
-        if "formulas" not in parsed:
-            parsed["formulas"] = []
-        if "theorems" not in parsed:
-            parsed["theorems"] = []
-        if "examples" not in parsed:
-            parsed["examples"] = []
-        return json.dumps(parsed, ensure_ascii=False)
-    except json.JSONDecodeError as e:
-        print(f"[MAP JSON ERROR] Failed to parse chunk response: {e}")
-        print(f"[MAP JSON ERROR] Response preview: {response[:200]}")
-        # Return minimal valid JSON to prevent pipeline break
-        return json.dumps({
-            "concepts": [],
-            "formulas": [],
-            "theorems": [],
-            "examples": []
-        }, ensure_ascii=False)
+    # Plain text - no parsing needed, just return as-is
+    print(f"[MAP OUTPUT] Generated {len(response)} chars of explanatory text")
+    return response
 
 
 def merge_summaries(
@@ -1512,85 +1495,207 @@ def merge_summaries(
     db = None
 ) -> str:
     """
-    Merge structured chunk JSONs into final exam-ready summary (REDUCE phase)
-    Now receives structured mini-JSONs from MAP phase
-    ENHANCED: Includes coverage validation to ensure no topics are skipped
+    Merge plain text chunks into final structured JSON study guide (REDUCE phase)
+    MAP phase returns plain text - REDUCE synthesizes into comprehensive JSON
     Returns final JSON string
     """
     import json
     from app.utils.coverage_validator import validate_coverage, generate_coverage_report
     
-    # Parse chunk JSONs and aggregate
-    all_concepts = []
-    all_formulas = []
-    all_theorems = []
-    all_examples = []
+    # Chunks are now plain text, not JSON - combine them all
+    print(f"[REDUCE] Merging {len(chunk_summaries)} plain text chunks into structured JSON")
     
-    for i, chunk_json in enumerate(chunk_summaries):
-        try:
-            chunk_data = json.loads(chunk_json)
-            all_concepts.extend(chunk_data.get("concepts", []))
-            all_formulas.extend(chunk_data.get("formulas", []))
-            all_theorems.extend(chunk_data.get("theorems", []))
-            all_examples.extend(chunk_data.get("examples", []))
-        except json.JSONDecodeError as e:
-            print(f"[REDUCE WARNING] Chunk {i+1} JSON parse failed: {e}")
-            # Fallback: treat as plain text
-            all_concepts.append({
-                "term": f"Content from chunk {i+1}",
-                "definition": "Raw content (parse failed)",
-                "explanation": chunk_json[:500],
-                "example": ""
-            })
+    # Combine all chunk texts with separators
+    combined_text = "\n\n=== CHUNK SEPARATOR ===\n\n".join(chunk_summaries)
+    total_chars = len(combined_text)
+    print(f"[REDUCE] Combined chunks: {total_chars} characters total")
     
-    # Enrich concepts with source citations
-    if chunk_citations:
-        for i, chunk_json in enumerate(chunk_summaries):
-            try:
-                chunk_data = json.loads(chunk_json)
-                citation_info = chunk_citations[i] if i < len(chunk_citations) else {}
-                
-                # Add citation metadata to each concept
-                for concept in chunk_data.get("concepts", []):
-                    concept["_source"] = {
-                        "chunk": i + 1,
-                        "heading": citation_info.get("heading_path", "Unknown")
-                    }
-                
-                for formula in chunk_data.get("formulas", []):
-                    formula["_source"] = {
-                        "chunk": i + 1,
-                        "heading": citation_info.get("heading_path", "Unknown")
-                    }
-            except:
-                pass
+    # Truncate if too large (keep most recent/important content)
+    max_chars = 120000  # ~30k tokens
+    if total_chars > max_chars:
+        print(f"[REDUCE] Truncating combined text from {total_chars} to {max_chars} chars")
+        combined_text = combined_text[-max_chars:]  # Keep end (usually most detailed)
     
-    # Create structured source material for REDUCE
-    aggregated_knowledge = {
-        "total_concepts": len(all_concepts),
-        "total_formulas": len(all_formulas),
-        "total_theorems": len(all_theorems),
-        "total_examples": len(all_examples),
-        "concepts": all_concepts,
-        "formulas": all_formulas,
-        "theorems": all_theorems,
-        "examples": all_examples,
-        "source_structure": chunk_citations if chunk_citations else []
-    }
+    # Language instruction
+    lang_instruction = "Output in TURKISH." if language == "tr" else "Output in ENGLISH."
     
-    # Use two-stage REDUCE with fallback to single-stage if errors occur
+    # Build comprehensive reduce prompt
+    reduce_prompt = f"""
+You are StudyWithAI, an elite academic tutor.
+
+You will receive MULTIPLE text chunks extracted from a document.
+These chunks contain EXPANDED explanatory content (plain text, NOT JSON).
+
+YOUR TASK:
+Synthesize ALL chunks into ONE comprehensive structured JSON study guide.
+
+REQUIRED JSON STRUCTURE:
+{{
+  "summary": {{
+    "title": "Study Guide: [Topic]",
+    "overview": "2-4 sentence comprehensive overview",
+    "learning_objectives": ["Objective 1", "Objective 2", ...],
+    "sections": [
+      {{
+        "heading": "Section name",
+        "concepts": [
+          {{
+            "term": "Concept name",
+            "definition": "Clear, concise definition",
+            "explanation": "Deep explanation (800+ characters)",
+            "example": "Real-world example with details",
+            "key_points": ["Point 1", "Point 2", ...],
+            "pitfalls": ["Common mistake 1", ...],
+            "when_to_use": ["Use case 1", ...],
+            "limitations": ["Limitation 1", ...]
+          }}
+        ],
+        "bullets": ["Summary bullet 1", ...]
+      }}
+    ],
+    "formula_sheet": [
+      {{
+        "name": "Formula name",
+        "expression": "LaTeX expression in \\\\( \\\\)",
+        "variables": {{"x": "meaning of x"}},
+        "worked_example": "Step-by-step calculation with numbers",
+        "notes": "Usage hints, complexity, constraints"
+      }}
+    ],
+    "diagrams": [
+      {{
+        "title": "Diagram title",
+        "description": "What it shows and why",
+        "content": "Mermaid syntax or textual description",
+        "type": "flowchart|graph|tree|other"
+      }}
+    ],
+    "pseudocode": [
+      {{
+        "name": "Algorithm name",
+        "code": "Pseudocode here",
+        "explanation": "What it does, when to use",
+        "example_trace": "Example input → output"
+      }}
+    ],
+    "practice_problems": [
+      {{
+        "problem": "Full problem statement",
+        "difficulty": "easy|medium|hard",
+        "solution": "Detailed solution",
+        "steps": ["Step 1", "Step 2", ...],
+        "key_concepts": ["Concept used", ...]
+      }}
+    ]
+  }},
+  "citations": []
+}}
+
+CRITICAL REQUIREMENTS (NON-NEGOTIABLE):
+1. Cover 100% of content from ALL chunks
+2. Minimum output: 40,000 characters (target 50,000-60,000)
+3. Minimum 12-20 sections (organize logically by topic)
+4. MINIMUM 3 examples per concept (each 150+ chars)
+5. MINIMUM 2 worked examples per formula (with step-by-step calculations)
+6. Create 8-12 practice problems with detailed solutions
+7. Add diagrams (Mermaid/textual) for visual concepts
+8. Add pseudocode for all algorithmic content
+9. Each concept explanation: minimum 800 characters
+10. DO NOT compress - EXPAND everything to maximum depth
+11. Use 85-95% of available token budget
+12. Never say "not provided" or "not available" - infer from content
+
+{lang_instruction}
+{f"User instructions: {additional_instructions}" if additional_instructions else ""}
+
+CHUNKS TO SYNTHESIZE:
+
+{combined_text}
+
+Generate the complete structured JSON study guide:"""
+    
+    # Call OpenAI for final synthesis
+    print("[REDUCE] Calling OpenAI for final JSON synthesis...")
     try:
-        print("[REDUCE] Attempting two-stage REDUCE (outline → fill → validate)...")
-        result = reduce_two_stage(
-            aggregated_knowledge=aggregated_knowledge,
-            language=language,
-            domain=domain,
-            out_cap=out_budget,
-            additional_instructions=additional_instructions or "",
+        final_json = call_openai(
+            system_prompt="You are an expert at synthesizing educational content into structured study guides.",
+            user_prompt=reduce_prompt,
+            max_output_tokens=out_budget,
+            temperature=0.3,  # Slightly creative for examples
             user_id=user_id,
+            endpoint="/summarize",
             db=db
         )
-        print("[REDUCE] Two-stage REDUCE completed successfully ✓")
+        
+        # Parse and validate JSON
+        from app.utils.json_helpers import parse_json_robust
+        result = parse_json_robust(final_json)
+        
+        if not result:
+            print("[REDUCE] JSON parse failed, attempting repair...")
+            repair_prompt = f"Fix this into valid JSON only (no other text):\n\n{final_json}"
+            repaired = call_openai(
+                system_prompt="You repair invalid JSON.",
+                user_prompt=repair_prompt,
+                max_output_tokens=4000,
+                temperature=0,
+                user_id=user_id,
+                endpoint="/summarize",
+                db=db
+            )
+            result = parse_json_robust(repaired)
+        
+        if not result:
+            raise ValueError("Failed to generate valid JSON after repair attempt")
+        
+        print("[REDUCE] JSON synthesis successful ✓")
+        
+        # Auto-expansion if output is too short
+        result_chars = len(json.dumps(result, ensure_ascii=False))
+        min_acceptable_chars = 40000
+        
+        if result_chars < min_acceptable_chars:
+            print(f"[REDUCE] Output too short ({result_chars} chars), triggering auto-expansion...")
+            
+            expansion_prompt = f"""
+You are enhancing a study guide that needs MORE DEPTH.
+
+CURRENT STATE: {result_chars} characters
+
+REQUIRED ENHANCEMENTS:
+1. EXPAND each concept explanation to 800+ characters  
+2. ADD 2-3 more examples to EACH concept (total 3+ per concept)
+3. ADD 2 worked examples to EACH formula with calculations
+4. ADD 5-10 practice problems with detailed solutions
+5. ADD diagrams (Mermaid) for visual concepts
+6. ADD pseudocode for algorithms
+7. EXPAND learning objectives to 6-10 items
+8. ADD pitfalls, limitations, when_to_use to concepts
+
+TARGET: Minimum 50,000 characters
+
+CURRENT JSON:
+{json.dumps(result, ensure_ascii=False)}
+
+Return EXPANDED version as valid JSON:"""
+            
+            try:
+                expanded_json = call_openai(
+                    system_prompt="You expand study notes while preserving structure.",
+                    user_prompt=expansion_prompt,
+                    max_output_tokens=16000,
+                    temperature=0.3,
+                    user_id=user_id,
+                    endpoint="/summarize",
+                    db=db
+                )
+                expanded = parse_json_robust(expanded_json)
+                if expanded:
+                    expanded_chars = len(json.dumps(expanded, ensure_ascii=False))
+                    print(f"[REDUCE] Auto-expansion: {result_chars} → {expanded_chars} chars")
+                    result = expanded
+            except Exception as e:
+                print(f"[REDUCE] Auto-expansion error: {e}, keeping original")
         
         # COVERAGE VALIDATION: Check if all topics are covered
         if original_text:
@@ -1835,21 +1940,41 @@ def merge_summaries(
         return result
     
     except Exception as e:
-        print(f"[REDUCE TWO-STAGE FALLBACK] Error in two-stage REDUCE: {e}")
-        print("[REDUCE TWO-STAGE FALLBACK] Falling back to single-stage REDUCE...")
+        print(f"[REDUCE ERROR] Plain text synthesis failed: {e}")
+        print(f"[REDUCE ERROR] Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         
-        # Fallback: single-stage REDUCE (original implementation)
-        user_prompt = get_final_merge_prompt(language, additional_instructions, domain)
-        user_prompt += f"\n\nSTRUCTURED SOURCE KNOWLEDGE (from {len(chunk_summaries)} chunks):\n{json.dumps(aggregated_knowledge, indent=2, ensure_ascii=False)}"
-        
-        return call_openai(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            max_output_tokens=out_budget,
-            user_id=user_id,
-            endpoint="/summarize",
-            db=db
-        )
+        # Fallback: Return minimal valid structure to prevent total failure
+        print("[REDUCE FALLBACK] Returning minimal valid JSON structure")
+        fallback = {
+            "summary": {
+                "title": "Summary (Error Recovery)",
+                "overview": f"An error occurred during synthesis. Chunks available: {len(chunk_summaries)}",
+                "learning_objectives": ["Review source material"],
+                "sections": [
+                    {
+                        "heading": "Content Summary",
+                        "concepts": [
+                            {
+                                "term": "Error Recovery Mode",
+                                "definition": "The system encountered an error during processing",
+                                "explanation": "Please try regenerating or contact support if the issue persists",
+                                "example": "",
+                                "key_points": []
+                            }
+                        ],
+                        "bullets": []
+                    }
+                ],
+                "formula_sheet": [],
+                "diagrams": [],
+                "pseudocode": [],
+                "practice_problems": []
+            },
+            "citations": []
+        }
+        return json.dumps(fallback, ensure_ascii=False, indent=2)
 
 
 def map_reduce_summary(

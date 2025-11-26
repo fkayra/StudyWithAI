@@ -61,14 +61,13 @@ MAX_IMAGE_MB = 5
 TOKEN_PER_CHAR = 0.25
 
 # Chunking configuration for map-reduce
-CHUNK_INPUT_TARGET = 2000  # target tokens per chunk for map phase (reduced for better coverage)
+CHUNK_INPUT_TARGET = 4500  # target tokens per chunk for map phase (larger chunks for plain text mode)
 
-# Adaptive chunk output budget (DEEP MODE: Prevent JSON truncation)
-# OLD VALUES (600/200/250) caused "Unterminated string" errors
-# → JSON cut mid-stream → reduce_two_stage FAIL → fallback → 1k garbage
-CHUNK_OUTPUT_BASE = 1800  # Ensure complete JSON structure (was 600)
-CHUNK_OUTPUT_FORMULA_BOOST = 400  # Full worked examples (was 200)
-CHUNK_OUTPUT_THEOREM_BOOST = 400  # Complete proof steps (was 250)
+# Adaptive chunk output budget (PLAIN TEXT MODE: Deep prose expansion)
+# Plain text mode allows much larger outputs without JSON structure constraints
+CHUNK_OUTPUT_BASE = 3200  # Each chunk outputs 3-4k tokens of prose (was 1800)
+CHUNK_OUTPUT_FORMULA_BOOST = 800  # Extra space for formula explanations (was 400)
+CHUNK_OUTPUT_THEOREM_BOOST = 800  # Extra space for theorem proofs (was 400)
 
 MERGE_OUTPUT_BUDGET = (4000, 18000)  # Increased upper limit: More comprehensive outputs
 
