@@ -2055,21 +2055,51 @@ def omega_run_reduce_phase_1(
     
     lang_instruction = "Output in TURKISH." if language == "tr" else "Output in ENGLISH."
     
-    REDUCE1_SYSTEM = f"""You are merging multiple expanded chapters into ONE seamless master chapter.
+    #######################################################################
+    # 🔥 OMEGA METHOD — REDUCE-1 FIX
+    # This prompt MUST NOT summarize, shorten, compress, or skip content.
+    # It must ONLY concatenate, reorganize, and stitch MAP outputs together.
+    # Absolutely NO loss of detail is allowed.
+    #######################################################################
+    
+    REDUCE1_SYSTEM = f"""You are an expert compiler merging multiple expanded chapters.
 
-CRITICAL RULES:
-- DO NOT summarize or compress
-- DO NOT remove detail
-- KEEP ALL explanations, examples, diagrams, pseudocode
-- Merge smoothly into coherent flowing text
-- Remove redundancy but preserve all unique content
-- Output as continuous prose (NO JSON)
+{lang_instruction}
 
-{lang_instruction}"""
+OUTPUT REQUIREMENTS:
+- Pure unstructured prose (NO JSON)
+- Output must be LONGER or EQUAL to total input length
+- Expected output: 25,000-45,000 characters"""
+    
+    reduce1_prompt = f"""
+🔥 **MERGE ALL MAP OUTPUTS INTO ONE SEAMLESS CHAPTER**
+
+FULL RULES (MANDATORY):
+-----------------------------------------
+1) DO NOT SUMMARIZE ANYTHING.
+2) DO NOT SHORTEN ANYTHING.
+3) DO NOT REMOVE DETAILS.
+4) DO NOT REPHRASE TO BE MORE CONCISE.
+5) DO NOT LOSE EXAMPLES, LISTS, FORMULAS, or DIAGRAMS.
+6) Return ALL content from ALL chunks.
+7) Merge them in order, remove duplicates ONLY if exact identical text.
+8) Add smooth transitions between sections.
+9) Output MUST be LONGER or EQUAL to total MAP chunk lengths.
+10) Expected output size: **25,000–45,000 characters**.
+
+GOAL:
+Create a master chapter that preserves 100% of information.
+
+--- BEGIN MAP CHUNKS ---
+{combined}
+--- END MAP CHUNKS ---
+
+Return **pure unstructured prose** (NO JSON).
+Preserve EVERY detail, example, formula, and explanation."""
     
     result = call_openai(
         system_prompt=REDUCE1_SYSTEM,
-        user_prompt=f"Merge these chapters into one coherent master chapter:\n\n{combined}",
+        user_prompt=reduce1_prompt,
         max_output_tokens=9000,
         temperature=0.3,
         user_id=user_id,
@@ -2164,13 +2194,41 @@ def omega_run_reduce_phase_2(
     
     lang_instruction = "Output in TURKISH." if language == "tr" else "Output in ENGLISH."
     
-    REDUCE2_SYSTEM = f"""You are generating the FINAL JSON STUDY GUIDE from comprehensive prose.
+    #######################################################################
+    # OMEGA REDUCE-2 — SAFE JSON GENERATOR
+    # NO markdown, NO backticks, NO text outside JSON.
+    # NO escaped quotes issues, NO stray characters.
+    # Always returns VALID JSON ONLY.
+    #######################################################################
+    
+    REDUCE2_SYSTEM = f"""You are a JSON-only generator creating structured study guides.
 
-OUTPUT FORMAT (EXACT):
+{lang_instruction}
+
+CRITICAL JSON RULES:
+1) Output MUST be valid JSON (no markdown, no backticks, no commentary)
+2) Do NOT include text outside the JSON object
+3) Always close all quotes, braces, and arrays
+4) Use proper escaping for quotes inside strings
+5) No trailing commas
+6) Verify JSON validity before returning"""
+    
+    reduce2_prompt = f"""
+STRICT RULES:
+-----------------------------------------
+1) Output MUST be valid JSON.
+2) Do NOT include markdown, backticks (```), or commentary.
+3) Do NOT escape content incorrectly (\\, \\", \\/)
+4) Always close all quotes, braces, and arrays.
+5) No text outside the JSON object.
+6) No trailing commas in arrays or objects.
+
+REQUIRED STRUCTURE (EXACT):
+-----------------------------------------
 {{
   "summary": {{
-    "title": "Study Guide: [Topic]",
-    "overview": "2-4 sentence overview",
+    "title": "Study Guide: [Topic Name]",
+    "overview": "2-4 sentence comprehensive overview",
     "learning_objectives": ["Objective 1", "Objective 2", ...],
     "sections": [
       {{
@@ -2178,70 +2236,76 @@ OUTPUT FORMAT (EXACT):
         "concepts": [
           {{
             "term": "Concept name",
-            "definition": "Clear definition",
-            "explanation": "Deep explanation (800+ chars)",
-            "example": "Detailed example",
-            "key_points": ["Point 1", ...],
-            "pitfalls": ["Pitfall 1", ...],
+            "definition": "Clear, concise definition",
+            "explanation": "Deep explanation (800+ characters minimum)",
+            "example": "Detailed worked example",
+            "key_points": ["Point 1", "Point 2", ...],
+            "pitfalls": ["Common mistake 1", ...],
             "when_to_use": ["Use case 1", ...],
             "limitations": ["Limitation 1", ...]
           }}
         ],
-        "bullets": ["Summary point 1", ...]
+        "bullets": ["Summary point 1", "Summary point 2", ...]
       }}
     ],
     "formula_sheet": [
       {{
         "name": "Formula name",
-        "expression": "LaTeX in \\\\( \\\\)",
-        "variables": {{"x": "meaning"}},
-        "worked_example": "Step-by-step calculation",
-        "notes": "Usage hints"
+        "expression": "LaTeX expression in \\\\( \\\\)",
+        "variables": {{"x": "meaning of x", "y": "meaning of y"}},
+        "worked_example": "Step-by-step numerical calculation",
+        "notes": "Usage hints, complexity, constraints"
       }}
     ],
     "diagrams": [
       {{
         "title": "Diagram title",
-        "description": "What it shows",
-        "content": "Mermaid syntax",
-        "type": "flowchart|graph|tree|other"
+        "description": "What it shows and why it matters",
+        "content": "Mermaid syntax or textual description",
+        "type": "flowchart|graph|tree|sequence|other"
       }}
     ],
     "pseudocode": [
       {{
-        "name": "Algorithm",
-        "code": "Pseudocode",
-        "explanation": "Explanation",
-        "example_trace": "Example"
+        "name": "Algorithm name",
+        "code": "Pseudocode here",
+        "explanation": "What it does and when to use",
+        "example_trace": "Example input -> output trace"
       }}
     ],
     "practice_problems": [
       {{
-        "problem": "Problem statement",
+        "problem": "Full problem statement",
         "difficulty": "easy|medium|hard",
-        "solution": "Detailed solution",
-        "steps": ["Step 1", ...],
-        "key_concepts": ["Concept", ...]
+        "solution": "Detailed step-by-step solution",
+        "steps": ["Step 1 explanation", "Step 2 explanation", ...],
+        "key_concepts": ["Concept used", "Another concept", ...]
       }}
     ]
   }},
   "citations": []
 }}
 
-REQUIREMENTS:
+CONTENT REQUIREMENTS:
+-----------------------------------------
 - 12-20 sections minimum
-- 3+ examples per concept
-- 2+ worked examples per formula  
+- 3+ examples per concept (detailed, not brief)
+- 2+ worked examples per formula (with numbers and calculations)
 - 8-12 practice problems minimum
-- Include ALL diagrams as Mermaid syntax
-- Include ALL pseudocode
-- NO empty arrays allowed
+- Include ALL diagrams as Mermaid syntax where possible
+- Include ALL algorithmic content as pseudocode
+- NO empty arrays - always populate with content
 
-{lang_instruction}"""
+INPUT MASTER TEXT:
+-------------------
+{expanded_text}
+
+Generate the complete structured JSON study guide.
+Output ONLY the JSON object, nothing else."""
     
     resp = call_openai(
         system_prompt=REDUCE2_SYSTEM,
-        user_prompt=f"Convert this comprehensive prose into structured JSON:\n\n{expanded_text}",
+        user_prompt=reduce2_prompt,
         max_output_tokens=16000,
         temperature=0.3,
         user_id=user_id,
