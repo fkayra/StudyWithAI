@@ -61,7 +61,7 @@ MAX_IMAGE_MB = 5
 TOKEN_PER_CHAR = 0.25
 
 # Chunking configuration for map-reduce
-CHUNK_INPUT_TARGET = 3500  # target tokens per chunk for map phase
+CHUNK_INPUT_TARGET = 2000  # target tokens per chunk for map phase (reduced for better coverage)
 
 # Adaptive chunk output budget (DEEP MODE: Prevent JSON truncation)
 # OLD VALUES (600/200/250) caused "Unterminated string" errors

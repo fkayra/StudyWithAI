@@ -121,9 +121,18 @@ RULES:
 - For each section, attach ALL concepts whose
   concept._source.heading_path matches that section heading.
 - If needed, fuzzy match: lowercase + prefix match.
-- Minimum total length: 4000 tokens
-- Ideal target: 8000–12000 tokens
+- Minimum total length: 32000 characters (NOT tokens - more predictable)
+- Ideal target: 40000-56000 characters (use 70-95% of available budget)
 - No content outside JSON
+
+🚨 CRITICAL EXPANSION RULES:
+- DO NOT compress content
+- Use the ENTIRE max_tokens budget available
+- Expand each concept with MINIMUM 3 examples
+- Expand each formula with MINIMUM 2 worked examples
+- Expand each section with 5-10 sentences of explanation
+- If output feels short, EXPAND MORE - never stop early
+- Better to be comprehensive than brief
 """
 
 
@@ -548,33 +557,41 @@ ABSOLUTE RULES (CRITICAL)
    Output MUST be valid JSON.
    Do NOT add commentary before or after.
 
-2) **LENGTH REQUIREMENTS**
-   - TOTAL output: **minimum 8,000 tokens** (target 10k–14k)
-   - Each section: **minimum 400 tokens**, may exceed 1200+
+2) **LENGTH REQUIREMENTS** (CHARACTER-BASED - MORE PREDICTABLE)
+   - TOTAL output: **minimum 32,000 characters** (target 40k-56k chars)
+   - Each section: **minimum 1,600 characters**, may exceed 4,800+
    - Depth > brevity. If unsure, write more.
+   
+   🚨 IMPORTANT: DO NOT compress content.
+   🚨 Use the ENTIRE max_tokens budget.
+   🚨 Expand each concept with MINIMUM 3 examples.
+   🚨 Expand each formula with MINIMUM 2 worked examples.
+   🚨 Expand each section with 5–10 sentences.
 
 3) **DEPTH REQUIREMENTS**
    For EVERY concept, include:
-   - Clear definition
-   - Long-form explanation (200+ tokens)
-   - Real-world example
-   - Edge cases
-   - Pitfalls
+   - Clear definition (100+ chars)
+   - Long-form explanation (800+ characters, multiple paragraphs)
+   - MINIMUM 3 real-world examples (each 150+ chars)
+   - Edge cases and limitations
+   - Common pitfalls and mistakes
    - When to use / when not to use
    - Step-by-step reasoning or workflow
    - Mini-scenario or analogy when appropriate
 
 4) **DOMAIN-ADAPTIVE DEPTH**
    Domain is: {domain}
-   - If technical → include detailed reasoning
-   - If math → include 2–3 worked examples per formula
-   - If CS → include pseudocode + flow
-   - If social sciences → include theory comparison + examples
-   - If business/econ → include frameworks + case examples
+   - If technical → include detailed reasoning with multiple examples
+   - If math → include MINIMUM 2–3 worked examples per formula
+   - If CS → include pseudocode + flow + complexity analysis
+   - If social sciences → include theory comparison + historical examples
+   - If business/econ → include frameworks + multiple case examples
 
-5) **USE ALL AVAILABLE TOKENS**
-   Maximize detail, examples, explanations.
-   Never conclude early.
+5) **USE ALL AVAILABLE TOKENS - NEVER STOP EARLY**
+   🔥 Maximize detail, examples, explanations.
+   🔥 Never conclude early - keep writing until budget is exhausted.
+   🔥 If a section feels short, ADD MORE examples and explanations.
+   🔥 Better to exceed than to fall short.
 
 6) **STRICT ALIGNMENT WITH OUTLINE**
    - Do NOT add new sections.
@@ -860,15 +877,18 @@ def validate_reduce_output(result: dict, out_cap: int | None = None) -> list:
     result_json = json.dumps(result, ensure_ascii=False)
     estimated_tokens = len(result_json) // 4  # ≈ 4 chars per token
 
-    # LENGTH CHECK: Min 4000, ideal 8000+ (ama hard değil)
-    min_tokens = 8000   # <- SENİN İSTEDİĞİN ASGARİ SINIR
-    target_min = 10000  # <- optimum hedef (outline + fill)
-    target_max = 14000  # <- plan sınırı
+    # LENGTH CHECK: Character-based (more predictable than tokens)
+    min_chars = 32000   # <- Minimum acceptable length (characters)
+    target_min_chars = 40000  # <- Target minimum (better quality)
+    target_max_chars = 56000  # <- Ideal comprehensive output
+    
+    # Estimate characters from JSON
+    estimated_chars = len(result_json)
 
-    if estimated_tokens < min_tokens:
-        issues.append(f"Output too short ({estimated_tokens} tokens). MUST be >= {min_tokens}.")
-    elif estimated_tokens < target_min:
-        issues.append(f"Output below target range ({estimated_tokens} tokens). Should be >= {target_min}.")
+    if estimated_chars < min_chars:
+        issues.append(f"Output too short ({estimated_chars} chars, ~{estimated_tokens} tokens). MUST be >= {min_chars} chars.")
+    elif estimated_chars < target_min_chars:
+        issues.append(f"Output below target range ({estimated_chars} chars, ~{estimated_tokens} tokens). Should be >= {target_min_chars} chars.")
         
 
     
@@ -1779,15 +1799,31 @@ def map_reduce_summary(
     # 2. EXTRACT STRUCTURE
     from app.utils.structure_parser import extract_heading_hierarchy, chunk_by_headings, blocks_to_text
     
-    # === CHUNKING (Structure parser disabled — universal & reliable mode) ===
-    print("[CHUNKING] Structure parser disabled — using pure token-based chunking")
+    # === CHUNKING (Structure-aware mode for better coverage) ===
+    print("[CHUNKING] Using structure-aware chunking for better topic coverage")
     
-    chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
-    chunk_metadata = []
-    for chunk in chunks:
-        chunk_metadata.append({
-            "heading_path": detect_heading_from_text(chunk)
-        })
+    # Extract document structure (headings, sections)
+    blocks = extract_heading_hierarchy(full_text)
+    
+    # Try structure-based chunking first (better for coverage)
+    if blocks and len(blocks) > 5:  # If we have meaningful structure
+        print(f"[CHUNKING] Found {len(blocks)} structural blocks, using heading-based chunking")
+        structured_chunks = chunk_by_headings(blocks, target_tokens=CHUNK_INPUT_TARGET)
+        chunks = []
+        chunk_metadata = []
+        for chunk_blocks, heading_path in structured_chunks:
+            chunk_text = blocks_to_text(chunk_blocks)
+            chunks.append(chunk_text)
+            chunk_metadata.append({"heading_path": heading_path})
+    else:
+        # Fallback to token-based chunking if structure unclear
+        print("[CHUNKING] Structure unclear, falling back to token-based chunking")
+        chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
+        chunk_metadata = []
+        for chunk in chunks:
+            chunk_metadata.append({
+                "heading_path": detect_heading_from_text(chunk)
+            })
     
         
     print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
