@@ -947,14 +947,16 @@ export default function SummariesPage() {
                     <div className="text-sm text-slate-400 mb-4 italic">{diagram.description}</div>
                     <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 overflow-x-auto">
                       {/* Render Mermaid diagram or show as code if not Mermaid syntax */}
-                      {diagram.content.trim().startsWith('graph ') || 
-                       diagram.content.trim().startsWith('flowchart ') ||
-                       diagram.content.trim().startsWith('sequenceDiagram') ||
-                       diagram.content.trim().startsWith('classDiagram') ? (
+                      {diagram.content && typeof diagram.content === 'string' && (
+                        diagram.content.trim().startsWith('graph ') || 
+                        diagram.content.trim().startsWith('flowchart ') ||
+                        diagram.content.trim().startsWith('sequenceDiagram') ||
+                        diagram.content.trim().startsWith('classDiagram')
+                      ) ? (
                         <MermaidDiagram content={diagram.content} />
                       ) : (
                         <pre className="font-mono text-sm text-slate-300 whitespace-pre-wrap">
-                          {diagram.content}
+                          {diagram.content || ''}
                         </pre>
                       )}
                     </div>
@@ -1032,15 +1034,17 @@ export default function SummariesPage() {
                       <div className="text-sm text-purple-300 font-semibold mb-1">Final Answer:</div>
                       <div className="text-slate-200">
                         {/* Check if solution contains Mermaid syntax */}
-                        {problem.solution.trim().startsWith('graph ') || 
-                         problem.solution.trim().startsWith('flowchart ') ||
-                         problem.solution.trim().startsWith('sequenceDiagram') ||
-                         problem.solution.trim().startsWith('classDiagram') ? (
+                        {problem.solution && typeof problem.solution === 'string' && (
+                          problem.solution.trim().startsWith('graph ') || 
+                          problem.solution.trim().startsWith('flowchart ') ||
+                          problem.solution.trim().startsWith('sequenceDiagram') ||
+                          problem.solution.trim().startsWith('classDiagram')
+                        ) ? (
                           <div className="mt-2">
                             <MermaidDiagram content={problem.solution} />
                           </div>
                         ) : (
-                          <MathText text={problem.solution} />
+                          <MathText text={problem.solution || ''} />
                         )}
                       </div>
                     </div>
