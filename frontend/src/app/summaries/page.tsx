@@ -728,7 +728,7 @@ export default function SummariesPage() {
           </div>
 
           {/* Learning Objectives */}
-          {summary.learning_objectives && summary.learning_objectives.length > 0 && (
+          {Array.isArray(summary.learning_objectives) && summary.learning_objectives.length > 0 && (
             <div className="glass-card mb-8 animate-slide-up">
               <div className="flex items-center gap-3 mb-6">
                 <div className="text-3xl">🎯</div>
@@ -895,7 +895,7 @@ export default function SummariesPage() {
                           <MathText text={formula.variables} />
                         ) : (
                           <span className="space-y-1">
-                            {Object.entries(formula.variables).map(([key, value]) => (
+                            {typeof formula.variables === 'object' && formula.variables !== null && Object.entries(formula.variables).map(([key, value]) => (
                               <div key={key} className="ml-2">
                                 <MathText text={`${key}: ${value}`} />
                               </div>
@@ -1013,6 +1013,7 @@ export default function SummariesPage() {
                     <div className="mb-4 text-slate-200 leading-relaxed">
                       <span className="font-semibold text-purple-300">Problem:</span> <MathText text={problem.problem} />
                     </div>
+                    {Array.isArray(problem.steps) && problem.steps.length > 0 && (
                     <div className="mb-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700/50">
                       <div className="font-semibold text-pink-300 mb-2">Solution Steps:</div>
                       <ol className="space-y-2">
@@ -1026,6 +1027,7 @@ export default function SummariesPage() {
                         ))}
                       </ol>
                     </div>
+                    )}
                     <div className="mb-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
                       <div className="text-sm text-purple-300 font-semibold mb-1">Final Answer:</div>
                       <div className="text-slate-200">
@@ -1042,6 +1044,7 @@ export default function SummariesPage() {
                         )}
                       </div>
                     </div>
+                    {Array.isArray(problem.key_concepts) && problem.key_concepts.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       <span className="text-xs text-slate-500">Key Concepts:</span>
                       {problem.key_concepts.map((concept, cIdx) => (
@@ -1050,6 +1053,7 @@ export default function SummariesPage() {
                         </span>
                       ))}
                     </div>
+                    )}
                   </div>
                 ))}
               </div>
