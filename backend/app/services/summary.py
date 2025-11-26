@@ -2216,33 +2216,53 @@ def omega_run_reduce_phase_2(
     lang_instruction = "Output in TURKISH." if language == "tr" else "Output in ENGLISH."
     
     #######################################################################
-    # OMEGA REDUCE-2 — SAFE JSON GENERATOR
+    # OMEGA REDUCE-2 — STRICT JSON-ONLY GENERATOR (SIZE-LIMITED)
     # NO markdown, NO backticks, NO text outside JSON.
-    # NO escaped quotes issues, NO stray characters.
-    # Always returns VALID JSON ONLY.
+    # HARD 55k char limit to prevent truncation.
+    # Always returns complete, valid JSON.
     #######################################################################
     
-    REDUCE2_SYSTEM = f"""You are a JSON-only generator creating structured study guides.
+    REDUCE2_SYSTEM = f"""You are a STRICT JSON-ONLY generator.
 
 {lang_instruction}
 
-CRITICAL JSON RULES:
-1) Output MUST be valid JSON (no markdown, no backticks, no commentary)
-2) Do NOT include text outside the JSON object
-3) Always close all quotes, braces, and arrays
-4) Use proper escaping for quotes inside strings
-5) No trailing commas
-6) Verify JSON validity before returning"""
+RULES (NON-NEGOTIABLE):
+1) Output MUST be a single valid JSON object
+2) NO TEXT outside the JSON object
+3) NO markdown, NO prose, NO headings, NO comments
+4) NO backticks, NO code fences, NO explanatory sentences
+5) All strings MUST be properly escaped
+6) MUST close all brackets, braces, arrays, quotes
+7) ABSOLUTELY NO truncation due to length
+8) If output exceeds 50,000 characters, REDUCE DEPTH but KEEP all sections
+9) NEVER include the original document text verbatim
+10) NEVER restate instructions
+11) ALWAYS comply with the schema exactly
+
+CRITICAL SIZE LIMIT:
+- Target size: 45,000-55,000 characters
+- If approaching limit: compress explanations, shorten examples
+- But ALWAYS include all sections and concepts
+- Quality over quantity: better concise than truncated"""
     
     reduce2_prompt = f"""
-STRICT RULES:
+Synthesize the expanded master text into ONE JSON study guide.
+
+CRITICAL HARD LIMITS:
 -----------------------------------------
-1) Output MUST be valid JSON.
-2) Do NOT include markdown, backticks (```), or commentary.
-3) Do NOT escape content incorrectly (\\, \\", \\/)
-4) Always close all quotes, braces, and arrays.
-5) No text outside the JSON object.
-6) No trailing commas in arrays or objects.
+1) ABSOLUTE TARGET SIZE: 45,000-55,000 characters
+2) DO NOT exceed 55,000 characters
+3) If needed, compress explanations while keeping all topics
+4) Output MUST be valid JSON (no markdown, no backticks, no commentary)
+5) NO TEXT outside the JSON object
+6) Always close all quotes, braces, and arrays
+7) No trailing commas
+
+SIZE MANAGEMENT:
+- Count your output length as you generate
+- If approaching 50k chars: shorten explanations, reduce example verbosity
+- But KEEP all sections, all concepts, all formulas
+- Better to have brief examples than truncated JSON
 
 REQUIRED STRUCTURE (EXACT):
 -----------------------------------------
@@ -2310,19 +2330,28 @@ REQUIRED STRUCTURE (EXACT):
 CONTENT REQUIREMENTS:
 -----------------------------------------
 - 12-20 sections minimum
-- 3+ examples per concept (detailed, not brief)
-- 2+ worked examples per formula (with numbers and calculations)
-- 8-12 practice problems minimum
-- Include ALL diagrams as Mermaid syntax where possible
-- Include ALL algorithmic content as pseudocode
-- NO empty arrays - always populate with content
+- 2-3 examples per concept (quality over quantity - keep concise)
+- 2 worked examples per formula (brief but complete)
+- 6-10 practice problems (detailed solutions)
+- Include key diagrams as Mermaid syntax
+- Include algorithmic pseudocode
+- Populate all arrays (no empty arrays)
 
-INPUT MASTER TEXT:
+CRITICAL REMINDER:
+Your JSON output must be 45,000-55,000 characters total.
+If you're exceeding this, STOP and compress:
+- Shorten explanations (keep them clear but brief)
+- Use 2 examples instead of 3
+- Reduce practice problems to 6-8
+DO NOT let JSON get truncated due to length limit.
+
+INPUT MASTER TEXT ({len(expanded_text)} chars):
 -------------------
 {expanded_text}
 
 Generate the complete structured JSON study guide.
-Output ONLY the JSON object, nothing else."""
+Output ONLY the JSON object, nothing else.
+Target: 45-55k characters total."""
     
     resp = call_openai(
         system_prompt=REDUCE2_SYSTEM,
