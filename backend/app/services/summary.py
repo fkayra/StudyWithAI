@@ -2056,46 +2056,67 @@ def omega_run_reduce_phase_1(
     lang_instruction = "Output in TURKISH." if language == "tr" else "Output in ENGLISH."
     
     #######################################################################
-    # 🔥 OMEGA METHOD — REDUCE-1 FIX
-    # This prompt MUST NOT summarize, shorten, compress, or skip content.
-    # It must ONLY concatenate, reorganize, and stitch MAP outputs together.
-    # Absolutely NO loss of detail is allowed.
+    # 🔥 OMEGA METHOD — REDUCE-1 ULTRA-STRICT (ZERO LOSS MODE)
+    # Model MUST NOT summarize, compress, shorten, or rewrite.
+    # ONLY merge by concatenation with transitions.
+    # Any ambiguity → COPY VERBATIM, INCLUDE BOTH VERSIONS.
+    # Output MUST BE >= input length (30,000+ chars minimum).
     #######################################################################
     
-    REDUCE1_SYSTEM = f"""You are an expert compiler merging multiple expanded chapters.
+    REDUCE1_SYSTEM = f"""You are a STRICT NON-SUMMARIZING MERGER ENGINE.
 
 {lang_instruction}
 
-OUTPUT REQUIREMENTS:
-- Pure unstructured prose (NO JSON)
-- Output must be LONGER or EQUAL to total input length
-- Expected output: 25,000-45,000 characters"""
-    
-    reduce1_prompt = f"""
-🔥 **MERGE ALL MAP OUTPUTS INTO ONE SEAMLESS CHAPTER**
-
-FULL RULES (MANDATORY):
------------------------------------------
-1) DO NOT SUMMARIZE ANYTHING.
-2) DO NOT SHORTEN ANYTHING.
-3) DO NOT REMOVE DETAILS.
-4) DO NOT REPHRASE TO BE MORE CONCISE.
-5) DO NOT LOSE EXAMPLES, LISTS, FORMULAS, or DIAGRAMS.
-6) Return ALL content from ALL chunks.
-7) Merge them in order, remove duplicates ONLY if exact identical text.
-8) Add smooth transitions between sections.
-9) Output MUST be LONGER or EQUAL to total MAP chunk lengths.
-10) Expected output size: **25,000–45,000 characters**.
+HARD RULES (NON-NEGOTIABLE):
+- YOU MUST NOT SUMMARIZE.
+- YOU MUST NOT SHORTEN CONTENT.
+- YOU MUST NOT REMOVE ANY DETAILS.
+- YOU MUST NOT REWRITE FOR BREVITY.
+- If there is ANY uncertainty → COPY TEXT VERBATIM.
+- Your output MUST NOT be shorter than the input.
+- If merging causes conflict → append both versions sequentially.
+- If ordering uncertain → include ALL versions sequentially.
+- Your output MUST ALWAYS be longer than OR equal to input length.
+- This is NOT a summarization task.
+- This is NOT a paraphrasing task.
+- This is a PRESERVATION task.
 
 GOAL:
-Create a master chapter that preserves 100% of information.
+Produce a single seamless chapter that preserves 100% of the original content
+WITHOUT ANY LOSS, WITHOUT ANY COMPRESSION, WITHOUT ANY REDUCTION.
+"""
+    
+    reduce1_prompt = f"""
+🔥 OMEGA REDUCE-1 MODE = LOSSLESS MERGE ONLY 🔥
 
---- BEGIN MAP CHUNKS ---
+YOU MUST:
+- Copy ALL MAP output text into the final chapter.
+- Preserve EVERY word, EVERY example, EVERY formula exactly.
+- If unsure → copy verbatim.
+- NO short summaries.
+- NO compression.
+- NO "more concise rewrite".
+- NO reduction of repeated content unless identical.
+
+ADD transitions ONLY between sections.  
+DO NOT alter the internal content.
+
+If any ambiguity exists:
+→ INCLUDE BOTH VERSIONS ONE AFTER ANOTHER.
+
+FINAL OUTPUT MUST BE:
+- SAME OR LONGER than total MAP outputs
+- Expected 30,000+ characters minimum (current input: {total_chars} chars)
+
+CRITICAL: Your output length should be >= {total_chars} characters.
+If you produce less, you have FAILED this task.
+
+--- MAP OUTPUTS TO MERGE ---
 {combined}
---- END MAP CHUNKS ---
+--- END ---
 
-Return **pure unstructured prose** (NO JSON).
-Preserve EVERY detail, example, formula, and explanation."""
+Return ONLY pure prose (NO JSON, NO markdown).
+PRESERVE EVERYTHING. DO NOT REDUCE."""
     
     result = call_openai(
         system_prompt=REDUCE1_SYSTEM,
