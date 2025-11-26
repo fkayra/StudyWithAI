@@ -1156,14 +1156,20 @@ def reduce_two_stage(
         + json.dumps(outline, ensure_ascii=False, indent=2)
         + "\n\nSTRUCTURED SOURCE KNOWLEDGE:\n"
         + agg_trim
-        + "\n\nIMPORTANT:\n"
-        + "Use heading_path to attach each concept to the correct section.\n"
-        + "Do NOT mix unrelated themes.\n"
-        + "Cover EVERY concept.\n"
-        + "Use 70–95% of token budget.\n"
+        + "\n\n🚨 CRITICAL REQUIREMENTS (NON-NEGOTIABLE):\n"
+        + "1. Cover 100% of the content from structured knowledge\n"
+        + "2. Use ALL available tokens (min 40,000 characters output)\n"
+        + "3. MINIMUM per section: 1,600 characters\n"
+        + "4. MINIMUM per concept: 3 examples (each 150+ chars)\n"
+        + "5. MINIMUM per formula: 2 worked examples with step-by-step calculations\n"
+        + "6. Create 5-10 practice problems with detailed solutions\n"
+        + "7. Add diagrams (textual/Mermaid) where concepts are visual\n"
+        + "8. Add pseudocode for algorithmic content\n"
+        + "9. DO NOT compress - expand everything to maximum depth\n"
+        + "10. Use 80-95% of token budget - DO NOT stop early\n"
     )
     time.sleep(2.0) 
-    fill_max = 14000
+    fill_max = 14000  # Maximum tokens allowed
     filled_json = call_openai(
         system_prompt=FILL_SYSTEM_PROMPT,  # MODERATE, structure-focused prompt
         user_prompt=fill_user,
@@ -1201,6 +1207,67 @@ def reduce_two_stage(
         print("[REDUCE] Self-repair complete")
     else:
         print("[REDUCE] Output validated ✓")
+    
+    # === STAGE 4: Auto-Expansion if output is too short ===
+    result_json = json.dumps(result, ensure_ascii=False)
+    result_chars = len(result_json)
+    min_acceptable_chars = 32000  # Minimum for comprehensive output
+    
+    if result_chars < min_acceptable_chars:
+        print(f"[REDUCE] Output too short ({result_chars} chars), triggering auto-expansion...")
+        
+        # Count current content for targeted expansion
+        num_concepts = sum(len(sec.get("concepts", [])) for sec in result.get("summary", {}).get("sections", []))
+        num_practice = len(result.get("summary", {}).get("practice_problems", []))
+        num_formulas = len(result.get("summary", {}).get("formula_sheet", []))
+        
+        expansion_prompt = f"""
+You are enhancing a study guide that is currently too brief.
+
+CURRENT STATE:
+- Output length: {result_chars} characters
+- Concepts: {num_concepts}
+- Practice problems: {num_practice}
+- Formulas: {num_formulas}
+
+REQUIRED ENHANCEMENTS:
+1. EXPAND each concept explanation to 800+ characters
+2. ADD 2-3 more examples to EACH concept (total 3+ examples per concept)
+3. ADD 2 worked examples to EACH formula with step-by-step calculations
+4. ADD 5-10 practice problems with detailed solutions
+5. ADD diagrams (Mermaid/textual) for visual concepts
+6. ADD pseudocode for algorithmic content
+7. EXPAND learning objectives to 5-8 items
+8. ADD more key_points, pitfalls, when_to_use, limitations to concepts
+
+TARGET: Minimum 40,000 characters (current: {result_chars})
+
+CURRENT JSON TO EXPAND:
+{result_json}
+
+Return the EXPANDED version as valid JSON. DO NOT remove any existing content, only ADD and EXPAND."""
+
+        try:
+            expanded_json = call_openai(
+                system_prompt="You are an expert at expanding study notes while maintaining structure.",
+                user_prompt=expansion_prompt,
+                max_output_tokens=16000,  # Allow large expansion
+                temperature=0.3,  # Slightly creative for examples
+                user_id=user_id,
+                endpoint="/summarize",
+                db=db
+            )
+            expanded_result = parse_json_robust(expanded_json)
+            if expanded_result:
+                expanded_chars = len(json.dumps(expanded_result, ensure_ascii=False))
+                print(f"[REDUCE] Auto-expansion complete: {result_chars} → {expanded_chars} chars")
+                result = expanded_result
+            else:
+                print("[REDUCE] Auto-expansion failed to parse, keeping original")
+        except Exception as e:
+            print(f"[REDUCE] Auto-expansion error: {e}, keeping original")
+    else:
+        print(f"[REDUCE] Output length acceptable ({result_chars} chars)")
     
     return result
 
@@ -1346,6 +1413,7 @@ def summarize_chunk(
     """
     Summarize a single chunk of text (MAP phase)
     Returns structured mini-JSON with concepts/formulas/theorems/examples
+    ENHANCED: Forces valid JSON output with skeleton enforcement
     """
     # Adaptive budget based on chunk content
     if out_budget is None:
@@ -1353,21 +1421,83 @@ def summarize_chunk(
         out_budget = calculate_chunk_budget(chunk_text)
         print(f"[MAP ADAPTIVE] Allocated {out_budget} tokens for this chunk")
     
-    user_prompt = get_chunk_summary_prompt(language)
+    # JSON skeleton enforcement - guarantees valid JSON output
+    lang_instruction = "Use TURKISH." if language == "tr" else "Use ENGLISH."
     
-    if additional_instructions:
-        user_prompt += f"\n\nUser preferences: {additional_instructions}"
+    user_prompt = f"""
+You MUST return valid JSON in this EXACT schema:
+
+{{
+  "concepts": [
+    {{
+      "term": "Concept name",
+      "definition": "Short definition",
+      "explanation": "Detailed explanation",
+      "example": "Real-world example"
+    }}
+  ],
+  "formulas": [
+    {{
+      "name": "Formula name",
+      "expression": "LaTeX expression",
+      "variables": {{"x": "meaning"}},
+      "worked_example": "Step-by-step calculation"
+    }}
+  ],
+  "theorems": [],
+  "examples": []
+}}
+
+CRITICAL RULES:
+- Output MUST be valid JSON (no markdown, no backticks, no prose)
+- Never write explanations outside JSON structure
+- Never return empty response
+- Fill missing items with empty arrays []
+- Always escape quotes in strings
+- If no formulas/theorems, use empty arrays
+
+{lang_instruction}
+
+NOW EXTRACT FROM THIS TEXT:
+
+{chunk_text}
+
+Output ONLY the JSON structure above:"""
     
-    user_prompt += f"\n\nTEXT TO EXTRACT FROM:\n{chunk_text}"
-    
-    return call_openai(
+    response = call_openai(
         system_prompt=MAP_SYSTEM_PROMPT,  # Ultra-minimal for guaranteed JSON
         user_prompt=user_prompt,
         max_output_tokens=out_budget,
+        temperature=0,  # Deterministic for JSON
         user_id=user_id,
         endpoint="/summarize",
         db=db
     )
+    
+    # Validate JSON response
+    try:
+        import json
+        parsed = json.loads(response)
+        # Ensure required keys exist
+        if "concepts" not in parsed:
+            parsed["concepts"] = []
+        if "formulas" not in parsed:
+            parsed["formulas"] = []
+        if "theorems" not in parsed:
+            parsed["theorems"] = []
+        if "examples" not in parsed:
+            parsed["examples"] = []
+        return json.dumps(parsed, ensure_ascii=False)
+    except json.JSONDecodeError as e:
+        print(f"[MAP JSON ERROR] Failed to parse chunk response: {e}")
+        print(f"[MAP JSON ERROR] Response preview: {response[:200]}")
+        # Return minimal valid JSON to prevent pipeline break
+        return json.dumps({
+            "concepts": [],
+            "formulas": [],
+            "theorems": [],
+            "examples": []
+        }, ensure_ascii=False)
 
 
 def merge_summaries(
@@ -1793,37 +1923,26 @@ def map_reduce_summary(
         # simply do nothing → let normal MAP-REDUCE flow run
         pass  
 
-    # Large document: map-reduce with structure-aware chunking
-    print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using structure-aware chunking")
+    # Large document: map-reduce with pure token-based chunking
+    print(f"[MAP-REDUCE] Estimated {estimated_tokens} tokens, using pure token-based chunking")
     
-    # 2. EXTRACT STRUCTURE
-    from app.utils.structure_parser import extract_heading_hierarchy, chunk_by_headings, blocks_to_text
+    # === CHUNKING (Pure token-based - universal & reliable) ===
+    # Structure parser disabled: causes issues with PDFs (340+ blocks, incorrect parsing)
+    # Pure token-based chunking is more reliable and works consistently across all formats
+    print(f"[CHUNKING] Using pure token-based chunking (target: {CHUNK_INPUT_TARGET} tokens per chunk)")
     
-    # === CHUNKING (Structure-aware mode for better coverage) ===
-    print("[CHUNKING] Using structure-aware chunking for better topic coverage")
+    chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
+    chunk_metadata = []
     
-    # Extract document structure (headings, sections)
-    blocks = extract_heading_hierarchy(full_text)
-    
-    # Try structure-based chunking first (better for coverage)
-    if blocks and len(blocks) > 5:  # If we have meaningful structure
-        print(f"[CHUNKING] Found {len(blocks)} structural blocks, using heading-based chunking")
-        structured_chunks = chunk_by_headings(blocks, target_tokens=CHUNK_INPUT_TARGET)
-        chunks = []
-        chunk_metadata = []
-        for chunk_blocks, heading_path in structured_chunks:
-            chunk_text = blocks_to_text(chunk_blocks)
-            chunks.append(chunk_text)
-            chunk_metadata.append({"heading_path": heading_path})
-    else:
-        # Fallback to token-based chunking if structure unclear
-        print("[CHUNKING] Structure unclear, falling back to token-based chunking")
-        chunks = split_text_approx_tokens(full_text, CHUNK_INPUT_TARGET)
-        chunk_metadata = []
-        for chunk in chunks:
-            chunk_metadata.append({
-                "heading_path": detect_heading_from_text(chunk)
-            })
+    # Detect heading from each chunk for better traceability
+    for i, chunk in enumerate(chunks):
+        # Extract first meaningful line as heading hint
+        first_lines = chunk.strip().split('\n')[:3]
+        heading_hint = ' '.join(first_lines)[:100] if first_lines else f"Chunk {i+1}"
+        chunk_metadata.append({
+            "heading_path": heading_hint,
+            "chunk_index": i + 1
+        })
     
         
     print(f"[MAP-REDUCE] Processing {len(chunks)} chunks")
